@@ -1,0 +1,61 @@
+{% macro goal_card(g, catalog, scope_names, next_url) %}
+<article class="card" style="display:flex;flex-direction:column;gap:8px">
+  <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+    <span class="eyebrow">{{ REGISTRY[g.metric].label if g.metric in REGISTRY else "Custom" }}</span>
+    <span class="pill {{ g.state }}">{{ g.label }}</span>
+  </div>
+  <h3>{{ g.title }}</h3>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+    <div><div class="eyebrow">Start</div><b style="font:600 22px var(--f-display)">{{ fmt(g.metric, g.baseline) }}</b></div>
+    <div><div class="eyebrow">Now</div><b style="font:600 22px var(--f-display)">{{ fmt(g.metric, g.current) }}</b></div>
+    <div><div class="eyebrow">Target</div><b style="font:600 22px var(--f-display)">{{ fmt(g.metric, g.target) }}</b></div>
+  </div>
+  <div class="bar" role="img" aria-label="{{ (g.progress*100)|round|int }}% of the way"><i style="width:{{ (g.progress*100)|round|int }}%"></i></div>
+  {% if g.trend|length > 1 %}<canvas class="spark" height="40" data-points='{{ g.trend|map("last")|list|tojson }}' data-target="{{ g.target }}"></canvas>{% endif %}
+  {% if g.actions %}<p class="sub" style="margin:0">{{ g.actions }}</p>{% endif %}
+  <div class="muted" style="font-size:13px">Due {{ g.due }}{% if g.measured %} · measured {{ g.measured }}{% endif %}</div>
+  <details><summary>Edit</summary>{{ goal_form(g, catalog, scope_names, next_url) }}</details>
+</article>
+{% endmacro %}
+
+{% macro goal_form(g, catalog, scope_names, next_url) %}
+<form method="post" action="/goals" style="display:grid;gap:8px;margin-top:8px">
+  <input type="hidden" name="goal_id" value="{{ g.id if g else '' }}">
+  <input type="hidden" name="next_url" value="{{ next_url }}">
+  <label>Goal<input name="title" required maxlength="200" value="{{ g.title if g else '' }}"></label>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+    <label>For<select name="scope">{% for k, n in scope_names.items() %}<option value="{{ k }}" {{ 'selected' if g and g.scope==k }}>{{ n }}</option>{% endfor %}</select></label>
+    <label>Metric<select name="metric">{% for m in catalog %}<option value="{{ m.key }}" {{ 'selected' if g and g.metric==m.key }}>{{ m.label }}</option>{% endfor %}<option value="custom" {{ 'selected' if g and g.metric=='custom' }}>Custom (enter by hand)</option></select></label>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+    <label>Start<input name="baseline" type="number" step="any" value="{{ g.baseline if g else '' }}" placeholder="latest"></label>
+    <label>Target<input name="target" type="number" step="any" required value="{{ g.target if g else '' }}"></label>
+    <label>Due<input name="due" type="date" required value="{{ g.due if g else '' }}"></label>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+    <label>Status<select name="status">{% for st in ['active','done','dropped'] %}<option {{ 'selected' if g and g.status==st }}>{{ st }}</option>{% endfor %}</select></label>
+    <label>Current (custom only)<input name="manual_current" type="number" step="any" value="{{ g.current if g and g.metric=='custom' and g.current is not none else '' }}"></label>
+  </div>
+  <label>How we'll get there<textarea name="actions">{{ g.actions if g else '' }}</textarea></label>
+  <div style="display:flex;gap:8px"><button>Save</button></div>
+</form>
+{% if g %}
+<form method="post" action="/goals/{{ g.id }}/delete" style="display:flex;gap:8px;align-items:center;margin-top:6px">
+  <input type="hidden" name="next_url" value="{{ next_url }}">
+  <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="confirm" value="yes"> confirm</label>
+  <button class="danger">Delete goal</button>
+</form>
+{% endif %}
+{% endmacro %}
+
+{% macro spark_script() %}
+<script>
+document.querySelectorAll('canvas.spark').forEach(cv => {
+  const pts = JSON.parse(cv.dataset.points), tgt = +cv.dataset.target;
+  new Chart(cv, { type: 'line', data: { labels: pts.map((_, i) => i), datasets: [
+      { data: pts, borderColor: css('--s1'), borderWidth: 2, pointRadius: 2, tension: 0 },
+      { data: pts.map(() => tgt), borderColor: css('--ink-3'), borderDash: [3, 3], borderWidth: 1, pointRadius: 0 }] },
+    options: { animation: false, plugins: { legend: { display: false }, tooltip: { enabled: true } }, scales: { x: { display: false }, y: { display: false } }, maintainAspectRatio: false } });
+});
+</script>
+{% endmacro %}

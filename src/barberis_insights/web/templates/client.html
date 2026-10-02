@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<header>
+  <div class="eyebrow">Client {{ cid }}{% if p %} · <span class="pill {{ p.segment }}">{{ p.segment }}</span>{% endif %}</div>
+  <h1>{{ c.name if c and c.name else 'Client ' ~ cid }}</h1>
+  <p class="sub">{% if c and c.phone %}{{ c.phone }}{% else %}No phone on file{% endif %}{% if c and c.email %} · {{ c.email }}{% endif %}{% if c and c.do_not_contact %} · <b class="down">Do not contact</b>{% endif %}{% if c and c.data_processing_allowed is sameas false %} · no data-processing consent{% endif %}</p>
+</header>
+{% if p %}
+<div class="kpis">
+  <div class="kpi"><span class="l">Visits since 2025</span><span class="v">{{ p.visits }}</span></div>
+  <div class="kpi"><span class="l">Spent</span><span class="v">₴{{ '{:,.0f}'.format(p.lifetime_spend).replace(',', ' ') }}</span></div>
+  <div class="kpi"><span class="l">Last visit</span><span class="v">{{ p.last_visit }}</span><span class="d">{{ p.days_since_last }} days ago</span></div>
+  <div class="kpi"><span class="l">Usual gap</span><span class="v">{{ p.median_gap_days|round|int if p.median_gap_days else '—' }} d</span></div>
+  <div class="kpi"><span class="l">Usual barber</span><span class="v">{{ bnames.get(p.usual_barber, '—') }}</span></div>
+</div>
+{% endif %}
+<div class="grid">
+  <section class="card">
+    <h2>Win-back cases</h2>
+    {% for k in cases %}
+      <div style="border-top:1px solid var(--grid);padding-top:8px;margin-top:6px">
+        <div><span class="pill {{ k.status }}">{{ k.status }}</span> case {{ k.id }} · created {{ k.created.date() }}{% if k.assigned_to %} · {{ k.assigned_to }}{% endif %}{% if k.offer_given %} · offer {{ k.offer_given }}{% endif %}</div>
+        <ul style="margin:6px 0;padding-left:18px;font-size:14px">{% for e in k.events %}<li>{{ e.at.strftime('%Y-%m-%d') }} · {{ e.source }} · {{ e.outcome or e.kind }}{% if e.offer_given %} · {{ e.offer_given }}{% endif %}{% if e.note %} — {{ e.note }}{% endif %}</li>{% endfor %}</ul>
+        <form method="post" action="/cases/{{ k.id }}/status" class="inline">
+          <label>Set status<select name="status">{% for st in ['called','no_answer','booked','declined','do_not_contact','wrong_number','skipped'] %}<option>{{ st }}</option>{% endfor %}</select></label>
+          <label>Offer<input name="offer" size="10"></label><label>Note<input name="note"></label><button class="ghost">Save</button>
+        </form>
+      </div>
+    {% else %}<p class="muted">No cases yet.</p>{% endfor %}
+  </section>
+  <section class="card">
+    <h2>Contact</h2>
+    <form method="post" action="/client/{{ cid }}/dnc" class="inline">
+      <input type="hidden" name="value" value="{{ 'off' if c and c.do_not_contact else 'on' }}">
+      <button class="{{ 'ghost' if c and c.do_not_contact else 'danger' }}">{{ 'Allow contact again' if c and c.do_not_contact else 'Mark do not contact' }}</button>
+    </form>
+    <h3 style="margin-top:12px">Barbers</h3>
+    <p class="sub" style="margin:0">{% for bid, n in per_barber.most_common() %}{{ bnames.get(bid, bid) }} {{ n }}{{ ', ' if not loop.last }}{% endfor %}</p>
+  </section>
+</div>
+<section>
+  <h2>Recent visits</h2>
+  <div class="tablebox"><table><thead><tr><th class="l">Date</th><th class="l">Time</th><th class="l">Barber</th><th class="l">Status</th><th class="l">Services</th><th>Cost</th><th class="l">Booked</th></tr></thead>
+  <tbody>{% for v in visits %}<tr><td class="l">{{ v.date }}</td><td class="l">{{ v.start }}</td><td class="l">{{ bnames.get(v.barber_id, v.barber_name) }}</td><td class="l">{{ v.status }}</td><td class="wrap">{{ v.services|map(attribute='title')|join(', ') }}</td><td>₴{{ v.total_cost|round|int }}</td><td class="l">{{ 'online' if v.online else 'front desk' }}</td></tr>{% endfor %}</tbody></table></div>
+</section>
+{% endblock %}

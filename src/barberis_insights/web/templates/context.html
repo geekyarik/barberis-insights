@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<header>
+  <h1>Context</h1>
+  <p class="sub">What happened and why: price changes, staff changes, campaigns, decisions and observations. Claude reads these when analysing the numbers.</p>
+</header>
+<form method="get" class="inline card">
+  <label>Search<input name="q" value="{{ q }}" placeholder="price, staff, campaign…"></label>
+  <label>About<select name="scope"><option value="">Anything</option><option value="shop" {{ 'selected' if scope=='shop' }}>Shop</option><option value="team" {{ 'selected' if scope=='team' }}>Team</option>{% for b in all_barbers %}<option value="{{ b.key }}" {{ 'selected' if scope==b.key }}>{{ b.name }}</option>{% endfor %}</select></label>
+  <button class="ghost">Search</button>
+</form>
+<details class="card"><summary>Add a note</summary>
+  <form method="post" action="/context" style="display:grid;gap:8px;margin-top:8px">
+    <label>Title<input name="title" required maxlength="200"></label>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+      <label>From<input name="date_from" type="date" required value="{{ today }}"></label>
+      <label>To (optional)<input name="date_to" type="date"></label>
+      <label>Kind<select name="kind">{% for k in kinds %}<option>{{ k }}</option>{% endfor %}</select></label>
+    </div>
+    <label>About<select name="scopes" multiple size="4"><option value="shop" selected>Shop</option><option value="team">Team</option>{% for b in all_barbers %}<option value="{{ b.key }}">{{ b.name }}</option>{% endfor %}</select></label>
+    <label>Tags (comma-separated)<input name="tags" placeholder="pricing, campaign"></label>
+    <label>Details<textarea name="body"></textarea></label>
+    <div><button>Add note</button></div>
+  </form>
+</details>
+<section>
+  {% for n in notes %}
+  <article class="card" style="display:flex;flex-direction:column;gap:4px">
+    <div class="eyebrow">{{ n.date_from }}{% if n.date_to %} – {{ n.date_to }}{% endif %} · {{ n.kind }} · {{ n.scopes|join(', ') }}{% if n.tags %} · {{ n.tags|join(', ') }}{% endif %} · {{ n.source }}</div>
+    <h3>{{ n.title }}</h3>
+    {% if n.body %}<p class="sub" style="margin:0">{{ n.body }}</p>{% endif %}
+    <form method="post" action="/context/{{ n.id }}/delete" onsubmit="return this.querySelector('input').checked"><label style="display:inline-flex;gap:6px;align-items:center;font-size:12px"><input type="checkbox"> confirm</label> <button class="danger" style="padding:3px 8px">Delete</button></form>
+  </article>
+  {% else %}<p class="muted">No notes match.</p>{% endfor %}
+</section>
+{% endblock %}

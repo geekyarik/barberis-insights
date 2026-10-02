@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<header>
+  <div class="eyebrow">Completed visits up to {{ data_asof }}</div>
+  <h1>Data &amp; sync</h1>
+  <p class="sub">Data comes in through files Claude fetches from the Altegio Pro connector (<code>insights ingest FILE…</code>) and the client export from Altegio (<code>insights import-clients FILE</code>). Ask Claude to “refresh the barber goals” for the monthly routine.</p>
+</header>
+<section class="card">
+  <h2>Save a measurement</h2>
+  <p class="sub">Computes every metric for every barber and the team over whole weeks and stores it, so goals move. Use the weeks since the last measurement.</p>
+  <form method="post" action="/data/snapshot" class="inline">
+    <label>From<input type="date" name="date_from" required value="{{ suggest_from or '' }}"></label>
+    <label>To (a Sunday)<input type="date" name="date_to" required value="{{ suggest_to }}"></label>
+    <button>Compute and save</button>
+  </form>
+</section>
+<div class="grid">
+  <section class="card"><h3>Measurements</h3><table><thead><tr><th class="l">As of</th><th class="l">Window</th><th class="l">Label</th><th>Values</th></tr></thead>
+    <tbody>{% for asof, f, t, label, n in snaps|reverse %}<tr><td class="l">{{ asof }}</td><td class="l">{{ f }} – {{ t }}</td><td class="l">{{ label }}</td><td>{{ n }}</td></tr>{% endfor %}</tbody></table></section>
+  <section class="card"><h3>Appointments by month</h3><table><thead><tr><th class="l">Month</th><th>Rows</th></tr></thead>
+    <tbody>{% for m, n in months|reverse %}<tr><td class="l">{{ m }}</td><td>{{ n }}</td></tr>{% endfor %}</tbody></table></section>
+</div>
+<section><h2>Sync runs</h2>
+  <div class="tablebox"><table><thead><tr><th class="l">Started</th><th class="l">Source</th><th class="l">Status</th><th class="l">Counts</th><th class="l">Log</th></tr></thead>
+  <tbody>{% for r in runs %}<tr><td class="l">{{ r.started.strftime('%Y-%m-%d %H:%M') }}</td><td class="l">{{ r.source }}</td><td class="l">{{ r.status }}</td><td class="wrap">{{ r.counts }}</td><td class="wrap">{{ r.log }}</td></tr>{% endfor %}</tbody></table></div>
+</section>
+{% endblock %}

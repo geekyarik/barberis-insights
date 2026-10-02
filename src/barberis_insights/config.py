@@ -1,0 +1,52 @@
+"""Service settings. Values come from environment variables prefixed INSIGHTS_ or a .env file."""
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+@dataclass(frozen=True)
+class Barber:
+    key: str
+    altegio_id: int
+    name: str
+    tier: str
+
+
+def default_barbers() -> list[Barber]:
+    """Initial roster for `insights import-legacy`, from var/barbers.json (private, not in git):
+    [{"key", "altegio_id", "name", "tier"}]. After that the database `barbers` table is the source of truth."""
+    import json
+    path = Path(Settings().data_dir) / "barbers.json"
+    return [Barber(**b) for b in json.loads(path.read_text())] if path.exists() else []
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="INSIGHTS_", env_file=ROOT / ".env", extra="ignore")
+
+    location_id: int = 209563
+    data_dir: Path = ROOT / "var"
+    history_start: str = "2025-01-01"
+    addon_keywords: tuple[str, ...] = ("Масаж", "Камуфляж", "Воскове", "брів")
+    baseline_date: str = "2026-09-27"
+    # risk rules
+    overdue_min_days: int = 45
+    overdue_gap_factor: float = 1.5
+    lapsed_after_days: int = 180
+    case_cooldown_days: int = 60
+    winback_window_days: int = 60
+    # google sheet for the admin call list
+    sheet_id: str | None = None
+    host: str = "127.0.0.1"
+    port: int = 8765
+
+    @property
+    def db_url(self) -> str:
+        return f"sqlite:///{self.data_dir / 'insights.sqlite'}"
+
+
+settings = Settings()

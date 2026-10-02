@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block content %}
+<header>
+  <div class="eyebrow">Profiles as of {{ asof }} · {{ seg.get('overdue',0) }} overdue · {{ seg.get('lapsed',0) }} lapsed · {{ seg.get('one_time',0) }} one-time · {{ seg.get('slipping',0) }} slipping</div>
+  <h1>Clients at risk</h1>
+  <p class="sub">Overdue = silent longer than max(45 days, 1.5 × the client's own usual gap). Lapsed = over 180 days. One-time = came once and not since. Select clients to propose as win-back cases, then approve them for the admin's call sheet.</p>
+</header>
+
+<form method="get" class="inline card">
+  <label>Segments<select name="segment" multiple size="3">{% for sg in segments %}<option {{ 'selected' if sg in chosen }}>{{ sg }}</option>{% endfor %}</select></label>
+  <label>Usual barber<select name="barber"><option value="">All</option>{% for b in all_barbers %}<option value="{{ b.key }}" {{ 'selected' if barber==b.key }}>{{ b.name }}</option>{% endfor %}</select></label>
+  <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="show_all" value="true" {{ 'checked' if show_all }}> include clients we can't call</label>
+  <button class="ghost">Filter</button>
+</form>
+<form method="post" action="/risk/rebuild"><button class="ghost">Rebuild profiles from the latest data</button></form>
+
+{% if proposed %}
+<section>
+  <h2>Proposed — waiting for your decision ({{ proposed|length }})</h2>
+  <form method="post" action="/cases/decide">
+    <input type="hidden" name="next_url" value="/risk">
+    <div class="tablebox"><table><thead><tr><th class="l"><input type="checkbox" onclick="this.closest('table').querySelectorAll('input[name=case_id]').forEach(c=>c.checked=this.checked)" aria-label="Select all"></th><th class="l">Client</th><th class="l">Phone</th><th>Visits</th><th>Spent</th><th>Days</th><th class="l">Offer</th><th class="l">Reason</th></tr></thead>
+    <tbody>{% for r in proposed %}<tr><td class="l"><input type="checkbox" name="case_id" value="{{ r.case_id }}" aria-label="Select case {{ r.case_id }}"></td><td class="l"><a href="/client/{{ r.client_id }}">{{ r.name or ('client ' ~ r.client_id) }}</a></td><td class="l">{{ r.phone or '—' }}</td><td>{{ r.visits }}</td><td>₴{{ '{:,.0f}'.format(r.lifetime_spend or 0).replace(',', ' ') }}</td><td>{{ r.days_since }}</td><td class="l">{{ r.suggested_offer or '' }}{% if r.offer_arm %} <span class="muted">(A/B)</span>{% endif %}</td><td class="wrap">{{ r.reason }}</td></tr>{% endfor %}</tbody></table></div>
+    <div class="inline" style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:end">
+      <label>Assign to admin<input name="assigned_to" placeholder="admin name"></label>
+      <button name="action" value="approve">Approve selected</button>
+      <button name="action" value="skip" class="ghost">Skip selected</button>
+    </div>
+  </form>
+</section>
+{% endif %}
+
+<section>
+  <h2>Candidates ({{ rows|length }})</h2>
+  <form method="post" action="/risk/propose">
+    <div class="tablebox" style="max-height:620px"><table><thead><tr><th class="l"><input type="checkbox" onclick="this.closest('table').querySelectorAll('input[name=client_id]').forEach(c=>c.checked=this.checked)" aria-label="Select all"></th><th>Priority</th><th class="l">Client</th><th class="l">Segment</th><th>Visits</th><th>Spent</th><th>Last visit</th><th>Days</th><th>Usual gap</th><th class="l">Usual barber</th><th class="l">Offer</th><th class="l">Can call</th></tr></thead>
+    <tbody>{% for r in rows %}<tr><td class="l">{% if r.eligible %}<input type="checkbox" name="client_id" value="{{ r.client_id }}" aria-label="Select client {{ r.client_id }}">{% endif %}</td><td>{{ r.priority }}</td><td class="l"><a href="/client/{{ r.client_id }}">{{ r.name or ('client ' ~ r.client_id) }}</a></td><td class="l"><span class="pill {{ r.segment }}">{{ r.segment }}</span></td><td>{{ r.visits }}</td><td>₴{{ '{:,.0f}'.format(r.lifetime_spend).replace(',', ' ') }}</td><td>{{ r.last_visit }}</td><td>{{ r.days_since }}</td><td>{{ r.median_gap|round|int if r.median_gap else '—' }}</td><td class="l">{{ bnames.get(r.usual_barber, '') }}</td><td class="l">{{ r.suggested_offer or '' }}</td><td class="l">{{ 'yes' if r.eligible else r.ineligible_reasons|join(', ') }}</td></tr>{% else %}<tr><td class="l muted" colspan="12">No clients match. If this is empty because nobody has a phone on file, tick “include clients we can't call”.</td></tr>{% endfor %}</tbody></table></div>
+    <div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;align-items:end">
+      <button>Propose selected as win-back cases</button>
+      <span class="muted" style="font-size:13px">Optional A/B test — randomly assign one of:</span>
+      {% for o in offers %}<label style="display:flex;gap:5px;align-items:center"><input type="checkbox" name="arms" value="{{ o.code }}"> {{ o.label }}</label>{% endfor %}
+    </div>
+  </form>
+</section>
+{% endblock %}

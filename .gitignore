@@ -216,3 +216,28 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ---- barberis-insights ----
+# local business data, client contacts, credentials — never commit
+var/
+*.sqlite
+*.sqlite-journal
+credentials*.json
+token*.json
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+dist/
+
+# exports and Google client secrets dropped in the root by mistake
+*.xls
+*.xlsx
+*.csv
+client_secret*.json
+.idea/
+.env
+
+# business analysis data and figures (private)
+legacy/

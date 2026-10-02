@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<header>
+  <h1>Win-back</h1>
+  <p class="sub">A case counts as won back when the client completes a visit within 60 days of the call. Revenue recovered is that visit's service price.</p>
+</header>
+<div class="kpis">
+  <div class="kpi"><span class="l">To review</span><span class="v">{{ counts.get('proposed', 0) }}</span></div>
+  <div class="kpi"><span class="l">With the admin</span><span class="v">{{ counts.get('in_sheet', 0) + counts.get('approved', 0) }}</span></div>
+  <div class="kpi"><span class="l">Booked</span><span class="v">{{ counts.get('booked', 0) }}</span></div>
+  <div class="kpi"><span class="l">Won back</span><span class="v">{{ won }}{% if closed %} <span class="muted" style="font-size:16px">of {{ closed }}</span>{% endif %}</span><span class="d">{{ (100*won/closed)|round|int ~ '% rate' if closed else 'no closed cases yet' }}</span></div>
+  <div class="kpi"><span class="l">Revenue recovered</span><span class="v">₴{{ '{:,.0f}'.format(revenue).replace(',', ' ') }}</span></div>
+</div>
+<form method="post" action="/outreach/sync" class="inline"><button>{{ 'Sync with the admin sheet' if sheet else 'Set up the admin sheet' }}</button>
+  <span class="muted" style="font-size:13px">Pulls the admin's outcomes, marks returned clients, sends approved cases, archives closed ones.</span></form>
+
+<div class="grid">
+  {% for title, rows in [('By offer', by_offer), ('By admin', by_admin), ('By segment', by_segment)] %}
+  <section class="card"><h3>{{ title }}</h3><table><thead><tr><th class="l"></th><th>Won</th><th>Closed</th><th>Rate</th><th>₴</th></tr></thead>
+    <tbody>{% for k, w, n, rev in rows %}<tr><td class="l">{{ k }}</td><td>{{ w }}</td><td>{{ n }}</td><td>{{ (100*w/n)|round|int }}%</td><td>{{ '{:,.0f}'.format(rev).replace(',', ' ') }}</td></tr>{% else %}<tr><td class="l muted" colspan="5">No closed cases yet.</td></tr>{% endfor %}</tbody></table></section>
+  {% endfor %}
+</div>
+
+<section>
+  <h2>Cases</h2>
+  <form method="get" class="inline"><label>Status<select name="status" onchange="this.form.submit()"><option value="">All</option>{% for st in statuses %}<option {{ 'selected' if status==st }}>{{ st }}</option>{% endfor %}</select></label></form>
+  <div class="tablebox" style="max-height:620px"><table><thead><tr><th class="l">Case</th><th class="l">Client</th><th class="l">Status</th><th class="l">Admin</th><th class="l">Offer</th><th>Contacted</th><th>Returned</th><th>₴</th><th class="l">Usual barber</th></tr></thead>
+  <tbody>{% for r in rows %}<tr><td class="l">{{ r.case_id }}</td><td class="l"><a href="/client/{{ r.client_id }}">{{ r.name or ('client ' ~ r.client_id) }}</a></td><td class="l"><span class="pill {{ r.status }}">{{ r.status }}</span></td><td class="l">{{ r.assigned_to or '' }}</td><td class="l">{{ r.offer_given or r.suggested_offer or '' }}</td><td>{{ r.contacted_on or '' }}</td><td>{{ r.returned_on or '' }}</td><td>{{ r.revenue_recovered|round|int if r.revenue_recovered else '' }}</td><td class="l">{{ bnames.get(r.usual_barber, '') }}</td></tr>{% else %}<tr><td class="l muted" colspan="9">No cases yet. Start from <a href="/risk">Clients at risk</a>.</td></tr>{% endfor %}</tbody></table></div>
+</section>
+{% endblock %}
