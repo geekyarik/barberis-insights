@@ -64,16 +64,23 @@ The recommended way is a **service account**. It needs no browser sign-in, its a
 3. Open the service account → **Keys → Add key → Create new key → JSON**. Save the file as `var/google_service_account.json`.
 4. Open the admin's Google Sheet → **Share**, and add the service account's email (`…@<project>.iam.gserviceaccount.com`) as **Editor**. Also share it with the admin.
 5. Put the sheet id in `.env`: `INSIGHTS_SHEET_ID=…`, the part of the sheet URL between `/d/` and `/edit`.
-6. Run `uv run insights sheet-auth`. It connects and creates the *Call list* and *Done* tabs.
+6. Run `uv run insights sheet-auth`. It connects and creates the *Обдзвін* (call list) and *Завершені* (done) tabs.
 
 **Alternative: OAuth sign-in.** Put an OAuth client JSON at `var/google_oauth_client.json`. A *Web* client needs `http://localhost:8766/` as an authorized redirect URI; a *Desktop* client needs nothing. Add your Google account as a **test user** on the consent screen, then run `insights sheet-auth` to sign in in the browser. While the app stays in Testing mode, Google expires this sign-in after 7 days.
 
 `insights sheet-sync --dry-run` shows what would be sent, using an in-memory sheet.
 
+The sheet is in Ukrainian by default. Set `INSIGHTS_SHEET_LANG=en` for English. The sync reads headers and dropdown values in either language, so an admin typing «Записався» or “Booked” both work. Tabs with no rows yet switch to the configured language on the next sync; tabs already in use keep their headers.
+
 ### Client contacts
 Contacts come from Altegio's own export: **Clients → Export** (Excel). Run `insights import-clients FILE --dry-run` to see which columns were recognised. If a header isn't matched, add it to `ALIASES` in `ingest/client_export.py`.
 
 Clients without a phone, without data-processing consent, or marked *do not contact* are never sent to the sheet.
+
+## Languages
+Everything people read is in **Ukrainian** (default) or **English**: the dashboard, its messages, and the call sheet. Switch the dashboard language in the menu (it is remembered per browser). Code, identifiers, docs, the CLI and the MCP tools stay in English.
+
+All visible text lives in `src/barberis_insights/i18n/uk.json` and `en.json`, keyed by stable English ids (`nav.goals`, `metric.util`, `status.won_back`). Templates call `t("key")`; codes in the data (segments, statuses, offers) are shown with `label("segment.", code)`. To add or change text, edit both files: `tests/test_i18n.py` fails if a key or a `{placeholder}` exists in one language but not the other, or if a page uses a key that doesn't exist.
 
 ## Claude integration
 - **MCP server:** registered as `barberis-insights`, with `claude mcp add barberis-insights --scope user -- uv --directory <repo> run insights mcp`. It has 17 tools:
@@ -99,6 +106,7 @@ src/barberis_insights/
   metrics/               registry + built-in metrics (core.py), window context, weekly rows
   clients/               client profiles and risk segments
   outreach/              cases, offers, attribution, Google Sheet sync
+  i18n/                  interface text in Ukrainian and English (uk.json, en.json) and the t() helper
   goals/ context/ experiments/ playbook/   domain services
   web/                   FastAPI app, Jinja templates, vendored Chart.js
   mcp_server.py, cli.py

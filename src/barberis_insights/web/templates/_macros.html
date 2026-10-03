@@ -1,20 +1,22 @@
+{# Import with context so the macros can use the page's language: {% from "_macros.html" import goal_card with context %} #}
 {% macro goal_card(g, catalog, scope_names, next_url) %}
 <article class="card" style="display:flex;flex-direction:column;gap:8px">
   <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
-    <span class="eyebrow">{{ REGISTRY[g.metric].label if g.metric in REGISTRY else "Custom" }}</span>
-    <span class="pill {{ g.state }}">{{ g.label }}</span>
+    <span class="eyebrow">{{ mlabel(g.metric) if g.metric in REGISTRY else t("goal.custom") }}</span>
+    <span class="pill {{ g.state }}">{{ t(g.label_key) }}</span>
   </div>
   <h3>{{ g.title }}</h3>
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
-    <div><div class="eyebrow">Start</div><b style="font:600 22px var(--f-display)">{{ fmt(g.metric, g.baseline) }}</b></div>
-    <div><div class="eyebrow">Now</div><b style="font:600 22px var(--f-display)">{{ fmt(g.metric, g.current) }}</b></div>
-    <div><div class="eyebrow">Target</div><b style="font:600 22px var(--f-display)">{{ fmt(g.metric, g.target) }}</b></div>
+    <div><div class="eyebrow">{{ t("goal.start") }}</div><b style="font:600 22px var(--f-display)">{{ fmt(g.metric, g.baseline) }}</b></div>
+    <div><div class="eyebrow">{{ t("goal.now") }}</div><b style="font:600 22px var(--f-display)">{{ fmt(g.metric, g.current) }}</b></div>
+    <div><div class="eyebrow">{{ t("goal.target") }}</div><b style="font:600 22px var(--f-display)">{{ fmt(g.metric, g.target) }}</b></div>
   </div>
-  <div class="bar" role="img" aria-label="{{ (g.progress*100)|round|int }}% of the way"><i style="width:{{ (g.progress*100)|round|int }}%"></i></div>
+  {% set pct = (g.progress*100)|round|int %}
+  <div class="bar" role="img" aria-label="{{ t('goal.progress_aria', pct=pct) }}"><i style="width:{{ pct }}%"></i></div>
   {% if g.trend|length > 1 %}<canvas class="spark" height="40" data-points='{{ g.trend|map("last")|list|tojson }}' data-target="{{ g.target }}"></canvas>{% endif %}
   {% if g.actions %}<p class="sub" style="margin:0">{{ g.actions }}</p>{% endif %}
-  <div class="muted" style="font-size:13px">Due {{ g.due }}{% if g.measured %} · measured {{ g.measured }}{% endif %}</div>
-  <details><summary>Edit</summary>{{ goal_form(g, catalog, scope_names, next_url) }}</details>
+  <div class="muted" style="font-size:13px">{{ t("goal.due", date=g.due) }}{% if g.measured %} · {{ t("goal.measured", date=g.measured) }}{% endif %}</div>
+  <details><summary>{{ t("common.edit") }}</summary>{{ goal_form(g, catalog, scope_names, next_url) }}</details>
 </article>
 {% endmacro %}
 
@@ -22,28 +24,28 @@
 <form method="post" action="/goals" style="display:grid;gap:8px;margin-top:8px">
   <input type="hidden" name="goal_id" value="{{ g.id if g else '' }}">
   <input type="hidden" name="next_url" value="{{ next_url }}">
-  <label>Goal<input name="title" required maxlength="200" value="{{ g.title if g else '' }}"></label>
+  <label>{{ t("goal.f.title") }}<input name="title" required maxlength="200" value="{{ g.title if g else '' }}"></label>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-    <label>For<select name="scope">{% for k, n in scope_names.items() %}<option value="{{ k }}" {{ 'selected' if g and g.scope==k }}>{{ n }}</option>{% endfor %}</select></label>
-    <label>Metric<select name="metric">{% for m in catalog %}<option value="{{ m.key }}" {{ 'selected' if g and g.metric==m.key }}>{{ m.label }}</option>{% endfor %}<option value="custom" {{ 'selected' if g and g.metric=='custom' }}>Custom (enter by hand)</option></select></label>
+    <label>{{ t("goal.f.scope") }}<select name="scope">{% for k, n in scope_names.items() %}<option value="{{ k }}" {{ 'selected' if g and g.scope==k }}>{{ n }}</option>{% endfor %}</select></label>
+    <label>{{ t("goal.f.metric") }}<select name="metric">{% for m in catalog %}<option value="{{ m.key }}" {{ 'selected' if g and g.metric==m.key }}>{{ mlabel(m.key) }}</option>{% endfor %}<option value="custom" {{ 'selected' if g and g.metric=='custom' }}>{{ t("goal.f.custom") }}</option></select></label>
   </div>
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-    <label>Start<input name="baseline" type="number" step="any" value="{{ g.baseline if g else '' }}" placeholder="latest"></label>
-    <label>Target<input name="target" type="number" step="any" required value="{{ g.target if g else '' }}"></label>
-    <label>Due<input name="due" type="date" required value="{{ g.due if g else '' }}"></label>
+    <label>{{ t("goal.start") }}<input name="baseline" type="number" step="any" value="{{ g.baseline if g else '' }}" placeholder="{{ t('goal.f.latest') }}"></label>
+    <label>{{ t("goal.target") }}<input name="target" type="number" step="any" required value="{{ g.target if g else '' }}"></label>
+    <label>{{ t("goal.f.due") }}<input name="due" type="date" required value="{{ g.due if g else '' }}"></label>
   </div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-    <label>Status<select name="status">{% for st in ['active','done','dropped'] %}<option {{ 'selected' if g and g.status==st }}>{{ st }}</option>{% endfor %}</select></label>
-    <label>Current (custom only)<input name="manual_current" type="number" step="any" value="{{ g.current if g and g.metric=='custom' and g.current is not none else '' }}"></label>
+    <label>{{ t("goal.f.status") }}<select name="status">{% for st in ['active','done','dropped'] %}<option value="{{ st }}" {{ 'selected' if g and g.status==st }}>{{ t('goal.status.' ~ st) }}</option>{% endfor %}</select></label>
+    <label>{{ t("goal.f.current") }}<input name="manual_current" type="number" step="any" value="{{ g.current if g and g.metric=='custom' and g.current is not none else '' }}"></label>
   </div>
-  <label>How we'll get there<textarea name="actions">{{ g.actions if g else '' }}</textarea></label>
-  <div style="display:flex;gap:8px"><button>Save</button></div>
+  <label>{{ t("goal.f.actions") }}<textarea name="actions">{{ g.actions if g else '' }}</textarea></label>
+  <div style="display:flex;gap:8px"><button>{{ t("common.save") }}</button></div>
 </form>
 {% if g %}
 <form method="post" action="/goals/{{ g.id }}/delete" style="display:flex;gap:8px;align-items:center;margin-top:6px">
   <input type="hidden" name="next_url" value="{{ next_url }}">
-  <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="confirm" value="yes"> confirm</label>
-  <button class="danger">Delete goal</button>
+  <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="confirm" value="yes"> {{ t("common.confirm") }}</label>
+  <button class="danger">{{ t("goal.delete") }}</button>
 </form>
 {% endif %}
 {% endmacro %}

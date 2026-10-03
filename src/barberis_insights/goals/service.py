@@ -36,19 +36,19 @@ def assess(s: Session, g: Goal) -> dict:
     base_date = dt.date.fromisoformat(settings.baseline_date)
     p = progress(g, cur)
     if g.status in ("done", "dropped"):
-        state, label = g.status, g.status.capitalize()
+        state, label, key = g.status, g.status.capitalize(), g.status
     elif cur is None or not (g.target - g.baseline):
-        state, label = "new", "No data yet"
+        state, label, key = "new", "No data yet", "no_data"
     elif p >= 1:
-        state, label = "ok", "Target reached"
+        state, label, key = "ok", "Target reached", "reached"
     elif not asof or asof <= base_date:
-        state, label = "new", "Waiting for first measurement"
+        state, label, key = "new", "Waiting for first measurement", "waiting"
     else:
         elapsed = max(0.0, min(1.0, (asof - base_date).days / max(1, (g.due - base_date).days)))
-        state, label = ("ok", "On track") if p + 0.1 >= elapsed else ("behind", "Behind")
+        state, label, key = ("ok", "On track", "on_track") if p + 0.1 >= elapsed else ("behind", "Behind", "behind")
     return {"id": g.id, "scope": g.scope, "title": g.title, "metric": g.metric, "baseline": g.baseline, "target": g.target,
             "due": str(g.due), "status": g.status, "actions": g.actions, "current": cur, "measured": str(asof) if asof else None,
-            "progress": round(p, 3), "state": state, "label": label, "trend": series(s, g.scope, g.metric) if g.metric != "custom" else []}
+            "progress": round(p, 3), "state": state, "label": label, "label_key": "goal.state." + key, "trend": series(s, g.scope, g.metric) if g.metric != "custom" else []}
 
 
 def _slug(scope: str, title: str) -> str:

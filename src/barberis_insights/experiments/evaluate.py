@@ -56,12 +56,12 @@ def evaluate_did(ds: Dataset, metric: str, treatment: list[str], control: list[s
     out = {"metric": metric, "treatment": treatment, "pre_window": [str(pre_start), str(monday - dt.timedelta(days=1))],
            "post_window": [str(post_start), str(post_start + dt.timedelta(weeks=post_weeks, days=-1))], "weeks": {"treatment_pre": len(T0), "treatment_post": len(T1)}}
     if len(T0) < 3 or len(T1) < 3:
-        return out | {"verdict": "Not enough weeks of data to evaluate."}
+        return out | {"verdict": "Not enough weeks of data to evaluate.", "msg": {"key": "not_enough_weeks"}}
     out["treatment_before"], out["treatment_after"] = round(st.mean(T0), 2), round(st.mean(T1), 2)
     if control:
         C0 = clean(weekly_series(ds, metric, control, pre_start, pre_weeks)); C1 = clean(weekly_series(ds, metric, control, post_start, post_weeks))
         if len(C0) < 3 or len(C1) < 3:
-            return out | {"verdict": "Not enough control weeks to evaluate."}
+            return out | {"verdict": "Not enough control weeks to evaluate.", "msg": {"key": "not_enough_control"}}
         f = lambda a, b, c, d: (st.mean(b) - st.mean(a)) - (st.mean(d) - st.mean(c))
         effect = f(T0, T1, C0, C1); lo, hi = _boot(f, [T0, T1, C0, C1])
         out |= {"control": control, "control_before": round(st.mean(C0), 2), "control_after": round(st.mean(C1), 2), "weeks": out["weeks"] | {"control_pre": len(C0), "control_post": len(C1)}}
@@ -74,6 +74,9 @@ def evaluate_did(ds: Dataset, metric: str, treatment: list[str], control: list[s
     out["significant"] = sig
     out["verdict"] = (f"{'Significant' if sig else 'No clear'} effect on {REGISTRY[metric].label.lower()}: {effect:+.2f}{unit if unit == '%' else ''} "
                       f"(95% CI {lo:+.2f} to {hi:+.2f}){' relative to the control group' if control else ''}.")
+    # the same verdict as a catalog key + numbers, so the dashboard can show it in the viewer's language
+    out["msg"] = {"key": "did_significant" if sig else "did_unclear", "control": bool(control),
+                  "params": {"metric": metric, "effect": f"{effect:+.2f}{unit if unit == '%' else ''}", "lo": f"{lo:+.2f}", "hi": f"{hi:+.2f}"}}
     return out
 
 
@@ -89,11 +92,12 @@ def evaluate_offer_ab(s: Session) -> dict:
             p = (wa + wb) / (na + nb); se = math.sqrt(p * (1 - p) * (1 / na + 1 / nb)) or 1e-9
             z = (wa / na - wb / nb) / se; pval = math.erfc(abs(z) / math.sqrt(2))
             out |= {"z": round(z, 2), "p_value": round(pval, 4), "significant": pval < 0.05,
-                    "verdict": f"{a} {wa}/{na} vs {b} {wb}/{nb} won back; p = {pval:.3f}."}
+                    "verdict": f"{a} {wa}/{na} vs {b} {wb}/{nb} won back; p = {pval:.3f}.",
+                    "msg": {"key": "ab_result", "params": {"a": a, "wa": wa, "na": na, "b": b, "wb": wb, "nb": nb, "p": f"{pval:.3f}"}}}
         else:
-            out["verdict"] = "Need at least 10 closed cases per arm."
+            out["verdict"] = "Need at least 10 closed cases per arm."; out["msg"] = {"key": "ab_need_10"}
     else:
-        out["verdict"] = "Needs exactly two offer arms with closed cases."
+        out["verdict"] = "Needs exactly two offer arms with closed cases."; out["msg"] = {"key": "ab_need_two"}
     return out
 
 

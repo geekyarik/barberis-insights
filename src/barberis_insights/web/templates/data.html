@@ -1,27 +1,27 @@
 {% extends "base.html" %}
 {% block content %}
 <header>
-  <div class="eyebrow">Completed visits up to {{ data_asof }}</div>
-  <h1>Data &amp; sync</h1>
-  <p class="sub">Data comes in through files Claude fetches from the Altegio Pro connector (<code>insights ingest FILE…</code>) and the client export from Altegio (<code>insights import-clients FILE</code>). Ask Claude to “refresh the barber goals” for the monthly routine.</p>
+  <div class="eyebrow">{{ t("data.upto", date=data_asof) }}</div>
+  <h1>{{ t("nav.data") }}</h1>
+  <p class="sub">{{ t("data.sub") }} <code>insights ingest FILE…</code> · <code>insights import-clients FILE</code></p>
 </header>
 <section class="card">
-  <h2>Save a measurement</h2>
-  <p class="sub">Computes every metric for every barber and the team over whole weeks and stores it, so goals move. Use the weeks since the last measurement.</p>
+  <h2>{{ t("data.save") }}</h2>
+  <p class="sub">{{ t("data.save_sub") }}</p>
   <form method="post" action="/data/snapshot" class="inline">
-    <label>From<input type="date" name="date_from" required value="{{ suggest_from or '' }}"></label>
-    <label>To (a Sunday)<input type="date" name="date_to" required value="{{ suggest_to }}"></label>
-    <button>Compute and save</button>
+    <label>{{ t("common.from") }}<input type="date" name="date_from" required value="{{ suggest_from or '' }}"></label>
+    <label>{{ t("data.to_sunday") }}<input type="date" name="date_to" required value="{{ suggest_to }}"></label>
+    <button>{{ t("data.compute") }}</button>
   </form>
 </section>
 <div class="grid">
-  <section class="card"><h3>Measurements</h3><table><thead><tr><th class="l">As of</th><th class="l">Window</th><th class="l">Label</th><th>Values</th></tr></thead>
-    <tbody>{% for asof, f, t, label, n in snaps|reverse %}<tr><td class="l">{{ asof }}</td><td class="l">{{ f }} – {{ t }}</td><td class="l">{{ label }}</td><td>{{ n }}</td></tr>{% endfor %}</tbody></table></section>
-  <section class="card"><h3>Appointments by month</h3><table><thead><tr><th class="l">Month</th><th>Rows</th></tr></thead>
+  <section class="card"><h3>{{ t("data.measurements") }}</h3><table><thead><tr><th class="l">{{ t("data.asof") }}</th><th class="l">{{ t("data.window") }}</th><th class="l">{{ t("data.label") }}</th><th>{{ t("data.values") }}</th></tr></thead>
+    <tbody>{% for asof, f, to, lbl, n in snaps|reverse %}<tr><td class="l">{{ asof }}</td><td class="l">{{ f }} – {{ to }}</td><td class="l">{{ lbl }}</td><td>{{ n }}</td></tr>{% endfor %}</tbody></table></section>
+  <section class="card"><h3>{{ t("data.by_month") }}</h3><table><thead><tr><th class="l">{{ t("data.month") }}</th><th>{{ t("data.rows") }}</th></tr></thead>
     <tbody>{% for m, n in months|reverse %}<tr><td class="l">{{ m }}</td><td>{{ n }}</td></tr>{% endfor %}</tbody></table></section>
 </div>
-<section><h2>Sync runs</h2>
-  <div class="tablebox"><table><thead><tr><th class="l">Started</th><th class="l">Source</th><th class="l">Status</th><th class="l">Counts</th><th class="l">Log</th></tr></thead>
+<section><h2>{{ t("data.runs") }}</h2>
+  <div class="tablebox"><table><thead><tr><th class="l">{{ t("data.started") }}</th><th class="l">{{ t("data.source") }}</th><th class="l">{{ t("col.status") }}</th><th class="l">{{ t("data.counts") }}</th><th class="l">{{ t("data.log") }}</th></tr></thead>
   <tbody>{% for r in runs %}<tr><td class="l">{{ r.started.strftime('%Y-%m-%d %H:%M') }}</td><td class="l">{{ r.source }}</td><td class="l">{{ r.status }}</td><td class="wrap">{{ r.counts }}</td><td class="wrap">{{ r.log }}</td></tr>{% endfor %}</tbody></table></div>
 </section>
 {% endblock %}

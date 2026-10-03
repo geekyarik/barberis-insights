@@ -1,46 +1,46 @@
 {% extends "base.html" %}
 {% block content %}
 <header>
-  <div class="eyebrow">Client {{ cid }}{% if p %} · <span class="pill {{ p.segment }}">{{ p.segment }}</span>{% endif %}</div>
-  <h1>{{ c.name if c and c.name else 'Client ' ~ cid }}</h1>
-  <p class="sub">{% if c and c.phone %}{{ c.phone }}{% else %}No phone on file{% endif %}{% if c and c.email %} · {{ c.email }}{% endif %}{% if c and c.do_not_contact %} · <b class="down">Do not contact</b>{% endif %}{% if c and c.data_processing_allowed is sameas false %} · no data-processing consent{% endif %}</p>
+  <div class="eyebrow">{{ t("client.fallback", id=cid) }}{% if p %} · <span class="pill {{ p.segment }}">{{ label('segment.', p.segment) }}</span>{% endif %}</div>
+  <h1>{{ c.name if c and c.name else t('client.fallback', id=cid) }}</h1>
+  <p class="sub">{% if c and c.phone %}{{ c.phone }}{% else %}{{ t("client.no_phone") }}{% endif %}{% if c and c.email %} · {{ c.email }}{% endif %}{% if c and c.do_not_contact %} · <b class="down">{{ t("reason.dnc") }}</b>{% endif %}{% if c and c.data_processing_allowed is sameas false %} · {{ t("reason.no_consent") }}{% endif %}</p>
 </header>
 {% if p %}
 <div class="kpis">
-  <div class="kpi"><span class="l">Visits since 2025</span><span class="v">{{ p.visits }}</span></div>
-  <div class="kpi"><span class="l">Spent</span><span class="v">₴{{ '{:,.0f}'.format(p.lifetime_spend).replace(',', ' ') }}</span></div>
-  <div class="kpi"><span class="l">Last visit</span><span class="v">{{ p.last_visit }}</span><span class="d">{{ p.days_since_last }} days ago</span></div>
-  <div class="kpi"><span class="l">Usual gap</span><span class="v">{{ p.median_gap_days|round|int if p.median_gap_days else '—' }} d</span></div>
-  <div class="kpi"><span class="l">Usual barber</span><span class="v">{{ bnames.get(p.usual_barber, '—') }}</span></div>
+  <div class="kpi"><span class="l">{{ t("client.visits_since") }}</span><span class="v">{{ p.visits }}</span></div>
+  <div class="kpi"><span class="l">{{ t("col.spent") }}</span><span class="v">₴{{ '{:,.0f}'.format(p.lifetime_spend).replace(',', ' ') }}</span></div>
+  <div class="kpi"><span class="l">{{ t("col.last_visit") }}</span><span class="v">{{ p.last_visit }}</span><span class="d">{{ t("client.days_ago", n=p.days_since_last) }}</span></div>
+  <div class="kpi"><span class="l">{{ t("col.usual_gap") }}</span><span class="v">{{ t("client.days_short", n=(p.median_gap_days|round|int) if p.median_gap_days else '—') }}</span></div>
+  <div class="kpi"><span class="l">{{ t("col.usual_barber") }}</span><span class="v">{{ bnames.get(p.usual_barber, '—') }}</span></div>
 </div>
 {% endif %}
 <div class="grid">
   <section class="card">
-    <h2>Win-back cases</h2>
+    <h2>{{ t("client.cases") }}</h2>
     {% for k in cases %}
       <div style="border-top:1px solid var(--grid);padding-top:8px;margin-top:6px">
-        <div><span class="pill {{ k.status }}">{{ k.status }}</span> case {{ k.id }} · created {{ k.created.date() }}{% if k.assigned_to %} · {{ k.assigned_to }}{% endif %}{% if k.offer_given %} · offer {{ k.offer_given }}{% endif %}</div>
-        <ul style="margin:6px 0;padding-left:18px;font-size:14px">{% for e in k.events %}<li>{{ e.at.strftime('%Y-%m-%d') }} · {{ e.source }} · {{ e.outcome or e.kind }}{% if e.offer_given %} · {{ e.offer_given }}{% endif %}{% if e.note %} — {{ e.note }}{% endif %}</li>{% endfor %}</ul>
+        <div><span class="pill {{ k.status }}">{{ label('status.', k.status) }}</span> {{ t("client.case_line", id=k.id, date=k.created.date()) }}{% if k.assigned_to %} · {{ k.assigned_to }}{% endif %}{% if k.offer_given %} · {{ label('offer.', k.offer_given) }}{% endif %}</div>
+        <ul style="margin:6px 0;padding-left:18px;font-size:14px">{% for e in k.events %}<li>{{ e.at.strftime('%Y-%m-%d') }} · {{ label('source.', e.source) }} · {{ label('status.', e.outcome) if e.outcome else label('event.', e.kind) }}{% if e.offer_given %} · {{ label('offer.', e.offer_given) }}{% endif %}{% if e.note %} — {{ e.note }}{% endif %}</li>{% endfor %}</ul>
         <form method="post" action="/cases/{{ k.id }}/status" class="inline">
-          <label>Set status<select name="status">{% for st in ['called','no_answer','booked','declined','do_not_contact','wrong_number','skipped'] %}<option>{{ st }}</option>{% endfor %}</select></label>
-          <label>Offer<input name="offer" size="10"></label><label>Note<input name="note"></label><button class="ghost">Save</button>
+          <label>{{ t("client.set_status") }}<select name="status">{% for st in ['called','no_answer','booked','declined','do_not_contact','wrong_number','skipped'] %}<option value="{{ st }}">{{ label('status.', st) }}</option>{% endfor %}</select></label>
+          <label>{{ t("col.offer") }}<input name="offer" size="10"></label><label>{{ t("client.note") }}<input name="note"></label><button class="ghost">{{ t("common.save") }}</button>
         </form>
       </div>
-    {% else %}<p class="muted">No cases yet.</p>{% endfor %}
+    {% else %}<p class="muted">{{ t("client.no_cases") }}</p>{% endfor %}
   </section>
   <section class="card">
-    <h2>Contact</h2>
+    <h2>{{ t("client.contact") }}</h2>
     <form method="post" action="/client/{{ cid }}/dnc" class="inline">
       <input type="hidden" name="value" value="{{ 'off' if c and c.do_not_contact else 'on' }}">
-      <button class="{{ 'ghost' if c and c.do_not_contact else 'danger' }}">{{ 'Allow contact again' if c and c.do_not_contact else 'Mark do not contact' }}</button>
+      <button class="{{ 'ghost' if c and c.do_not_contact else 'danger' }}">{{ t('client.allow_contact') if c and c.do_not_contact else t('client.mark_dnc') }}</button>
     </form>
-    <h3 style="margin-top:12px">Barbers</h3>
+    <h3 style="margin-top:12px">{{ t("nav.barbers") }}</h3>
     <p class="sub" style="margin:0">{% for bid, n in per_barber.most_common() %}{{ bnames.get(bid, bid) }} {{ n }}{{ ', ' if not loop.last }}{% endfor %}</p>
   </section>
 </div>
 <section>
-  <h2>Recent visits</h2>
-  <div class="tablebox"><table><thead><tr><th class="l">Date</th><th class="l">Time</th><th class="l">Barber</th><th class="l">Status</th><th class="l">Services</th><th>Cost</th><th class="l">Booked</th></tr></thead>
-  <tbody>{% for v in visits %}<tr><td class="l">{{ v.date }}</td><td class="l">{{ v.start }}</td><td class="l">{{ bnames.get(v.barber_id, v.barber_name) }}</td><td class="l">{{ v.status }}</td><td class="wrap">{{ v.services|map(attribute='title')|join(', ') }}</td><td>₴{{ v.total_cost|round|int }}</td><td class="l">{{ 'online' if v.online else 'front desk' }}</td></tr>{% endfor %}</tbody></table></div>
+  <h2>{{ t("client.recent_visits") }}</h2>
+  <div class="tablebox"><table><thead><tr><th class="l">{{ t("col.date") }}</th><th class="l">{{ t("col.time") }}</th><th class="l">{{ t("common.barber") }}</th><th class="l">{{ t("col.status") }}</th><th class="l">{{ t("col.services") }}</th><th>{{ t("col.cost") }}</th><th class="l">{{ t("col.booked") }}</th></tr></thead>
+  <tbody>{% for v in visits %}<tr><td class="l">{{ v.date }}</td><td class="l">{{ v.start }}</td><td class="l">{{ bnames.get(v.barber_id, v.barber_name) }}</td><td class="l">{{ label('visit.', v.status) }}</td><td class="wrap">{{ v.services|map(attribute='title')|join(', ') }}</td><td>₴{{ v.total_cost|round|int }}</td><td class="l">{{ t('client.online') if v.online else t('client.front_desk') }}</td></tr>{% endfor %}</tbody></table></div>
 </section>
 {% endblock %}

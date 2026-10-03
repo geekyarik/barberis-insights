@@ -1,47 +1,47 @@
 {% extends "base.html" %}
 {% block content %}
 <header>
-  <h1>Hypotheses</h1>
-  <p class="sub">Test whether a change moved a metric. "Compare with a control group" uses difference-in-differences on weekly values: the change in the barbers you changed something for, minus the change in barbers you didn't. The 95% interval shows how sure the result is; if it crosses zero, the effect is not proven.</p>
+  <h1>{{ t("nav.hypotheses") }}</h1>
+  <p class="sub">{{ t("hyp.sub") }}</p>
 </header>
-<details class="card"><summary>New hypothesis</summary>
+<details class="card"><summary>{{ t("hyp.new") }}</summary>
   <form method="post" action="/hypotheses" style="display:grid;gap:8px;margin-top:8px">
-    <label>Title<input name="title" required maxlength="200" placeholder="Rebooking at checkout raises the return rate"></label>
-    <label>Statement<textarea name="statement" placeholder="What changed, and what you expect to happen"></textarea></label>
+    <label>{{ t("common.title") }}<input name="title" required maxlength="200" placeholder="{{ t('hyp.title_ph') }}"></label>
+    <label>{{ t("hyp.statement") }}<textarea name="statement" placeholder="{{ t('hyp.statement_ph') }}"></textarea></label>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-      <label>Metric<select name="metric">{% for m in catalog %}<option value="{{ m.key }}">{{ m.label }}</option>{% endfor %}</select></label>
-      <label>Method<select name="kind"><option value="did">Compare with a control group</option><option value="prepost">Before vs after</option><option value="offer_ab">Win-back offer A/B</option></select></label>
-      <label>Expected<select name="expected"><option value="up">Metric goes up</option><option value="down">Metric goes down</option><option value="none">No change</option></select></label>
+      <label>{{ t("goal.f.metric") }}<select name="metric">{% for m in catalog %}<option value="{{ m.key }}">{{ mlabel(m.key) }}</option>{% endfor %}</select></label>
+      <label>{{ t("hyp.method") }}<select name="kind">{% for k in ['did', 'prepost', 'offer_ab'] %}<option value="{{ k }}">{{ t('hyp.kind.' ~ k) }}</option>{% endfor %}</select></label>
+      <label>{{ t("hyp.expected") }}<select name="expected">{% for e in ['up', 'down', 'none'] %}<option value="{{ e }}">{{ t('hyp.expected.' ~ e) }}</option>{% endfor %}</select></label>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <label>Changed for<select name="treatment" multiple size="6">{% for b in all_barbers %}<option value="{{ b.key }}">{{ b.name }}</option>{% endfor %}</select></label>
-      <label>Control (unchanged)<select name="control" multiple size="6">{% for b in all_barbers %}<option value="{{ b.key }}">{{ b.name }}</option>{% endfor %}</select></label>
+      <label>{{ t("hyp.changed_for") }}<select name="treatment" multiple size="6">{% for b in all_barbers %}<option value="{{ b.key }}">{{ b.name }}</option>{% endfor %}</select></label>
+      <label>{{ t("hyp.control") }}<select name="control" multiple size="6">{% for b in all_barbers %}<option value="{{ b.key }}">{{ b.name }}</option>{% endfor %}</select></label>
     </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-      <label>Change date<input name="intervention" type="date"></label>
-      <label>Weeks before<input name="pre_weeks" type="number" value="8" min="3" max="52"></label>
-      <label>Weeks after<input name="post_weeks" type="number" value="8" min="3" max="52"></label>
+      <label>{{ t("hyp.change_date") }}<input name="intervention" type="date"></label>
+      <label>{{ t("hyp.weeks_before") }}<input name="pre_weeks" type="number" value="8" min="3" max="52"></label>
+      <label>{{ t("hyp.weeks_after") }}<input name="post_weeks" type="number" value="8" min="3" max="52"></label>
     </div>
-    <div><button>Save and evaluate</button></div>
+    <div><button>{{ t("hyp.save_eval") }}</button></div>
   </form>
 </details>
 <section>
   {% for h in hs %}
   <article class="card" style="display:flex;flex-direction:column;gap:6px">
-    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span class="eyebrow">{{ REGISTRY[h.metric].label if h.metric in REGISTRY else h.metric }} · {{ h.kind }} · expected {{ h.expected }}</span><span class="pill {{ h.status }}">{{ h.status }}</span></div>
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span class="eyebrow">{{ mlabel(h.metric) }} · {{ t('hyp.kind.' ~ h.kind) }} · {{ t('hyp.expected.' ~ h.expected) }}</span><span class="pill {{ h.status }}">{{ label('hyp.status.', h.status) }}</span></div>
     <h3>{{ h.title }}</h3>
     {% if h.statement %}<p class="sub" style="margin:0">{{ h.statement }}</p>{% endif %}
-    <div class="muted" style="font-size:13px">{% if h.treatment %}Changed for {{ h.treatment|join(', ') }}{% endif %}{% if h.control %} · control {{ h.control|join(', ') }}{% endif %}{% if h.intervention_date %} · change on {{ h.intervention_date }}{% endif %}{% if h.evaluated %} · evaluated {{ h.evaluated.strftime('%Y-%m-%d') }}{% endif %}</div>
+    <div class="muted" style="font-size:13px">{% if h.treatment %}{{ t("hyp.changed_for") }}: {{ h.treatment|join(', ') }}{% endif %}{% if h.control %} · {{ t("hyp.control") }}: {{ h.control|join(', ') }}{% endif %}{% if h.intervention_date %} · {{ t("hyp.change_on", date=h.intervention_date) }}{% endif %}{% if h.evaluated %} · {{ t("hyp.evaluated", date=h.evaluated.strftime('%Y-%m-%d')) }}{% endif %}</div>
     {% if h.result %}
-      <p style="margin:0"><b>{{ h.result.verdict }}</b></p>
-      {% if h.result.treatment_before is defined %}<div class="muted" style="font-size:13px">Changed group {{ h.result.treatment_before }} → {{ h.result.treatment_after }}{% if h.result.control_before is defined %} · control {{ h.result.control_before }} → {{ h.result.control_after }}{% endif %} · before {{ h.result.pre_window|join('–') }}, after {{ h.result.post_window|join('–') }}</div>{% endif %}
-      {% if h.result.arms is defined %}<div class="muted" style="font-size:13px">{% for k, a in h.result.arms.items() %}{{ k }}: {{ a.won }}/{{ a.closed }} ({{ (a.rate*100)|round|int }}%){{ ' · ' if not loop.last }}{% endfor %}</div>{% endif %}
+      <p style="margin:0"><b>{{ verdict(h.result) }}</b></p>
+      {% if h.result.treatment_before is defined %}<div class="muted" style="font-size:13px">{{ t("hyp.changed_group") }} {{ h.result.treatment_before }} → {{ h.result.treatment_after }}{% if h.result.control_before is defined %} · {{ t("hyp.control") }} {{ h.result.control_before }} → {{ h.result.control_after }}{% endif %} · {{ t("hyp.windows", before=h.result.pre_window|join('–'), after=h.result.post_window|join('–')) }}</div>{% endif %}
+      {% if h.result.arms is defined %}<div class="muted" style="font-size:13px">{% for k, a in h.result.arms.items() %}{{ label('offer.', k) }}: {{ a.won }}/{{ a.closed }} ({{ (a.rate*100)|round|int }}%){{ ' · ' if not loop.last }}{% endfor %}</div>{% endif %}
     {% endif %}
     <div style="display:flex;gap:8px">
-      <form method="post" action="/hypotheses/{{ h.id }}/evaluate"><button class="ghost">Re-evaluate with the latest data</button></form>
-      <form method="post" action="/hypotheses/{{ h.id }}/delete" onsubmit="return this.querySelector('input').checked"><label style="display:inline-flex;gap:6px;align-items:center;font-size:12px"><input type="checkbox"> confirm</label> <button class="danger">Delete</button></form>
+      <form method="post" action="/hypotheses/{{ h.id }}/evaluate"><button class="ghost">{{ t("hyp.reevaluate") }}</button></form>
+      <form method="post" action="/hypotheses/{{ h.id }}/delete" onsubmit="return this.querySelector('input').checked"><label style="display:inline-flex;gap:6px;align-items:center;font-size:12px"><input type="checkbox"> {{ t("common.confirm") }}</label> <button class="danger">{{ t("common.delete") }}</button></form>
     </div>
   </article>
-  {% else %}<p class="muted">No hypotheses yet.</p>{% endfor %}
+  {% else %}<p class="muted">{{ t("hyp.empty") }}</p>{% endfor %}
 </section>
 {% endblock %}

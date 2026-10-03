@@ -228,11 +228,13 @@ def approve(case_ids: list[int], assigned_to: Optional[str] = None) -> None:
 
 
 @app.command("sheet-sync")
-def sheet_sync(dry_run: bool = typer.Option(False, "--dry-run", help="Use an in-memory sheet and roll back")) -> None:
+def sheet_sync(dry_run: bool = typer.Option(False, "--dry-run", help="Use an in-memory sheet and roll back"),
+               lang: str = typer.Option(None, "--lang", help="Sheet language: uk or en (default: INSIGHTS_SHEET_LANG, uk)")) -> None:
     """Pull the admin's outcomes, mark returned clients, push approved cases, archive closed ones."""
     from .db.session import session_factory
     from .outreach.offers import active_offers
-    from .outreach.sheets import FakeSheet, GspreadSheet, sync
+    from .i18n import normalize
+    from .outreach.sheets import FakeSheet, GspreadSheet, sync, tab_name
     s = session_factory()()
     try:
         if dry_run:
@@ -245,9 +247,10 @@ def sheet_sync(dry_run: bool = typer.Option(False, "--dry-run", help="Use an in-
             except (RuntimeError, FileNotFoundError) as e:
                 typer.echo(f"Could not connect to the sheet: {e}", err=True)
                 raise typer.Exit(1)
-        out = sync(s, sheet, [o.code for o in active_offers(s)])
+        lang = normalize(lang or settings.sheet_lang)
+        out = sync(s, sheet, [o.code for o in active_offers(s)], lang)
         s.rollback() if dry_run else s.commit()
-        typer.echo(json.dumps(out | ({"dry_run_rows": sheet.read("Call list")[:5]} if dry_run else {}), ensure_ascii=False, indent=1, default=str))
+        typer.echo(json.dumps(out | ({"dry_run_rows": sheet.read(tab_name("call", lang))[:5]} if dry_run else {}), ensure_ascii=False, indent=1, default=str))
     finally:
         s.close()
 
@@ -257,8 +260,7 @@ def sheet_auth() -> None:
     """Connect to the admin call sheet (service-account key, or a one-time Google sign-in) and create its tabs."""
     from .db.session import session_scope
     from .outreach.offers import active_offers
-    from .outreach.service import OUTCOMES
-    from .outreach.sheets import ADMIN_COLS, CALL_TAB, DONE_COLS, DONE_TAB, INFO_COLS, GspreadSheet
+    from .outreach.sheets import GspreadSheet, prepare
     if not settings.sheet_id:
         raise typer.BadParameter("Set INSIGHTS_SHEET_ID in .env first")
     try:
@@ -268,8 +270,7 @@ def sheet_auth() -> None:
         raise typer.Exit(1)
     with session_scope() as s:
         offers = [o.code for o in active_offers(s)]
-    sheet.ensure_tab(CALL_TAB, INFO_COLS + ADMIN_COLS, {"Outcome": list(OUTCOMES), "Offer given": offers})
-    sheet.ensure_tab(DONE_TAB, DONE_COLS)
+    prepare(sheet, offers)
     typer.echo(f"Signed in. Sheet “{sheet.sh.title}” is ready with tabs: {[w.title for w in sheet.sh.worksheets()]}")
 
 

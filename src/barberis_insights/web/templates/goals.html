@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% from "_macros.html" import goal_card, goal_form, spark_script %}
+{% from "_macros.html" import goal_card, goal_form, spark_script with context %}
 {% block content %}
 <header>
-  <h1>Goals</h1>
-  <p class="sub">Each goal compares its metric's start value with the latest measurement. "On track" means progress is keeping pace with the time elapsed toward the due date.</p>
+  <h1>{{ t("nav.goals") }}</h1>
+  <p class="sub">{{ t("goals.sub") }}</p>
 </header>
-<details class="card"><summary>Add a goal</summary>{{ goal_form(none, catalog, scope_names, '/goals') }}</details>
+<details class="card"><summary>{{ t("goals.add") }}</summary>{{ goal_form(none, catalog, scope_names, '/goals') }}</details>
 {% for sc in order if by_scope.get(sc) %}
 <section>
   <h2>{{ scope_names.get(sc, sc) }}</h2>

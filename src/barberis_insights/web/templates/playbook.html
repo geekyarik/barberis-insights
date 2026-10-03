@@ -1,24 +1,24 @@
 {% extends "base.html" %}
-{% macro tip_form(t) %}
+{% macro tip_form(tip) %}
 <form method="post" action="/playbook" style="display:grid;gap:8px;margin-top:8px">
-  <input type="hidden" name="tip_id" value="{{ t.id if t else '' }}">
-  <label>Title<input name="title" required maxlength="200" value="{{ t.title if t else '' }}"></label>
-  <label>Topic<input name="tag" maxlength="40" value="{{ t.tag if t else '' }}" placeholder="Retention, Extras, Online, Schedule"></label>
-  <label>What to do<textarea name="body" required>{{ t.body if t else '' }}</textarea></label>
-  <label>Applies to<select name="barbers" multiple size="6">{% for b in all_barbers %}<option value="{{ b.key }}" {{ 'selected' if t and b.key in t.barbers }}>{{ b.name }}</option>{% endfor %}</select></label>
-  <div><button>Save</button></div>
+  <input type="hidden" name="tip_id" value="{{ tip.id if tip else '' }}">
+  <label>{{ t("common.title") }}<input name="title" required maxlength="200" value="{{ tip.title if tip else '' }}"></label>
+  <label>{{ t("playbook.topic") }}<input name="tag" maxlength="40" value="{{ tip.tag if tip else '' }}" placeholder="{{ t('playbook.topic_ph') }}"></label>
+  <label>{{ t("playbook.what") }}<textarea name="body" required>{{ tip.body if tip else '' }}</textarea></label>
+  <label>{{ t("playbook.applies") }}<select name="barbers" multiple size="6">{% for b in all_barbers %}<option value="{{ b.key }}" {{ 'selected' if tip and b.key in tip.barbers }}>{{ b.name }}</option>{% endfor %}</select></label>
+  <div><button>{{ t("common.save") }}</button></div>
 </form>
 {% endmacro %}
 {% block content %}
-<header><h1>Playbook</h1><p class="sub">Routines the team agrees to use. Each tip shows on the pages of the barbers it applies to.</p></header>
-<details class="card"><summary>Add a tip</summary>{{ tip_form(none) }}</details>
+<header><h1>{{ t("nav.playbook") }}</h1><p class="sub">{{ t("playbook.sub") }}</p></header>
+<details class="card"><summary>{{ t("playbook.add") }}</summary>{{ tip_form(none) }}</details>
 <div class="grid">
-  {% for t in tips %}
+  {% for tip in tips %}
   <article class="card" style="display:flex;flex-direction:column;gap:6px">
-    <div class="eyebrow">{{ t.tag }}</div><h3>{{ t.title }}</h3><p class="sub" style="margin:0">{{ t.body }}</p>
-    <div class="muted" style="font-size:13px">{% for k in t.barbers %}{% for b in all_barbers if b.key == k %}{{ b.name }}{% endfor %}{{ ', ' if not loop.last }}{% endfor %}</div>
-    <details><summary>Edit</summary>{{ tip_form(t) }}
-      <form method="post" action="/playbook/{{ t.id }}/delete" onsubmit="return this.querySelector('input').checked" style="margin-top:6px"><label style="display:inline-flex;gap:6px;align-items:center;font-size:12px"><input type="checkbox"> confirm</label> <button class="danger">Delete</button></form>
+    <div class="eyebrow">{{ tip.tag }}</div><h3>{{ tip.title }}</h3><p class="sub" style="margin:0">{{ tip.body }}</p>
+    <div class="muted" style="font-size:13px">{% for k in tip.barbers %}{% for b in all_barbers if b.key == k %}{{ b.name }}{% endfor %}{{ ', ' if not loop.last }}{% endfor %}</div>
+    <details><summary>{{ t("common.edit") }}</summary>{{ tip_form(tip) }}
+      <form method="post" action="/playbook/{{ tip.id }}/delete" onsubmit="return this.querySelector('input').checked" style="margin-top:6px"><label style="display:inline-flex;gap:6px;align-items:center;font-size:12px"><input type="checkbox"> {{ t("common.confirm") }}</label> <button class="danger">{{ t("common.delete") }}</button></form>
     </details>
   </article>
   {% endfor %}

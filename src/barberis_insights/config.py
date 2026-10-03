@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     winback_window_days: int = 60
     # google sheet for the admin call list
     sheet_id: str | None = None
+    sheet_lang: str = "uk"  # language of the call sheet's tabs, headers and dropdowns ("uk" or "en"); the sync reads both
     host: str = "127.0.0.1"
     port: int = 8765
 

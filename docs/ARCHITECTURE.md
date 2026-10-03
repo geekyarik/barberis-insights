@@ -291,6 +291,7 @@ Each feed is a plugin, like a Mirror adapter. *Open question:* which feeds are w
 | **Audit** | Changes to goals, cases and factors keep an event trail. Runs record who or what created them. |
 | **Testing** | Each metric and each analysis has its own fixture test. Behaviour on real data is checked by regression tests that skip when data isn't present. |
 | **Migrations** | Alembic. Non-model objects (FTS5) are excluded from autogenerate. |
+| **Language** | Code, identifiers, docs, CLI and MCP in English. Everything people read — dashboard, messages, call sheet — comes from `i18n/uk.json` / `en.json` by stable keys; Ukrainian is the default (ADR-0008). Modules return codes (segments, statuses, reasons, verdict keys), never sentences, and interfaces translate them. |
 | **Config** | `INSIGHTS_*` environment variables or `.env`. Private seed data: `var/barbers.json`, `var/seed_notes.json`. |
 
 ## 8. Extension points

@@ -1,29 +1,29 @@
 {% extends "base.html" %}
 {% block content %}
 <header>
-  <div class="eyebrow">BARBERIS · Луганська 10А · data up to {{ data_asof }}</div>
-  <h1>Overview</h1>
-  <p class="sub">Latest measurement {{ latest or "—" }}{% if prev %}, compared with {{ prev }}{% endif %}. Arrows show whether a change is good for the business.</p>
+  <div class="eyebrow">BARBERIS · {{ t("overview.address") }} · {{ t("overview.data_upto", date=data_asof) }}</div>
+  <h1>{{ t("nav.overview") }}</h1>
+  <p class="sub">{{ t("overview.latest", date=latest or "—") }}{% if prev %}{{ t("overview.compared", date=prev) }}{% endif %}. {{ t("overview.arrows") }}</p>
 </header>
 
 {% if with_phone == 0 %}
-<div class="flash warn">No client phone numbers are loaded yet, so the call list can't be sent to the admin. Export the client base from Altegio (Clients → Export) and run <code>insights import-clients FILE</code>.</div>
+<div class="flash warn">{{ t("overview.no_phones") }} <code>insights import-clients FILE</code>.</div>
 {% endif %}
 
 <section>
-  <h2>Team</h2>
+  <h2>{{ t("common.team") }}</h2>
   <div class="kpis">
     {% for m in key_metrics %}{% set v = cur.get('team', {}).get(m) %}{% set p = before.get('team', {}).get(m) %}
-    <div class="kpi"><span class="l">{{ REGISTRY[m].label }}</span><span class="v">{{ fmt(m, v) }}</span>
-      <span class="d {{ delta_class(m, v, p) }}">{% if p is not none and v is not none %}{{ fmt(m, p) }} before{% else %}&nbsp;{% endif %}</span></div>
+    <div class="kpi"><span class="l">{{ mlabel(m) }}</span><span class="v">{{ fmt(m, v) }}</span>
+      <span class="d {{ delta_class(m, v, p) }}">{% if p is not none and v is not none %}{{ t("overview.before", value=fmt(m, p)) }}{% else %}&nbsp;{% endif %}</span></div>
     {% endfor %}
   </div>
 </section>
 
 <section>
-  <h2>Barbers</h2>
+  <h2>{{ t("nav.barbers") }}</h2>
   <div class="tablebox"><table>
-    <thead><tr><th class="l">Barber</th>{% for m in key_metrics %}<th>{{ REGISTRY[m].label }}</th>{% endfor %}</tr></thead>
+    <thead><tr><th class="l">{{ t("common.barber") }}</th>{% for m in key_metrics %}<th>{{ mlabel(m) }}</th>{% endfor %}</tr></thead>
     <tbody>{% for b in all_barbers %}<tr><td class="l"><a href="/barber/{{ b.key }}">{{ b.name }}</a> <span class="muted">{{ b.tier }}</span></td>
       {% for m in key_metrics %}{% set v = cur.get(b.key, {}).get(m) %}{% set p = before.get(b.key, {}).get(m) %}
       <td><span class="{{ delta_class(m, v, p) if p is not none else '' }}">{{ fmt(m, v) }}</span></td>{% endfor %}</tr>{% endfor %}</tbody>
@@ -31,9 +31,9 @@
 </section>
 
 <section>
-  <h2>Busy share by weekday</h2>
+  <h2>{{ t("overview.weekday_heat") }}</h2>
   <div class="tablebox"><table class="heat">
-    <thead><tr><th class="l"></th>{% for d in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}<th>{{ d }}</th>{% endfor %}</tr></thead>
+    <thead><tr><th class="l"></th>{% for i in range(7) %}<th>{{ t('day.short.' ~ i) }}</th>{% endfor %}</tr></thead>
     <tbody>{% for b in all_barbers %}<tr><td class="l">{{ b.name }}</td>{% for i in range(7) %}{% set u = cur.get(b.key, {}).get('util_d' ~ i) %}
       {% if u is none %}<td class="muted">·</td>{% else %}{% set lvl = 1 if u < 40 else 2 if u < 50 else 3 if u < 60 else 4 if u < 75 else 5 %}
       <td style="background:var(--h{{ lvl }});color:var({{ '--hd' if lvl >= 4 else '--hl' }})">{{ u|round|int }}%</td>{% endif %}{% endfor %}</tr>{% endfor %}</tbody>
@@ -42,20 +42,20 @@
 
 <div class="grid">
   <section class="card">
-    <h2>Goals</h2>
-    <p class="sub" style="margin:0">{{ states.get('ok', 0) }} on track · {{ states.get('behind', 0) }} behind · {{ states.get('new', 0) }} waiting · {{ states.get('done', 0) }} done</p>
-    <ul style="margin:6px 0 0;padding-left:18px">{% for g in board if g.state == 'behind' %}<li>{{ g.scope }}: {{ g.title }}</li>{% else %}<li class="muted">Nothing behind.</li>{% endfor %}</ul>
-    <a href="/goals">All goals →</a>
+    <h2>{{ t("nav.goals") }}</h2>
+    <p class="sub" style="margin:0">{{ t("overview.goal_counts", ok=states.get('ok', 0), behind=states.get('behind', 0), new=states.get('new', 0), done=states.get('done', 0)) }}</p>
+    <ul style="margin:6px 0 0;padding-left:18px">{% for g in board if g.state == 'behind' %}<li>{{ g.scope }}: {{ g.title }}</li>{% else %}<li class="muted">{{ t("overview.nothing_behind") }}</li>{% endfor %}</ul>
+    <a href="/goals">{{ t("overview.all_goals") }} →</a>
   </section>
   <section class="card">
-    <h2>Clients</h2>
-    <p class="sub" style="margin:0">{{ seg.get('overdue', 0) }} overdue · {{ seg.get('lapsed', 0) }} lapsed · {{ seg.get('one_time', 0) }} one-time, not back · {{ seg.get('slipping', 0) }} slipping</p>
-    <a href="/risk">Review the call list →</a>
+    <h2>{{ t("overview.clients") }}</h2>
+    <p class="sub" style="margin:0">{{ t("overview.client_counts", overdue=seg.get('overdue', 0), lapsed=seg.get('lapsed', 0), one_time=seg.get('one_time', 0), slipping=seg.get('slipping', 0)) }}</p>
+    <a href="/risk">{{ t("overview.review_calls") }} →</a>
   </section>
   <section class="card">
-    <h2>Win-back</h2>
-    <p class="sub" style="margin:0">{{ cases.get('proposed', 0) }} to review · {{ cases.get('in_sheet', 0) }} with the admin · {{ cases.get('booked', 0) }} booked · {{ cases.get('won_back', 0) }} won back</p>
-    <a href="/outreach">Results →</a>
+    <h2>{{ t("nav.outreach") }}</h2>
+    <p class="sub" style="margin:0">{{ t("overview.case_counts", proposed=cases.get('proposed', 0), in_sheet=cases.get('in_sheet', 0), booked=cases.get('booked', 0), won=cases.get('won_back', 0)) }}</p>
+    <a href="/outreach">{{ t("overview.results") }} →</a>
   </section>
 </div>
 {% endblock %}

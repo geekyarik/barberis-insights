@@ -21,6 +21,7 @@ from ..db.models import Appointment, Barber, Client, ClientProfile, Hypothesis, 
 from ..db.session import session_factory
 from ..experiments.evaluate import run as run_hypothesis
 from ..goals import service as goals
+from ..i18n import LANGUAGES, normalize, t as tr, translator
 from ..ingest.legacy import save_measurement
 from ..metrics import compute_snapshot
 from ..metrics.registry import REGISTRY, catalog
@@ -60,14 +61,62 @@ def db():
         s.close()
 
 
-def page(request: Request, s: Session, name: str, nav: str, **ctx):
+LANG_COOKIE = "lang"
+
+
+def lang_of(request: Request) -> str:
+    """Interface language: the viewer's choice (cookie), else Ukrainian — the team's language."""
+    return normalize(request.cookies.get(LANG_COOKIE))
+
+
+def helpers(lang: str) -> dict:
+    """Template functions bound to one language. Codes (segments, statuses, offers…) are translated through
+    catalog prefixes and fall back to the code itself, so unknown data still shows."""
+    t = translator(lang)
+
+    def label(prefix: str, code, default=None) -> str:
+        key = f"{prefix}{code}"
+        text = t(key)
+        return text if text != key else (default or str(code))
+
+    def mlabel(metric: str) -> str:
+        return label("metric.", metric, REGISTRY[metric].label if metric in REGISTRY else metric)
+
+    def verdict(res: dict) -> str:
+        msg = res.get("msg")
+        if not msg:
+            return res.get("verdict", "")
+        p = dict(msg.get("params", {}))
+        if "metric" in p:
+            p["metric"] = mlabel(p["metric"])
+        for k in ("a", "b"):
+            if k in p:
+                p[k] = label("offer.", p[k])
+        return t("verdict." + msg["key"], **p) + (t("verdict.vs_control") if msg.get("control") else "")
+
+    return {"t": t, "lang": lang, "languages": LANGUAGES, "label": label, "mlabel": mlabel, "verdict": verdict,
+            "reasons": lambda codes: ", ".join(label("reason.", c) for c in codes)}
+
+
+def page(request: Request, s: Session, name: str, nav: str, title: str = "", **ctx):
+    h = helpers(lang_of(request))
     return templates.TemplateResponse(request, name, {"nav": nav, "all_barbers": vm.barbers(s), "flash": request.query_params.get("msg"),
-                                                      "flash_kind": request.query_params.get("kind"), **ctx})
+                                                      "flash_kind": request.query_params.get("kind"), "title": h["t"](title), **h, **ctx})
 
 
-def back(url: str, msg: str | None = None, kind: str = "") -> RedirectResponse:
+def back(request: Request, url: str, key: str | None = None, kind: str = "", **params) -> RedirectResponse:
+    """Redirect with a confirmation message, translated now into the viewer's language (catalog key "flash.<key>")."""
     sep = "&" if "?" in url else "?"
+    msg = tr(f"flash.{key}", lang_of(request), **params) if key else None
     return RedirectResponse(url + (f"{sep}msg={quote(msg)}&kind={kind}" if msg else ""), status_code=303)
+
+
+@app.get("/lang/{code}")
+def set_language(code: str, next: str = "/"):
+    target = next if next.startswith("/") and not next.startswith("//") else "/"
+    r = RedirectResponse(target, status_code=303)
+    r.set_cookie(LANG_COOKIE, normalize(code), max_age=365 * 24 * 3600, samesite="lax", httponly=True)
+    return r
 
 
 def names(s: Session) -> dict[int, str]:
@@ -90,7 +139,7 @@ def overview(request: Request, s: Session = Depends(db)):
     seg = C.Counter(st for (st,) in s.execute(select(ClientProfile.segment)))
     no_phone = s.scalar(select(func.count(ClientProfile.client_id)).where(ClientProfile.segment.in_(CALLABLE))) or 0
     with_phone = s.scalar(select(func.count(Client.altegio_id)).where(Client.phone.is_not(None))) or 0
-    return page(request, s, "overview.html", "overview", title="Overview", latest=latest, prev=prev, cur=cur, before=before,
+    return page(request, s, "overview.html", "overview", title="nav.overview", latest=latest, prev=prev, cur=cur, before=before,
                 key_metrics=KEY_METRICS, board=board, states=states, cases=cases, seg=seg, callable_n=no_phone, with_phone=with_phone,
                 data_asof=data_asof(s))
 
@@ -119,12 +168,12 @@ def goals_page(request: Request, s: Session = Depends(db)):
     for g in board:
         by_scope[g["scope"]].append(g)
     order = ["team"] + [b.key for b in vm.barbers(s)]
-    return page(request, s, "goals.html", "goals", title="Goals", by_scope=by_scope, order=order, catalog=catalog(),
-                scope_names={"team": "Team"} | {b.key: b.name for b in vm.barbers(s)})
+    return page(request, s, "goals.html", "goals", title="nav.goals", by_scope=by_scope, order=order, catalog=catalog(),
+                scope_names={"team": tr("common.team", lang_of(request))} | {b.key: b.name for b in vm.barbers(s)})
 
 
 @app.post("/goals")
-def goal_save(goal_id: str = Form(""), scope: str = Form(...), title: str = Form(...), metric: str = Form(...), baseline: str = Form(""),
+def goal_save(request: Request, goal_id: str = Form(""), scope: str = Form(...), title: str = Form(...), metric: str = Form(...), baseline: str = Form(""),
               target: float = Form(...), due: str = Form(...), status: str = Form("active"), actions: str = Form(""),
               manual_current: str = Form(""), next_url: str = Form("/goals"), s: Session = Depends(db)):
     data = {"scope": scope, "title": title.strip(), "metric": metric, "target": target, "due": due, "status": status, "actions": actions.strip(),
@@ -134,15 +183,15 @@ def goal_save(goal_id: str = Form(""), scope: str = Form(...), title: str = Form
         if g and data["baseline"] is None:
             data["baseline"] = g.baseline
     goals.upsert(s, data, goal_id or None)
-    return back(next_url, "Goal saved.")
+    return back(request, next_url, "goal_saved")
 
 
 @app.post("/goals/{goal_id}/delete")
-def goal_delete(goal_id: str, confirm: str = Form(""), next_url: str = Form("/goals"), s: Session = Depends(db)):
+def goal_delete(request: Request, goal_id: str, confirm: str = Form(""), next_url: str = Form("/goals"), s: Session = Depends(db)):
     if confirm != "yes":
-        return back(next_url, "Tick “confirm” to delete a goal.", "warn")
+        return back(request, next_url, "goal_confirm", "warn")
     goals.delete(s, goal_id)
-    return back(next_url, "Goal deleted.")
+    return back(request, next_url, "goal_deleted")
 
 
 # ---------------------------------------------------------------- clients at risk
@@ -155,14 +204,14 @@ def risk_page(request: Request, segment: list[str] | None = None, barber: str = 
     proposed = outreach.case_rows(s, ("proposed",))
     seg = C.Counter(st for (st,) in s.execute(select(ClientProfile.segment)))
     asof = s.scalar(select(func.max(ClientProfile.asof)))
-    return page(request, s, "risk.html", "risk", title="Clients at risk", rows=rows, segments=SEGMENTS, chosen=segment, barber=barber,
+    return page(request, s, "risk.html", "risk", title="nav.risk", rows=rows, segments=SEGMENTS, chosen=segment, barber=barber,
                 show_all=show_all, proposed=proposed, seg=seg, bnames=names(s), asof=asof, offers=active_offers(s))
 
 
 @app.post("/risk/rebuild")
-def risk_rebuild(s: Session = Depends(db)):
+def risk_rebuild(request: Request, s: Session = Depends(db)):
     n = rebuild_profiles(s, vm.dataset(s))
-    return back("/risk", f"Client profiles rebuilt for {n} clients.")
+    return back(request, "/risk", "profiles_rebuilt", n=n)
 
 
 @app.post("/risk/propose")
@@ -172,7 +221,7 @@ async def risk_propose(request: Request, s: Session = Depends(db)):
     arms = [a for a in form.getlist("arms") if a]
     rows = [r for r in risk_list(s, SEGMENTS, None, 100000, include_ineligible=False) if r["client_id"] in ids]
     cases = outreach.propose(s, rows, arms or None)
-    return back("/risk", f"Proposed {len(cases)} cases. Review them below, then approve.")
+    return back(request, "/risk", "proposed", n=len(cases))
 
 
 @app.post("/cases/decide")
@@ -182,9 +231,9 @@ async def cases_decide(request: Request, s: Session = Depends(db)):
     action = form.get("action")
     if action == "approve":
         n = outreach.approve(s, ids, (form.get("assigned_to") or "").strip() or None)
-        return back(form.get("next_url") or "/risk", f"Approved {n} cases. They go to the admin's sheet on the next sync.")
+        return back(request, form.get("next_url") or "/risk", "approved", n=n)
     n = outreach.skip(s, ids, (form.get("note") or "").strip() or None)
-    return back(form.get("next_url") or "/risk", f"Skipped {n} cases.")
+    return back(request, form.get("next_url") or "/risk", "skipped", n=n)
 
 
 # ---------------------------------------------------------------- client card
@@ -196,15 +245,15 @@ def client_page(request: Request, cid: int, s: Session = Depends(db)):
         raise HTTPException(404)
     cases = list(s.scalars(select(OutreachCase).where(OutreachCase.client_id == cid).order_by(OutreachCase.created.desc())))
     per_barber = C.Counter(v.barber_id for v in visits if v.status == "arrived")
-    return page(request, s, "client.html", "risk", title=c.name if c and c.name else f"Client {cid}", cid=cid, c=c, p=p, visits=visits,
+    return page(request, s, "client.html", "risk", title=c.name if c and c.name else tr("client.fallback", lang_of(request), id=cid), cid=cid, c=c, p=p, visits=visits,
                 cases=cases, per_barber=per_barber, bnames=names(s))
 
 
 @app.post("/client/{cid}/dnc")
-def client_dnc(cid: int, value: str = Form("on"), s: Session = Depends(db)):
+def client_dnc(request: Request, cid: int, value: str = Form("on"), s: Session = Depends(db)):
     c = s.get(Client, cid) or Client(altegio_id=cid)
     c.do_not_contact = value == "on"; s.add(c)
-    return back(f"/client/{cid}", "Do-not-contact updated.")
+    return back(request, f"/client/{cid}", "dnc_updated")
 
 
 # ---------------------------------------------------------------- win-back
@@ -216,7 +265,7 @@ def outreach_page(request: Request, status: str = "", s: Session = Depends(db)):
     contacted = [c for c in all_cases if c.status in ("won_back", "not_returned")]
     by = lambda key: sorted(((k, sum(1 for c in v if c.status == "won_back"), len(v), sum(c.revenue_recovered or 0 for c in v)) for k, v in
                              _group(contacted, key).items()), key=lambda r: -r[2])
-    return page(request, s, "outreach.html", "outreach", title="Win-back", rows=rows, status=status, counts=C.Counter(c.status for c in all_cases),
+    return page(request, s, "outreach.html", "outreach", title="nav.outreach", rows=rows, status=status, counts=C.Counter(c.status for c in all_cases),
                 won=sum(1 for c in contacted if c.status == "won_back"), closed=len(contacted), revenue=sum(c.revenue_recovered or 0 for c in contacted),
                 by_offer=by(lambda c: c.offer_given or c.suggested_offer or "—"), by_admin=by(lambda c: c.assigned_to or "—"),
                 by_segment=by(lambda c: c.segment), statuses=outreach.OPEN + outreach.CLOSED, outcomes=outreach.OUTCOMES,
@@ -231,104 +280,104 @@ def _group(items, key):
 
 
 @app.post("/cases/{case_id}/status")
-def case_status(case_id: int, status: str = Form(...), note: str = Form(""), offer: str = Form(""), s: Session = Depends(db)):
+def case_status(request: Request, case_id: int, status: str = Form(...), note: str = Form(""), offer: str = Form(""), s: Session = Depends(db)):
     c = s.get(OutreachCase, case_id)
     if not c:
         raise HTTPException(404)
     outreach.set_status(s, c, status, note=note.strip() or None, offer=offer or None)
-    return back(f"/client/{c.client_id}", f"Case {case_id}: {status}.")
+    return back(request, f"/client/{c.client_id}", "case_status", id=case_id, status=helpers(lang_of(request))["label"]("status.", status))
 
 
 @app.post("/outreach/sync")
-def outreach_sync(s: Session = Depends(db)):
+def outreach_sync(request: Request, s: Session = Depends(db)):
     if not settings.sheet_id:
-        return back("/outreach", "Google Sheet is not set up yet: see README, “Admin call sheet”.", "warn")
+        return back(request, "/outreach", "sheet_missing", "warn")
     from ..outreach.sheets import GspreadSheet, sync
     try:
         r = sync(s, GspreadSheet(settings.sheet_id), [o.code for o in active_offers(s)])
     except Exception as e:  # shown to the user, nothing written on failure
         s.rollback()
-        return back("/outreach", f"Sheet sync failed: {e}", "warn")
-    return back("/outreach", f"Synced: {r['pulled_changes']} updates from the admin, {r['pushed']} new rows, {r['archived']} archived, "
-                             f"{r['won_back']} won back, {r['not_returned']} not returned.")
+        return back(request, "/outreach", "sheet_failed", "warn", error=e)
+    return back(request, "/outreach", "synced", pulled=r["pulled_changes"], pushed=r["pushed"], archived=r["archived"], won=r["won_back"],
+                lost=r["not_returned"])
 
 
 # ---------------------------------------------------------------- context
 @app.get("/context", response_class=HTMLResponse)
 def context_page(request: Request, q: str = "", scope: str = "", s: Session = Depends(db)):
     found = notes.search(s, q or None, scope or None, limit=200)
-    return page(request, s, "context.html", "context", title="Context", notes=found, q=q, scope=scope, kinds=notes.KINDS, today=dt.date.today())
+    return page(request, s, "context.html", "context", title="nav.context", notes=found, q=q, scope=scope, kinds=notes.KINDS, today=dt.date.today())
 
 
 @app.post("/context")
-def context_add(title: str = Form(...), date_from: str = Form(...), date_to: str = Form(""), kind: str = Form("observation"),
+def context_add(request: Request, title: str = Form(...), date_from: str = Form(...), date_to: str = Form(""), kind: str = Form("observation"),
                 scopes: list[str] = Form(["shop"]), tags: str = Form(""), body: str = Form(""), s: Session = Depends(db)):
     notes.add(s, title.strip(), date_from, body.strip(), kind, scopes, [t.strip() for t in tags.split(",") if t.strip()], date_to or None)
-    return back("/context", "Note added.")
+    return back(request, "/context", "note_added")
 
 
 @app.post("/context/{nid}/delete")
-def context_delete(nid: int, s: Session = Depends(db)):
+def context_delete(request: Request, nid: int, s: Session = Depends(db)):
     n = s.get(notes.Note, nid)
     if n:
         s.delete(n)
-    return back("/context", "Note deleted.")
+    return back(request, "/context", "note_deleted")
 
 
 # ---------------------------------------------------------------- hypotheses
 @app.get("/hypotheses", response_class=HTMLResponse)
 def hypotheses_page(request: Request, s: Session = Depends(db)):
     hs = list(s.scalars(select(Hypothesis).order_by(Hypothesis.created.desc())))
-    return page(request, s, "hypotheses.html", "hypotheses", title="Hypotheses", hs=hs, catalog=catalog())
+    return page(request, s, "hypotheses.html", "hypotheses", title="nav.hypotheses", hs=hs, catalog=catalog())
 
 
 @app.post("/hypotheses")
-def hypothesis_add(title: str = Form(...), statement: str = Form(""), metric: str = Form(...), kind: str = Form("did"),
+def hypothesis_add(request: Request, title: str = Form(...), statement: str = Form(""), metric: str = Form(...), kind: str = Form("did"),
                    treatment: list[str] = Form([]), control: list[str] = Form([]), intervention: str = Form(""), pre_weeks: int = Form(8),
                    post_weeks: int = Form(8), expected: str = Form("up"), s: Session = Depends(db)):
     h = Hypothesis(title=title.strip(), statement=statement.strip(), metric=metric, kind=kind, treatment=treatment, control=control,
                    intervention_date=dt.date.fromisoformat(intervention) if intervention else None, pre_weeks=pre_weeks, post_weeks=post_weeks, expected=expected)
     s.add(h); s.flush()
     if kind != "offer_ab" and not intervention:
-        return back("/hypotheses", "Saved. Add an intervention date to evaluate it.", "warn")
+        return back(request, "/hypotheses", "hyp_need_date", "warn")
     res = run_hypothesis(s, h)
-    return back("/hypotheses", f"Evaluated: {res.get('verdict', '')}")
+    return back(request, "/hypotheses", "hyp_evaluated", verdict=helpers(lang_of(request))["verdict"](res))
 
 
 @app.post("/hypotheses/{hid}/evaluate")
-def hypothesis_eval(hid: int, s: Session = Depends(db)):
+def hypothesis_eval(request: Request, hid: int, s: Session = Depends(db)):
     h = s.get(Hypothesis, hid)
     res = run_hypothesis(s, h)
-    return back("/hypotheses", f"Re-evaluated: {res.get('verdict', '')}")
+    return back(request, "/hypotheses", "hyp_evaluated", verdict=helpers(lang_of(request))["verdict"](res))
 
 
 @app.post("/hypotheses/{hid}/delete")
-def hypothesis_delete(hid: int, s: Session = Depends(db)):
+def hypothesis_delete(request: Request, hid: int, s: Session = Depends(db)):
     h = s.get(Hypothesis, hid)
     if h:
         s.delete(h)
-    return back("/hypotheses", "Hypothesis deleted.")
+    return back(request, "/hypotheses", "hyp_deleted")
 
 
 # ---------------------------------------------------------------- playbook
 @app.get("/playbook", response_class=HTMLResponse)
 def playbook_page(request: Request, s: Session = Depends(db)):
-    return page(request, s, "playbook.html", "playbook", title="Playbook", tips=playbook.listing(s))
+    return page(request, s, "playbook.html", "playbook", title="nav.playbook", tips=playbook.listing(s))
 
 
 @app.post("/playbook")
-def playbook_save(tip_id: str = Form(""), title: str = Form(...), tag: str = Form(""), body: str = Form(""), barbers: list[str] = Form([]),
+def playbook_save(request: Request, tip_id: str = Form(""), title: str = Form(...), tag: str = Form(""), body: str = Form(""), barbers: list[str] = Form([]),
                   s: Session = Depends(db)):
     playbook.upsert(s, {"title": title.strip(), "tag": tag.strip(), "body": body.strip(), "barbers": barbers}, tip_id or None)
-    return back("/playbook", "Tip saved.")
+    return back(request, "/playbook", "tip_saved")
 
 
 @app.post("/playbook/{tip_id}/delete")
-def playbook_delete(tip_id: str, s: Session = Depends(db)):
+def playbook_delete(request: Request, tip_id: str, s: Session = Depends(db)):
     t = s.get(playbook.Tip, tip_id)
     if t:
         s.delete(t)
-    return back("/playbook", "Tip deleted.")
+    return back(request, "/playbook", "tip_deleted")
 
 
 # ---------------------------------------------------------------- data & sync
@@ -341,18 +390,18 @@ def data_page(request: Request, s: Session = Depends(db)):
     last = s.scalar(select(func.max(Measurement.window_to)))
     suggest_from = (last + dt.timedelta(days=1)) if last else None
     today = dt.date.today(); suggest_to = today - dt.timedelta(days=today.weekday() + 1)
-    return page(request, s, "data.html", "data", title="Data & sync", runs=runs, months=months, snaps=snaps, data_asof=data_asof(s),
+    return page(request, s, "data.html", "data", title="nav.data", runs=runs, months=months, snaps=snaps, data_asof=data_asof(s),
                 suggest_from=suggest_from, suggest_to=suggest_to)
 
 
 @app.post("/data/snapshot")
-def data_snapshot(date_from: str = Form(...), date_to: str = Form(...), s: Session = Depends(db)):
+def data_snapshot(request: Request, date_from: str = Form(...), date_to: str = Form(...), s: Session = Depends(db)):
     f, t = dt.date.fromisoformat(date_from), dt.date.fromisoformat(date_to)
     if (t - f).days < 13:
-        return back("/data", "A measurement needs at least two weeks of data.", "warn")
+        return back(request, "/data", "measure_short", "warn")
     snap = compute_snapshot(vm.dataset(s), f, t)
     n = save_measurement(s, snap, "Monthly measurement")
-    return back("/data", f"Measurement saved for {t}: {n} values.")
+    return back(request, "/data", "measure_saved", date=t, n=n)
 
 
 # ---------------------------------------------------------------- JSON API (for scripts, Claude, a future SPA)

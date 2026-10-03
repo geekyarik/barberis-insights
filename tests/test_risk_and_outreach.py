@@ -8,7 +8,7 @@ from barberis_insights.db.models import Client, ClientProfile, OutreachCase
 from barberis_insights.metrics import Dataset
 from barberis_insights.outreach import service
 from barberis_insights.outreach.attribution import attribute
-from barberis_insights.outreach.sheets import CALL_TAB, DONE_TAB, FakeSheet, sync
+from barberis_insights.outreach.sheets import FakeSheet, sync, tab_name
 
 ASOF = dt.date(2026, 10, 1)
 D = lambda s: dt.date.fromisoformat(s)
@@ -48,7 +48,7 @@ def test_eligibility_excludes_consent_and_dnc(s):
     eligible = [r["client_id"] for r in risk_list(s, ("overdue",))]
     assert eligible == [20]
     reasons = {r["client_id"]: r["ineligible_reasons"] for r in risk_list(s, ("overdue",), include_ineligible=True)}
-    assert reasons[21] == ["no data-processing consent"] and reasons[22] == ["do not contact"] and reasons[23] == ["no phone on file"]
+    assert reasons[21] == ["no_consent"] and reasons[22] == ["dnc"] and reasons[23] == ["no_phone"]
 
 
 def _one_case(s, cid=30):
@@ -75,30 +75,61 @@ def test_attribution_not_returned_after_window(s):
 
 
 def test_sheet_round_trip(s):
+    """Ukrainian sheet (the default): push, admin edits, pull, archive; a second sync changes nothing."""
     for cid in (40, 41):
         regular(s, cid, "2026-07-20"); client(s, cid)
     build(s)
     cases = service.propose(s, risk_list(s, ("overdue",)))
     assert len(cases) == 2 and all(c.status == "proposed" for c in cases)
     sheet = FakeSheet()
-    assert sync(s, sheet, ["call_only", "pct10"])["pushed"] == 0          # nothing approved yet
+    call, done = tab_name("call", "uk"), tab_name("done", "uk")
+    assert sync(s, sheet, ["call_only", "pct10"], "uk")["pushed"] == 0          # nothing approved yet
+    assert set(sheet.tabs()) == {"Обдзвін", "Завершені"} and sheet.headers(call)[0] == "№ звернення"
     service.approve(s, [c.id for c in cases], assigned_to="admin")
-    r = sync(s, sheet, ["call_only", "pct10"])
-    assert r["pushed"] == 2 and len(sheet.read(CALL_TAB)) == 2 and all(c.status == "in_sheet" for c in cases)
+    r = sync(s, sheet, ["call_only", "pct10"], "uk")
+    assert r["pushed"] == 2 and len(sheet.read(call)) == 2 and all(c.status == "in_sheet" for c in cases)
+    assert sheet.read(call)[0]["Рекомендована пропозиція"] in ("Дружній дзвінок без знижки", "Знижка 10% на наступний візит")
     a, b = cases
-    sheet.edit(CALL_TAB, a.id, **{"Outcome": "Booked", "Call date": "2026-09-30", "Offer given": "pct10", "Admin note": "Will come Friday"})
-    sheet.edit(CALL_TAB, b.id, **{"Outcome": "Do not contact", "Call date": "2026-09-30"})
-    r = sync(s, sheet, ["call_only", "pct10"])
+    sheet.edit(call, a.id, **{"Результат": "Записався", "Дата дзвінка": "30.09.2026", "Запропоновано": "Знижка 10% на наступний візит",
+                              "Коментар адміністратора": "Прийде в п'ятницю"})
+    sheet.edit(call, b.id, **{"Результат": "Не турбувати", "Дата дзвінка": "2026-09-30"})
+    r = sync(s, sheet, ["call_only", "pct10"], "uk")
     assert r["pulled_changes"] == 2
     assert a.status == "booked" and a.offer_given == "pct10" and a.contacted_on == D("2026-09-30")
     assert b.status == "do_not_contact" and s.get(Client, 41).do_not_contact is True
-    assert r["archived"] == 1 and [row["Case ID"] for row in sheet.read(CALL_TAB)] == [str(a.id)]
-    done = sheet.read(DONE_TAB)
-    assert done[0]["Status"] == "do_not_contact" and "Phone" not in done[0]
-    again = sync(s, sheet, ["call_only", "pct10"])
+    assert r["archived"] == 1 and [row["№ звернення"] for row in sheet.read(call)] == [str(a.id)]
+    archived = sheet.read(done)
+    assert archived[0]["Статус"] == "не турбувати" and "Телефон" not in archived[0]
+    again = sync(s, sheet, ["call_only", "pct10"], "uk")
     assert again["pulled_changes"] == 0 and again["pushed"] == 0 and again["archived"] == 0  # idempotent
-    notes = [e.note for e in a.events if e.note]
-    assert "Will come Friday" in notes
+    assert "Прийде в п'ятницю" in [e.note for e in a.events if e.note]
+    assert sheet.dropdowns[(call, sheet.headers(call).index("Результат"))][2] == "Записався"
+
+
+def test_sheet_reads_either_language(s):
+    """An English sheet already in use keeps its headers; outcomes typed in either language are understood."""
+    for cid in (42, 43):
+        regular(s, cid, "2026-07-20"); client(s, cid)
+    build(s)
+    cases = service.propose(s, risk_list(s, ("overdue",)))
+    service.approve(s, [c.id for c in cases])
+    sheet = FakeSheet()
+    sync(s, sheet, ["call_only"], "en")
+    assert "Call list" in sheet.tabs() and len(sheet.read("Call list")) == 2
+    a, b = cases
+    sheet.edit("Call list", a.id, **{"Outcome": "Booked"})
+    sheet.edit("Call list", b.id, **{"Outcome": "Не відповів"})
+    r = sync(s, sheet, ["call_only"], "uk")                  # switched to Ukrainian while the English tab has rows
+    assert r["pulled_changes"] == 2 and a.status == "booked" and b.status == "no_answer"
+    assert "Call list" in sheet.tabs() and "Обдзвін" not in sheet.tabs()
+
+
+def test_empty_sheet_switches_language(s):
+    sheet = FakeSheet()
+    sync(s, sheet, ["call_only"], "en")
+    assert set(sheet.tabs()) == {"Call list", "Done"}
+    sync(s, sheet, ["call_only"], "uk")                      # no rows yet: renamed and re-headed in Ukrainian
+    assert set(sheet.tabs()) == {"Обдзвін", "Завершені"} and sheet.headers("Обдзвін")[1] == "Клієнт"
 
 
 def test_offer_arms_are_assigned(s):

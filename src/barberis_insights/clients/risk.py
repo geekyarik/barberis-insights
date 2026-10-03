@@ -67,7 +67,8 @@ def classify(f: Facts) -> tuple[str, float, str | None]:
 
 def risk_list(s: Session, segments: tuple[str, ...] = ("overdue", "lapsed"), barber: int | None = None, limit: int = 200,
               include_ineligible: bool = False, min_visits: int = 2) -> list[dict]:
-    """Ranked call candidates with eligibility flags. Eligible = consent not refused, not do-not-contact, no case in the cool-down."""
+    """Ranked call candidates with eligibility flags. Eligible = consent not refused, not do-not-contact, no case in the cool-down.
+    `ineligible_reasons` are codes (dnc, no_consent, recent_case, no_phone); interfaces translate them (i18n "reason.*")."""
     import datetime as dt
     q = select(ClientProfile).where(ClientProfile.segment.in_(segments)).order_by(ClientProfile.priority.desc())
     if barber:
@@ -81,13 +82,13 @@ def risk_list(s: Session, segments: tuple[str, ...] = ("overdue", "lapsed"), bar
         c = clients.get(p.client_id)
         reasons = []
         if c and c.do_not_contact:
-            reasons.append("do not contact")
+            reasons.append("dnc")
         if c and c.data_processing_allowed is False:
-            reasons.append("no data-processing consent")
+            reasons.append("no_consent")
         if p.client_id in recent:
-            reasons.append("contacted recently")
+            reasons.append("recent_case")
         if not c or not c.phone:
-            reasons.append("no phone on file")
+            reasons.append("no_phone")
         if reasons and not include_ineligible:
             continue
         out.append({"client_id": p.client_id, "name": c.name if c else "", "phone": c.phone if c else None, "segment": p.segment,

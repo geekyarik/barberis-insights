@@ -19,14 +19,14 @@ OPEN = ("proposed", "approved", "in_sheet", "called", "no_answer", "booked")
 CLOSED = ("won_back", "not_returned", "skipped", "declined", "do_not_contact", "wrong_number")
 CONTACTED = ("called", "no_answer", "booked", "declined", "won_back", "not_returned")
 
-# Outcome labels used in the sheet's dropdown → case status
+# Call outcomes the admin picks in the sheet (code → case status). Labels come from the i18n catalogs ("outcome.<code>").
 OUTCOMES = {
-    "No answer": "no_answer",
-    "Call back later": "called",
-    "Booked": "booked",
-    "Declined": "declined",
-    "Do not contact": "do_not_contact",
-    "Wrong number": "wrong_number",
+    "no_answer": "no_answer",
+    "call_back": "called",
+    "booked": "booked",
+    "declined": "declined",
+    "do_not_contact": "do_not_contact",
+    "wrong_number": "wrong_number",
 }
 
 
