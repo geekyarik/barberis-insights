@@ -3,7 +3,7 @@
 > Living document. It describes the **target** architecture and how the current code maps onto it.
 > Vocabulary lives in [`CONTEXT.md`](../CONTEXT.md). Decisions that are hard to reverse live in [`docs/adr/`](adr/).
 > The roadmap and the process for changing this document are in [`PLAN.md`](PLAN.md).
-> Status: **draft for review**. Sections marked *open question* are settled in the `grill-with-docs` session.
+> Status: **accepted 2026-10-03** after the `grill-with-docs` session. No open-question markers remain; change it with the process in §10.
 
 ## 1. Purpose
 
@@ -58,10 +58,16 @@ The two analyses first built by hand in chat — the per-barber weekly book and 
 3. **Analyses are code, and their results are data** (ADR-0007). One module per metric, and one module per analysis. Runs are stored and compared; nothing important lives only in a chat answer.
 4. **Every number is reproducible.** A run or measurement records its window, the versions of its metric and analysis definitions, its lens, and a fingerprint of the data it saw.
 5. **Modules own their data.** A module changes its own tables only. Others go through its service interface.
+   New modules (Analyses, Reports, Scheduler, Notifications) expose a service interface from their first commit.
+   The graph is acyclic: Context and Mirror depend on nobody, and Context never calls Experiments (a Factor's verdict is read from its linked Hypotheses).
 6. **Pure domain logic, thin edges.** Metrics and analyses are pure functions over loaded data, testable with fixtures. I/O (database, Altegio files, Google, web) sits at the edges.
 7. **Local-first and private.** It runs on the owner's laptop. Personal data stays in `var/` and never goes to git. Only the data the admin needs reaches their sheet.
-8. **Claude is a first-class user.** Every capability a person has in the dashboard is also exposed through the MCP server, with the same rules. Claude writes the narrative on top of stored runs, never instead of them.
-9. **Extensible by registration.** New metrics, analyses, data sources, factor feeds and report sections plug in without changing existing modules.
+8. **Portable to a server later.** Hosting is not a goal now (ADR-0003), but nothing may rule it out:
+   - Scheduler and Notifications get time and storage through service interfaces; launchd is only one trigger of `insights jobs tick`.
+   - No module reads a fixed laptop path; everything comes from `INSIGHTS_*` config.
+   - Authentication and multiple users are out of scope. A hosted version needs its own ADR.
+9. **Claude is a first-class user.** Every capability a person has in the dashboard is also exposed through the MCP server, with the same rules. Claude writes the narrative on top of stored runs, never instead of them.
+10. **Extensible by registration.** New metrics, analyses, data sources, factor feeds and report sections plug in without changing existing modules.
 
 ## 5. Module map
 
@@ -123,18 +129,18 @@ Dependencies point **one way**, from left to right. Mirror and Context depend on
 
 | Module | Responsibility | Owns (tables) | Depends on | Code today |
 |---|---|---|---|---|
-| **CRM Mirror** | Import and keep a faithful local copy of Altegio facts; record every sync run | `barbers`, `appointments`, `appointment_services`, `schedule_slots`, `clients` (Altegio fields), `sync_runs` | — | `ingest/`, `db/` |
+| **CRM Mirror** | Import and keep a faithful local copy of Altegio facts; record every sync run | `barbers`, `appointments`, `appointment_services`, `schedule_slots`, `clients` (Altegio fields, including the description and the Do-not-contact tag), `sync_runs` | — | `ingest/`, `db/` |
 | **Context** | The owner's truth: factors (outside and internal), decisions, observations, and how each should affect analysis | `notes` (→ `factors`, §5.5) | — | `context/` |
 | **Metrics** | One module per metric: its definition, scopes, direction and version; measurements | `measurements` | Mirror, Context | `metrics/` (all in `core.py` today) |
 | **Analyses** | One module per analysis: a structured, versioned result for a window, scope and lens; stored runs; comparisons between runs | `analysis_runs` | Metrics, Clients, Context | not yet (logic lives in `legacy/`, `metrics/weekly.py`, `web/app.py`) |
-| **Clients** | Client profiles, segments, value, risk | `client_profiles`, local client fields (`do_not_contact`) | Mirror | `clients/` |
-| **Outreach** | Win-back cases, offers, the admin sheet, attribution of returns | `outreach_cases`, `outreach_events`, `offers` | Clients, Mirror (visits) | `outreach/` |
+| **Clients** | Client profiles, segments, value, risk | `client_profiles` | Mirror, Context | `clients/` |
+| **Outreach** | Win-back cases, offers, the admin sheet, attribution of returns, write-back of tagged lines to Altegio (ADR-0010) | `outreach_cases`, `outreach_events`, `offers` | Clients, Mirror (visits) | `outreach/` |
 | **Goals** | Goals on metrics, with baseline, target, due date, and progress from measurements and runs | `goals`, `goal_events` | Metrics, Analyses | `goals/` |
-| **Experiments** | Hypotheses and their evaluation (difference-in-differences, before/after, offer A/B), controlling for Context | `hypotheses` | Metrics, Context, Outreach | `experiments/` |
+| **Experiments** | Hypotheses (each linked to a Factor) and their evaluation (difference-in-differences, before/after, offer A/B), controlling for Context | `hypotheses` | Metrics, Context, Outreach | `experiments/` |
 | **Playbook** | Shared routines and tips for barbers | `tips` | — | `playbook/` |
-| **Reports** | Compose stored analysis runs, goals and Context into readable pages (barber book, team comparison, monthly review); export them | — (reads runs) | Analyses, Goals, Context | not yet (dashboard pages do parts) |
+| **Reports** | Compose stored analysis runs, goals and Context into readable pages (barber book, team comparison, monthly review); freeze each as a Report run; export them | `report_runs` | Analyses, Goals, Context | not yet (dashboard pages do parts) |
 | **Scheduler** | Run jobs on a daily, weekly or monthly cadence; catch up runs missed while the laptop was asleep; record every run | `jobs`, `job_runs` | the services of the modules it runs | not yet |
-| **Notifications** | Deliver reports and alerts to people through channels (Telegram first), in each recipient's language; record every delivery | `recipients`, `subscriptions`, `deliveries` | Reports | not yet (the website already sends Telegram messages for call-back requests) |
+| **Notifications** | Deliver reports and alerts to people through channels (Telegram first), in each recipient's language; record every delivery | `recipients`, `subscriptions`, `deliveries` (refer to `report_runs`) | Reports | not yet (the website already sends Telegram messages for call-back requests) |
 | **Interfaces** | Dashboard, JSON API, CLI, MCP server | — | all modules (through services) | `web/`, `api/`, `cli.py`, `mcp_server.py` |
 
 **Planned:**
@@ -174,8 +180,9 @@ Dependencies point **one way**, from left to right. Mirror and Context depend on
   - a `VERSION`
   - a fixture test in `tests/metrics/`
 - **Scopes:** barber, team, shop, and later segment.
-- **Measurements** are stored in long format (`asof`, window, scope, metric, metric version, lens, value), so a new metric needs no schema change.
-- **Changing a definition** raises the metric's `VERSION`, and comparisons only compare equal versions. *Open question:* whether to re-run old windows automatically.
+- **Measurements** are a projection of runs, written only as a side effect of a run or a manual snapshot (itself a run). Stored in long format (`asof`, window, scope, metric, metric version, lens, value), so a new metric needs no schema change.
+- **Changing a definition** raises the metric's `VERSION`, and comparisons only compare equal versions. A re-run of an old window under the new version creates a new run, and the Goal's Baseline is re-pointed to it with an audit event; this is a person's decision, not automatic. The bump command lists the Goals and Baselines affected. It only works while the Mirror still holds the data, so the data fingerprint flags windows that can no longer be reproduced.
+- **Windows** are whole ISO weeks. Date-range Windows (such as the owner's 15th–14th month) are deferred until needed.
 - **Regression:** the 2026-09-27 baseline is pinned by `tests/test_metrics_baseline.py`.
 
 ### 6.3 Analyses — one module per analysis
@@ -209,6 +216,7 @@ An **analysis** answers one business question for a window, scope and lens, with
 | `departure_impact` | When a barber left, how many of their regulars stayed with the shop, and with whom? | Віталій analysis |
 | `new_clients` | How many new clients per day and month, and what share of all clients? | new-clients analysis |
 | `service_mix` | Which services and extras drive revenue? | service mix |
+| `seasonality` | How do visits and revenue per work day in recurring periods (summer, holidays and their run-up) differ from each year's own average? Gives recurring Factors their effect | multi-year history |
 | `overdue_regulars` | Who is overdue, and how much are they worth? | at-risk analysis |
 
 - **Analysis run** (`analysis_runs` table): analysis key and version, scope, window, lens, `asof`, data fingerprint (appointment count and last import), created by (person, schedule or Claude), and the result JSON. Runs are immutable; re-running creates a new run.
@@ -218,8 +226,9 @@ An **analysis** answers one business question for a window, scope and lens, with
 - **What a report is:** a composition of analysis runs, goals and Context, for example:
   - *Barber book*: `barber_scorecard` + `weekly_book` + `weekday_pattern` + `client_retention` + `return_cohorts` + goals for one barber
   - *Team comparison*: `barber_scorecard` for all + `weekday_pattern` + `client_retention` + team goals
-  - *Monthly review*: all of the above, compared with the previous run and the baseline
+  - *Monthly review* *(deferred, TODO)*: all of the above, compared with the previous run and the baseline. When built, its Window is the last 4 or 5 complete ISO weeks, ending in the week that contains the 14th; its label shows the real dates. Goal due dates snap to the end of a week.
 - **Where they appear:** reports render in the dashboard and export to HTML. Claude adds the narrative through MCP, citing run IDs.
+- **Report runs:** a Report is frozen as a `report_run` (the analysis run IDs, goal states and resolved Lens it used). Re-rendering never changes what was sent, and deliveries refer to a Report run.
 - **They replace the two hand-built artifact pages.**
 
 ### 6.5 Context — the second source of truth
@@ -229,46 +238,52 @@ This module turns the owner's knowledge into data the analysis can act on.
 
 | Field | Meaning |
 |---|---|
-| `kind` | `external` (not under our control: security, energy, economy, calendar, weather, competition, migration) or `internal` (our decision: price, staff, schedule, marketing, operations) |
-| `period` | dates (and optionally hours) when it applies; can be recurring (e.g. summer, school holidays) |
-| `scope` | shop, team, specific barbers, or a client segment |
-| `expected_effects` | the owner's belief: which metrics, which direction, rough size, confidence |
+| `kind` | `external` (not under our control: migration and mobilisation, holidays and the run-up to them, security, competition; others by hand) or `internal` (our decision: price, staff, schedule, marketing, operations) |
+| `period` | dates when it applies, at day or week grain (no hours). Can recur yearly (summer, holidays and the run-up to them); the effect of a recurring factor is measured by the `seasonality` analysis from the shop's own history and linked to the factor; it is never typed in, and a factor with fewer than 2 observed years shows "not enough history" |
+| `scope` | shop, team, specific barbers, or one client (`client:<id>`). Segment scopes are not supported yet |
+| `expected_effects` | the owner's belief: which metrics and which direction (required), an optional size range. No confidence value |
 | `treatment` | how analysis should handle it, see the table below |
 | `source` | owner, manager, Claude, or a named feed |
-| `status` | `belief` → `supported` / `refuted` / `inconclusive`, once a linked Hypothesis is evaluated |
+| `status` | `belief` → `supported` / `refuted` / `inconclusive`. Derived on read from the linked Hypotheses; never stored on the Factor |
 
 **Treatments: how Context changes analysis**
 
 | Treatment | Effect on analysis | Example |
 |---|---|---|
 | `annotate` | Shown on charts, timelines and reports; numbers unchanged | Competitor opened nearby |
-| `exclude` | The period is removed from comparisons and baselines for that scope | Shop closed during a long power outage |
-| `adjust` | The denominator or expectation is corrected (e.g. scheduled hours reduced by outage hours) | A 3-hour scheduled outage on a work day |
-| `control` | Used as a covariate or a matching condition in Experiments | Season, holidays, air-raid-alert hours |
+| `exclude` | The period is removed from comparisons and baselines for that scope | Shop closed for several days |
+| `adjust` | The denominator or expectation is corrected (e.g. scheduled hours reduced for a day the shop opened late) | The shop opened late on a work day |
+| `suppress_overdue` | Client scope only: the client is not Overdue and not proposed for win-back until the factor ends | A client abroad until June |
+| `control` | Used as a covariate or a matching condition in Experiments | Season, holidays and the run-up to them |
 
-**Lens:** a named set of factor treatments applied to a computation, for example "raw", "clean weeks" or "outage-adjusted". Runs, measurements and hypothesis results store the lens they used, so two numbers are always comparable or visibly not.
+**Default Lens:** one per shop, `raw` at first, set in config. Each Goal records the Lens it was set under and is judged only under it. Reports may show a second Lens beside the default, but the headline number always uses the default. Changing the default is an audit event and a person's decision.
+
+**Lens:** a named rule (selectors plus a treatment), for example "raw", "clean weeks" or "outage-adjusted". It is resolved at run time to a frozen list of factor IDs and versions, and the run stores that list, not only the name. Two runs with the same Lens name but different resolved Factors are not comparable, and the comparison says why.
 
 **Feeds** *(planned):* adapters that create external factors automatically. Candidates:
-- air-raid alert history for Lviv
-- planned power-outage schedules
-- public holidays and school calendar
-- weather
+- public holidays and the run-up to them
+- migration and mobilisation (a proxy may be needed)
+- air-raid alert history for Lviv (low priority: rare impact)
+- Not worth tracking: power outages (reserve power), weather (too fine-grained), the economy (too wide)
 
-Each feed is a plugin, like a Mirror adapter. *Open question:* which feeds are worth it; to be settled with the `research` skill.
+Each feed is a plugin, like a Mirror adapter. Which feeds are worth building is settled by the `research` skill, based on the list above. Recurring factors are estimated from the shop's own history; the local mirror starts in January 2025, so the 2022–2024 appointments and shifts must be imported from Altegio first, which Altegio can provide.
 
-**Belief ↔ evidence:** any factor with `expected_effects` can produce a Hypothesis in one click. Its verdict updates the factor's `status`.
+**Belief ↔ evidence:** any factor with `expected_effects` can produce a Hypothesis in one click. Its verdict is what the factor's `status` shows.
 
 ### 6.6 Clients
 - **Profiles** are derived from Mirror on every ingest: first and last visit, visits, spend, usual barber, usual gap.
 - **Segments:** active, slipping, overdue, lapsed, one-time, switched. The rules are in `clients/risk.py`.
 - **Priority** combines value, how recoverable the client is, and loyalty.
-- **Local-only client data** (`do_not_contact`, Altegio comment) is owned here.
-- *Open question:* how Context affects risk. For example, a client known to be abroad shouldn't count as overdue.
+- **Do not contact** is a Fact held in Altegio (a tagged line in the client's description), not local-only data. Clients reads it from Mirror. There is no local-only client table for now.
+- Clients depends on Context: a Factor scoped to one client with `suppress_overdue` removes the client from Overdue and from proposed win-back until it ends. The Context text is shown to the owner and may be written to the client's description as a tagged line (ADR-0010).
 
 ### 6.7 Outreach
 - **Case lifecycle:** proposed → approved → in sheet → contacted outcomes → won back or not returned.
 - **Approval:** a person approves every case before an admin sees it.
 - **Admin interface:** a Google Sheet, through a service account (ADR-0004). The sync is idempotent; contacts are removed from the sheet when a case closes.
+- **Write-back (ADR-0010):** Outreach alone may write short tagged lines to a client's description in Altegio, through a write-back port. Outcome lines (`[insights] win-back: contacted …`) are projections, overwritten freely. Mirror stays read-only.
+- **Do not contact:** the tag in the description is the single representation. Accepted spellings: `не турбувати`, `do not contact`, `dnc`, case-insensitive; we write `[insights] do not contact`. After every client import the local flag equals "tag present". Staff setting it closes any open case as `do_not_contact` (source `altegio`), removes it from the sheet on the next sync, and writes an audit event.
+  - Today the description arrives only through the manual client export, so the flag is refreshed only then; `client_export.py` currently only sets it and never clears it (to change).
 - **Attribution:** a case counts as won back when the client completes a visit within N days of contact. Offer A/B arms feed Experiments.
 
 ### 6.8 Goals
@@ -293,18 +308,22 @@ Each feed is a plugin, like a Mirror adapter. *Open question:* which feeds are w
 
 | Job | Cadence (default) | Does | Report sent |
 |---|---|---|---|
-| `daily_digest` | every day, 09:00 | checks data freshness; yesterday per barber: visits, revenue, busy share, no-shows; today's free hours; new win-back outcomes | Daily digest |
+| `daily_digest` *(TODO, not in this phase)* | every day, 09:00 | yesterday per barber, today's free hours, new win-back outcomes | Daily digest |
 | `sheet_sync` | every day, 09:00 and 19:00 | pulls the admin's outcomes, attributes returns, pushes approved cases | only on problems |
 | `weekly_review` | Monday, 09:00 | last week vs the week before and the same week last year, per barber and team; overdue clients; goals that changed status | Weekly review |
-| `monthly_review` | 1st of the month, 09:00 | runs every analysis for the month, compares with the previous month and the baseline, updates goal progress | Monthly review (§6.4) |
+| `monthly_review` *(deferred, TODO)* | 1st of the month, 09:00 | runs every analysis for the month, compares with the previous month and the baseline, updates goal progress | Monthly review (§6.4) |
 | `data_watch` | every day | raises an alert when the newest data is older than N days or an import failed | Alert |
 
 - **How it runs on a laptop:** one launchd agent wakes `insights jobs tick` every 15 minutes. The tick runs every job that is *due* according to `job_runs`, so a run missed while the laptop slept or was off happens at the next tick, once, not once per missed slot. There is no long-running daemon.
+- **Catch-up:** every missed slot is processed, none skipped, in strict order. A slot runs only after the previous slot of that job is done.
+  - A window is complete when appointments are covered through its end and shifts are imported for every week in it, both checked against `sync_runs`.
+  - An incomplete window blocks the chain (`blocked: needs data`) and sends one Alert, at most once a day, naming the missing weeks and the exact refresh command.
+  - Catch-up creates every analysis run and Goal history entry, but sends one message: the latest week in full, older weeks as one-line deltas. Older Report runs can be reopened.
 - **Runs are recorded** (`job_runs`: job, scheduled for, started, finished, status, counts, error), visible on *Data & sync*, and safe to repeat: each job is idempotent, like imports and syncs.
 - **Fresh data is the catch** (ADR-0002): until Altegio's REST API works, no job can fetch new appointments by itself. Until then:
   - jobs report on the data already imported and say how old it is;
-  - fetching stays a person or Claude step (the `barberis-goals-refresh` skill);
-  - *open question:* whether a scheduled headless Claude run can do the fetch through the Altegio Pro connector.
+  - fetching stays a person or Claude step (the `barberis-goals-refresh` skill), and the `data_watch` Alert gives the exact command or skill to run;
+  - a scheduled headless Claude run is **not** used in this phase: it would make the tool depend on an agent running unattended. The owner is asking Altegio support to fix the partner-token access (ADR-0002).
 - **Manual runs:** `insights jobs run <job> [--dry-run]` from the CLI, a *Run now* button in the dashboard, and an MCP tool, all through the same service.
 
 ### 6.12 Notifications — channels and recipients
@@ -321,7 +340,8 @@ Each feed is a plugin, like a Mirror adapter. *Open question:* which feeds are w
 | **macOS notification** | "job failed", "data is stale" | none | only reaches the laptop owner |
 
 - **Deliveries are recorded** (`deliveries`: subscription, report run, channel, sent at, status, error) and retried a few times; a report is never sent twice for the same run and recipient.
-- **Privacy:** messages leave the laptop and are stored by the channel provider. They carry aggregates and barber names only — never client phone numbers, and client names only if the owner decides so (*open question*). Links to the dashboard work only on the laptop, so a message is complete without opening anything.
+- **Recipients:** only the owner, through a separate Telegram bot (not the website's call-back bot). Reports first: the weekly review. Alerts: data older than 3 days, a failed or blocked job, a Goal that moved to "behind", and a barber's weekly visits more than 30 % under their 8-week average.
+- **Privacy:** messages leave the laptop and are stored by the channel provider. For now the only recipient is the owner and the owner has set no limits on client data in messages, so none are enforced (the client base is the shop's working resource). If managers or barbers become recipients, add a per-recipient limit then. Links to the dashboard work only on the laptop, so a message is complete without opening anything.
 - **Language:** each message is rendered from the i18n catalogs in the recipient's language.
 
 ### 6.13 Explore — ad-hoc analysis in the dashboard
@@ -332,16 +352,18 @@ We don't use an external BI tool (ADR-0009); quick "slice it differently" questi
 - **Reusable components:** line or bar over time, weekday-by-hour heat map, breakdown table, KPI tiles with change, cohort table. Reports and pages use the same components.
 - **Export:** CSV of any table, kept local.
 - **Claude:** answers questions the explorer doesn't cover through MCP (`query_metrics`, `run_analysis`, read-only SQL), and a useful answer can be saved as a view or turned into a new metric or analysis.
+- **Boundary:** the Explorer calls only registered Metrics (each declares its breakdown dimensions) and registered Analyses. It writes no SQL and holds no client-level logic; a breakdown that needs it (such as client type) is added to an Analysis or a Clients service.
+- **Saved views** store parameters, not numbers. Results are ephemeral until a view is pinned to a Report, and then the Report run stores the analysis runs behind it.
 - Anything that matters more than once becomes a metric or an analysis, not a saved SQL query.
 
 ## 7. Cross-cutting
 
 | Concern | Rule |
 |---|---|
-| **Time** | Weeks are ISO weeks (Monday start) in the shop's local time. A window is whole weeks. A run or measurement is "as of" the last day of its window. |
+| **Time** | Weeks are ISO weeks (Monday start) in the shop's local time. A window is whole weeks (date ranges deferred). Digests use day-level facts and are never stored as Measurements. A run or measurement is "as of" the last day of its window. |
 | **Scopes** | `shop`, `team` (the barbers tracked), barber keys, and later client segments. They are used the same way across all modules. |
 | **Versioning** | Metrics and analyses carry a `VERSION`. Stored values record it. Only equal versions are compared. |
-| **Privacy** | Personal data is limited to name, phone and email. It lives only in `var/insights.sqlite` and the admin sheet. Analysis results hold IDs and aggregates, never contact details. The repo is public, so business data stays in `var/` and `legacy/`. |
+| **Privacy** | Personal data is limited to name, phone and email. It is kept as long as Altegio keeps it (no local retention rule). It lives only in `var/insights.sqlite` and the admin sheet. Analysis results hold IDs and aggregates, never contact details. The repo is public, so business data stays in `var/` and `legacy/`. |
 | **Idempotency** | Every import and sync can be re-run safely. Analysis runs are immutable; re-running creates a new run. |
 | **Audit** | Changes to goals, cases and factors keep an event trail. Runs record who or what created them. |
 | **Testing** | Each metric and each analysis has its own fixture test. Behaviour on real data is checked by regression tests that skip when data isn't present. |
@@ -375,9 +397,9 @@ We don't use an external BI tool (ADR-0009); quick "slice it differently" questi
 | Owner context | `notes`: free text with dates, scopes and tags | `factors` with effects, treatments, lenses and belief status |
 | Analysis lens | none (raw facts) | every run, measurement and hypothesis records its lens |
 | Module boundaries | services take a database session and read any table; `web/app.py` queries tables | each module exposes a service; cross-module reads go through it |
-| Altegio access | connector files plus a manual export | plus a REST adapter, so scheduled jobs can fetch on their own (blocked on the partner token) |
+| Altegio access | connector files plus a manual export; read-only | plus a REST adapter (blocked on the partner token); Outreach may write tagged lines to client descriptions (ADR-0010) |
 | Ad-hoc exploration | asking Claude in chat; fixed dashboard pages | an Explorer page with saved views on the metric registry (ADR-0009) |
-| Scheduling and delivery | nothing runs on its own; reports are asked for in chat | Scheduler runs daily, weekly and monthly jobs; Notifications sends reports and alerts to Telegram (then email) |
+| Scheduling and delivery | nothing runs on its own; reports are asked for in chat | Scheduler runs the weekly review and data checks (daily and monthly jobs deferred); Notifications sends them to the owner on Telegram (email later) |
 
 ## 10. Change process
 This document changes **with** the code, never after it:

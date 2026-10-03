@@ -23,6 +23,17 @@ From the `mattpocock-skills` plugin, plus our own skills:
 
 **Default loop for any feature:** `grill-with-docs` (if it brings new concepts) → `to-spec` → `to-tickets` → per ticket: `tdd` → `code-review` → update `ARCHITECTURE.md` §5/§9 if boundaries changed.
 
+## Build order (decided 2026-10-03)
+Phases below keep their descriptions; this is the order they ship in.
+1. **History import:** 2022–2024 appointments and shifts from Altegio into the Mirror. First ticket; no new modules.
+2. **Metrics split** (Phase 2, step 1). The 2026-09-27 baseline test stays green.
+3. **Analysis framework** and the first three analyses: `client_retention`, `overdue_regulars`, `barber_scorecard`, with `analysis_runs`.
+4. **Thin Phase 2b:** Notifications with a Telegram adapter (separate bot), the Scheduler with `data_watch` and `sheet_sync`, then `weekly_review`.
+5. **The remaining analyses** in the order `weekly_book`, `weekday_pattern`, `return_cohorts`, `new_clients`, `client_sources`, `exclusive_clients`, `departure_impact`, `price_demand`, `service_mix`, `seasonality`; then Reports with `report_runs`; then retire the two artifact pages (with your go-ahead).
+6. **Research** (Phase 4) any time after step 1. **Context v2** (Phase 5) after step 5. **Explorer** (Phase 2c) last.
+
+**Rules while building:** new modules (Analyses, Reports, Scheduler, Notifications) get a service interface from their first commit: one entry point, no reads of foreign tables. Existing modules are refactored in Phase 3. The Baseline stays 2026-09-27 and existing Goals stay against it; the 2022–2025 history is a separate *reference* run for same-week-last-year and seasonality comparisons.
+
 ## Phases
 
 ### Phase 0 — Set up *(short)*
@@ -31,7 +42,7 @@ From the `mattpocock-skills` plugin, plus our own skills:
 
 **Done when** the other skills can find the tracker and the docs.
 
-### Phase 1 — Settle the architecture *(next)*
+### Phase 1 — Settle the architecture *(done 2026-10-03)*
 Run `grill-with-docs` on `docs/ARCHITECTURE.md`. It should resolve the [open questions](#open-questions), turn the *proposed* terms in `CONTEXT.md` into accepted ones, and accept, rewrite or reject ADR-0005.
 
 **Done when** no *open question* markers remain in `ARCHITECTURE.md` §6, and ADR-0005 has a final status.
@@ -52,6 +63,7 @@ Turn the hand-made analyses into code, so the analysis cycle (ARCHITECTURE §3) 
    - `departure_impact`
    - `new_clients`
    - `service_mix`
+   - `seasonality` (measures recurring-factor effects from 3–4 years of history)
    - `overdue_regulars`
 4. **Baseline:** run every analysis for the 2026-01-12 – 2026-09-27 window and store the runs as **Baseline 2026-09-27**. Re-point the existing goals at it.
 5. **Reports:** the barber book and team comparison as dashboard pages rendered from stored runs, plus HTML export. Then retire the two claude.ai artifact pages, with your go-ahead before deleting.
@@ -100,7 +112,7 @@ The second source of truth, built into the analyses. Use `wayfinder`:
 1. **Notifications + Telegram adapter:** recipients, subscriptions, deliveries; `insights notify test` sends a test message.
 2. **Scheduler:** `jobs`, `job_runs`, `insights jobs tick|run|list`, the launchd agent (`insights jobs install`), *Run now* in the dashboard, MCP tools.
 3. **First jobs:** `data_watch` and `sheet_sync` (useful immediately), then `daily_digest`, then `weekly_review`.
-4. **`monthly_review`** once the Reports module (Phase 2, step 5) exists; email as the second channel for it.
+4. *(Deferred.)* `monthly_review` once the Reports module exists; email as the second channel for it.
 
 **Done when** the owner gets the daily digest in Telegram every morning without doing anything, sees each run in *Data & sync*, and gets an alert when data is older than the agreed limit.
 
@@ -112,24 +124,18 @@ The second source of truth, built into the analyses. Use `wayfinder`:
 ### Every month
 Run `barberis-goals-refresh`. Until Phase 2 lands, it saves a measurement and reports from goals. After that, it runs all analyses and compares them with the baseline and the previous run. Record new Context while doing it.
 
-## Open questions
-For the Phase 1 grilling session.
+## Decided in the Phase 1 grilling (2026-10-03)
+Owner-only, local-first for now; client retention is the first goal; analyses are built in the order in Phase 2; daily digest is deferred; Telegram uses a separate bot; no local retention rule for contact data; Windows stay whole ISO weeks. Details are in `ARCHITECTURE.md`, `CONTEXT.md` and the ADRs.
 
-1. **Users:** only the owner, or managers too? Does anyone besides the owner need access off the laptop? This affects ADR-0003.
-2. **Factor time grain:** do factors need hours (outages, alerts) or are days enough? Do we need recurring factors (every summer, school holidays)?
-3. **Per-client context:** can a factor apply to one client or a segment (for example "abroad until June")? Should that pause overdue status and win-back?
-4. **Beliefs:** how precise should a belief be: direction only, rough size, or a number with confidence?
-5. **Default lens:** should every analysis, goal and report use one default lens, or does each goal choose its own?
-6. **Versions:** when a metric or analysis definition changes, do we re-run past windows automatically so old and new stay comparable?
-7. **Analysis cadence:** monthly runs only, or also weekly runs for operational use (busy share, overdue clients)? Which windows does a comparison use: same length, or month against month?
-8. **First analyses:** are the twelve listed in Phase 2 the right ones, and in what order? Is anything missing (for example per-service profitability, front-desk vs online conversion)?
-9. **Priorities:** which decisions should the tool help with first: pricing, schedules and staffing, client retention, marketing, or barber development?
-10. **External factors:** which matter most for this shop and its clients: air-raid alerts, power outages, migration and mobilisation, the economy, weather, holidays, competition?
-11. **Personal data retention:** how long do we keep contact details for clients who haven't visited in years?
-12. **Reports:** how often, for whom, and in what form (dashboard page, HTML export, message)?
-13. **Channels:** Telegram first, then email for the monthly review — or another mix? Same bot as the website's call-back requests, or a separate one (recommended: separate, so business reports never reach the website's chat)?
-14. **Recipients:** only the owner, or managers and barbers too? Should each barber get only their own numbers?
-15. **Daily digest content and time:** which numbers, what time, and on days off too? Weekly on Monday morning, monthly on the 1st?
-16. **Alerts:** which conditions are worth a message (stale data after how many days, failed sync, a goal falling behind, a big drop in bookings)?
-17. **Client names in messages:** allowed (e.g. "Олена booked after the call") or aggregates only?
-18. **Fresh data without the REST API:** is it acceptable that scheduled reports use the last imported data and say how old it is? Should we test a scheduled headless Claude run that fetches through the Altegio Pro connector?
+## TODO (blocked or later)
+- **Profitability** per service and per barber (needs costs and payroll in the Finance module).
+- **Front-desk vs online conversion** (Altegio gives no funnel, only `online_share`).
+- **Capacity planning** for next quarter (needs forecasts).
+- **Daily digest** job (deferred; only weekly reports for now).
+- **Monthly review** job and report (deferred; the window rule is in ARCHITECTURE §6.4).
+- **Date-range Windows** (the owner's 15th–14th month), if the weekly month proves too coarse.
+- **Segment-scoped Factors**.
+- **Hosting**: needs authentication and its own ADR.
+
+## Open questions
+1. **Research (Phase 4):** holidays and the run-up to them, migration and mobilisation (a proxy), air-raid alerts (low priority), competition (unsure).
