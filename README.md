@@ -58,13 +58,15 @@ uv run pytest                              # 32 tests, incl. baseline regression
 5. **Review results** on the *Win-back* page: by offer, by admin and by segment. If you ran an offer test, evaluate it as a *Win-back offer A/B* hypothesis.
 
 ### Admin call sheet (Google Sheets) setup
-1. In Google Cloud Console, create a project and enable the **Google Sheets API** and **Google Drive API**.
-2. Create an **OAuth client ID** of type *Desktop app*. Download the JSON to `var/google_oauth_client.json`.
-3. Create an empty Google Sheet and share it with the admin (editor). Put its id in `.env`; the id is the part of the URL between `/d/` and `/edit`:
-   ```
-   INSIGHTS_SHEET_ID=1AbC...xyz
-   ```
-4. Run `uv run insights sheet-sync`. The first run opens a browser for consent, and the token is stored in `var/google_token.json`. It creates the *Call list* and *Done* tabs, with dropdowns for Outcome and Offer.
+The recommended way is a **service account**. It needs no browser sign-in, its access doesn't expire every 7 days the way a Testing-mode sign-in does, and it can only open sheets you explicitly share with it.
+1. In Google Cloud Console, open project → **APIs & Services → Enabled APIs**, and enable **Google Sheets API**.
+2. Go to **IAM & Admin → Service accounts → Create service account**. Name it e.g. `barberis-sheets` and skip the roles.
+3. Open the service account → **Keys → Add key → Create new key → JSON**. Save the file as `var/google_service_account.json`.
+4. Open the admin's Google Sheet → **Share**, and add the service account's email (`…@<project>.iam.gserviceaccount.com`) as **Editor**. Also share it with the admin.
+5. Put the sheet id in `.env`: `INSIGHTS_SHEET_ID=…`, the part of the sheet URL between `/d/` and `/edit`.
+6. Run `uv run insights sheet-auth`. It connects and creates the *Call list* and *Done* tabs.
+
+**Alternative: OAuth sign-in.** Put an OAuth client JSON at `var/google_oauth_client.json`. A *Web* client needs `http://localhost:8766/` as an authorized redirect URI; a *Desktop* client needs nothing. Add your Google account as a **test user** on the consent screen, then run `insights sheet-auth` to sign in in the browser. While the app stays in Testing mode, Google expires this sign-in after 7 days.
 
 `insights sheet-sync --dry-run` shows what would be sent, using an in-memory sheet.
 

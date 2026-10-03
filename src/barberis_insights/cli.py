@@ -240,7 +240,11 @@ def sheet_sync(dry_run: bool = typer.Option(False, "--dry-run", help="Use an in-
         else:
             if not settings.sheet_id:
                 raise typer.BadParameter("Set INSIGHTS_SHEET_ID in .env (the id from the sheet URL)")
-            sheet = GspreadSheet(settings.sheet_id)
+            try:
+                sheet = GspreadSheet(settings.sheet_id)
+            except (RuntimeError, FileNotFoundError) as e:
+                typer.echo(f"Could not connect to the sheet: {e}", err=True)
+                raise typer.Exit(1)
         out = sync(s, sheet, [o.code for o in active_offers(s)])
         s.rollback() if dry_run else s.commit()
         typer.echo(json.dumps(out | ({"dry_run_rows": sheet.read("Call list")[:5]} if dry_run else {}), ensure_ascii=False, indent=1, default=str))
@@ -250,14 +254,18 @@ def sheet_sync(dry_run: bool = typer.Option(False, "--dry-run", help="Use an in-
 
 @app.command("sheet-auth")
 def sheet_auth() -> None:
-    """One-time Google sign-in for the admin call sheet; also creates the sheet's tabs."""
+    """Connect to the admin call sheet (service-account key, or a one-time Google sign-in) and create its tabs."""
     from .db.session import session_scope
     from .outreach.offers import active_offers
     from .outreach.service import OUTCOMES
     from .outreach.sheets import ADMIN_COLS, CALL_TAB, DONE_COLS, DONE_TAB, INFO_COLS, GspreadSheet
     if not settings.sheet_id:
         raise typer.BadParameter("Set INSIGHTS_SHEET_ID in .env first")
-    sheet = GspreadSheet(settings.sheet_id, interactive=True)
+    try:
+        sheet = GspreadSheet(settings.sheet_id, interactive=True)
+    except (RuntimeError, FileNotFoundError) as e:
+        typer.echo(f"Could not connect to the sheet: {e}", err=True)
+        raise typer.Exit(1)
     with session_scope() as s:
         offers = [o.code for o in active_offers(s)]
     sheet.ensure_tab(CALL_TAB, INFO_COLS + ADMIN_COLS, {"Outcome": list(OUTCOMES), "Offer given": offers})

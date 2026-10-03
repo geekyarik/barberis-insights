@@ -88,11 +88,52 @@ def google_credentials(interactive: bool = True):
     return creds
 
 
+SERVICE_ACCOUNT_FILE = "google_service_account.json"  # preferred: no browser sign-in, no expiry, sees only sheets shared with it
+
+
+def service_account_email() -> str | None:
+    import json
+    p = settings.data_dir / SERVICE_ACCOUNT_FILE
+    return json.loads(p.read_text()).get("client_email") if p.exists() else None
+
+
+def _explain(e: Exception) -> str:
+    """Turn gspread's wrapped Google error into an actionable message."""
+    cause = e if getattr(e, "response", None) is not None else (e.__cause__ or e.__context__)
+    resp = getattr(cause, "response", None)
+    info = {}
+    try:
+        info = resp.json().get("error", {}) if resp is not None else {}
+    except ValueError:
+        pass
+    reasons = {d.get("reason") for d in info.get("details", [])}
+    if "SERVICE_DISABLED" in reasons:
+        return ("Google Sheets API is not enabled in the Google Cloud project of this key. Enable “Google Sheets API” "
+                "(APIs & Services → Library), wait a few minutes, then retry.")
+    if (resp is not None and resp.status_code in (403, 404)) or isinstance(e, gspread_not_found()):
+        return f"The service account can't open the sheet. Share it with {service_account_email()} as Editor. ({info.get('message', e)})"
+    return f"Google Sheets error: {info.get('message') or e}"
+
+
+def gspread_not_found():
+    import gspread
+    return gspread.exceptions.SpreadsheetNotFound
+
+
 class GspreadSheet:
-    """Google Sheets via gspread, using the stored OAuth token (see google_credentials)."""
+    """Google Sheets via gspread. Uses a service-account key (var/google_service_account.json) when present,
+    otherwise the OAuth sign-in token (see google_credentials)."""
     def __init__(self, sheet_id: str, interactive: bool = False):
         import gspread
-        self.sh = gspread.authorize(google_credentials(interactive)).open_by_key(sheet_id)
+        sa = settings.data_dir / SERVICE_ACCOUNT_FILE
+        if sa.exists():
+            gc = gspread.service_account(filename=str(sa), scopes=SCOPES)
+            try:
+                self.sh = gc.open_by_key(sheet_id)
+            except (gspread.exceptions.SpreadsheetNotFound, gspread.exceptions.APIError, PermissionError) as e:
+                raise RuntimeError(_explain(e)) from e
+        else:
+            self.sh = gspread.authorize(google_credentials(interactive)).open_by_key(sheet_id)
 
     def _ws(self, tab):
         import gspread
