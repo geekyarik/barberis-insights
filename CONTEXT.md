@@ -12,19 +12,19 @@ _Avoid_: data (too vague), raw data
 The owner's and managers' knowledge of what was going on and why: decisions, outside events, beliefs about cause and effect. It is the second source of truth next to Facts.
 _Avoid_: notes, comments, metadata
 
-**Factor** _(proposed)_:
-A dated, scoped piece of Context that may affect the numbers, either **external** (outside our control, e.g. a power outage, an air-raid alert, a holiday, a competitor opening) or **internal** (our decision, e.g. a price change, a new barber, a campaign).
+**Factor**:
+A dated, scoped piece of Context (days or weeks, never hours) that may affect the numbers, and may recur every year (its effect is then estimated from the shop's own history), either **external** (outside our control, e.g. a power outage, an air-raid alert, a holiday, a competitor opening) or **internal** (our decision, e.g. a price change, a new barber, a campaign).
 _Avoid_: event (overloaded), cause, reason
 
-**Treatment** _(proposed)_:
+**Treatment**:
 How analysis handles a Factor: annotate, exclude, adjust, or control for.
 
-**Lens** _(proposed)_:
-A named set of Factor treatments that a calculation runs under. Every number states its Lens.
+**Lens**:
+A named rule (which Factors, and how each is treated) that a calculation runs under. At run time it is resolved to a fixed list of Factors, and the run keeps that list. Two runs with the same Lens name but different resolved Factors are not comparable. Every number states its Lens.
 _Avoid_: filter, view, adjustment
 
-**Belief** _(proposed)_:
-A Factor's expected effect on the numbers, as the owner sees it, before the data has been checked. It becomes supported, refuted or inconclusive through a Hypothesis.
+**Belief**:
+A Factor's expected effect on the numbers (a direction, optionally a size range), as the owner sees it, before the data has been checked. It becomes supported, refuted or inconclusive through a Hypothesis; that verdict is read from the linked Hypotheses, never stored on the Factor.
 
 ## People and places
 
@@ -86,7 +86,7 @@ The part of scheduled shift time that is booked.
 _Avoid_: utilization, occupancy, load
 
 **Measurement**:
-The stored values of all metrics for one Window, as of its last day. Goals compare against the latest Measurement.
+The queryable copy of the metric values of one Analysis run (or manual snapshot, which is itself a run), for one Window, as of its last day. Goals compare against the latest Measurement. A Measurement is never written on its own.
 _Avoid_: snapshot (in conversation), report
 
 **Analysis**:
@@ -109,12 +109,15 @@ _Avoid_: diff, delta report
 A readable page made of analysis runs, goals and context, e.g. a barber book or the monthly review.
 _Avoid_: dashboard (that's the app), analysis
 
+**Report run**:
+One frozen Report: the analysis runs, goal states and Lens it was composed from. It is what gets delivered and what the owner can reopen unchanged.
+
 **Job**:
 Work the tool does by itself on a cadence (daily, weekly, monthly), such as sending the daily digest.
 _Avoid_: cron, task (a task is a person's work)
 
 **Digest**:
-A short report sent as a message, such as yesterday's numbers in the morning. A digest summarises; a report explains.
+A short message of yesterday's or today's numbers, built from day-level facts. It is not an Analysis, is not stored as a Measurement, and does not feed Goals. A digest summarises; a report explains.
 _Avoid_: newsletter, notification
 
 **Alert**:
@@ -170,6 +173,10 @@ Came once and not since, for longer than 45 days.
 
 **Switched**:
 Still visits the shop, but no longer with their usual barber.
+
+**Do not contact**:
+A client the shop must not call for win-back. It is a Fact held in Altegio (a tagged line in the client's description), so staff can set or clear it there; the tool also writes it when the admin marks a case that way.
+_Avoid_: blacklist, opt-out
 
 **Win-back case**:
 One attempt to bring one client back. A person proposes and approves it, the admin calls, and the client's return is recorded.
