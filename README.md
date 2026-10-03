@@ -86,7 +86,7 @@ Clients without a phone, without data-processing consent, or marked *do not cont
   - playbook
   - `ingest_files`
   - `sql_readonly` for ad-hoc analysis
-- **Skill:** `~/.claude/skills/barberis-goals-refresh` runs the monthly refresh against this service.
+- **Skill:** `.claude/skills/barberis-goals-refresh/` in this repo runs the monthly refresh against this service. It loads when Claude Code runs in this folder; from other projects, link it into your personal skills folder.
 - **Altegio data:** it arrives through the claude.ai **Altegio Pro** connector, because Altegio rejects the REST partner token (see note "Altegio partner token rejected"). Once a working token exists, add a REST source next to `ingest/connector_files.py` and schedule it with launchd.
 
 ## Architecture

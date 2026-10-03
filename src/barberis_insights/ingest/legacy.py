@@ -12,7 +12,10 @@ from ..config import default_barbers
 from ..db.models import Barber, Goal, Measurement, Tip
 from .base import parse_schedule_line, replace_schedule, sync_run, upsert_appointments
 
-SKILL_DIR = Path.home() / ".claude/skills/barberis-goals-refresh"
+from ..config import settings
+
+# Archive of the original refresh skill (appointment cache, schedules, baseline, scripts); private, git-ignored.
+SKILL_DIR = settings.data_dir / "legacy-skill"
 
 
 def ensure_barbers(s: Session) -> int:

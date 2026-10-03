@@ -14,7 +14,7 @@ from barberis_insights.config import settings
 pytestmark = pytest.mark.skipif(not (settings.data_dir / "insights.sqlite").exists(), reason="local data not imported")
 LEGACY = Path(__file__).resolve().parents[1] / "legacy"
 BASELINE = LEGACY / "baseline_snapshot.json"
-SKILL_SNAPSHOT = Path.home() / ".claude/skills/barberis-goals-refresh/scripts/snapshot.py"  # optional cross-check against the old skill
+SKILL_SNAPSHOT = settings.data_dir / "legacy-skill/scripts/snapshot.py"  # optional cross-check against the original script (private archive)
 
 
 @pytest.fixture(scope="module")
