@@ -83,12 +83,15 @@ flowchart LR
     OUT[Outreach]
     PLB[Playbook]
     REP[Reports]
+    JOB[Scheduler]
+    NTF[Notifications]
   end
   subgraph Interfaces
     WEB[Dashboard]
     MCP[MCP / Claude]
     CMD[CLI]
     SHEET[[Admin Google Sheet]]
+    CHAN[[Telegram · email · …]]
   end
   ALT -->|connector files, exports, REST later| MIR
   OWN --> CTX
@@ -109,10 +112,14 @@ flowchart LR
   ANA --> REP
   GOA --> REP
   CTX --> REP
+  JOB -->|runs| MIR & ANA & OUT
+  JOB -->|runs| REP
+  REP --> NTF
+  NTF --> CHAN
   Core --> WEB & MCP & CMD
 ```
 
-Dependencies point **one way**, from left to right. Mirror and Context depend on nobody. Interfaces depend on modules and never the reverse.
+Dependencies point **one way**, from left to right. Mirror and Context depend on nobody. Interfaces depend on modules and never the reverse. The Scheduler sits on top: it only calls other modules' services, and nothing calls it.
 
 | Module | Responsibility | Owns (tables) | Depends on | Code today |
 |---|---|---|---|---|
@@ -126,7 +133,9 @@ Dependencies point **one way**, from left to right. Mirror and Context depend on
 | **Experiments** | Hypotheses and their evaluation (difference-in-differences, before/after, offer A/B), controlling for Context | `hypotheses` | Metrics, Context, Outreach | `experiments/` |
 | **Playbook** | Shared routines and tips for barbers | `tips` | — | `playbook/` |
 | **Reports** | Compose stored analysis runs, goals and Context into readable pages (barber book, team comparison, monthly review); export them | — (reads runs) | Analyses, Goals, Context | not yet (dashboard pages do parts) |
-| **Interfaces** | Dashboard, JSON API, CLI, MCP server, scheduler | — | all modules (through services) | `web/`, `api/`, `cli.py`, `mcp_server.py` |
+| **Scheduler** | Run jobs on a daily, weekly or monthly cadence; catch up runs missed while the laptop was asleep; record every run | `jobs`, `job_runs` | the services of the modules it runs | not yet |
+| **Notifications** | Deliver reports and alerts to people through channels (Telegram first), in each recipient's language; record every delivery | `recipients`, `subscriptions`, `deliveries` | Reports | not yet (the website already sends Telegram messages for call-back requests) |
+| **Interfaces** | Dashboard, JSON API, CLI, MCP server | — | all modules (through services) | `web/`, `api/`, `cli.py`, `mcp_server.py` |
 
 **Planned:**
 - **Finance:** product sales, costs and payroll, once Altegio data allows.
@@ -277,7 +286,53 @@ Each feed is a plugin, like a Mirror adapter. *Open question:* which feeds are w
 - **CLI:** `insights …`, including `insights analyze` and `insights compare` (planned).
 - **MCP server:** for Claude.
 - **Rule:** interfaces call module services and never query another module's tables directly. Today `web/app.py` does in places; that's a refactor target.
-- **Scheduler** *(planned):* launchd jobs for sync → analyze → compare → sheet sync, once a REST source exists.
+- **Scheduled work** lives in the Scheduler module (§6.11), not in the interfaces.
+
+### 6.11 Scheduler — jobs on a cadence
+- **Job:** a named piece of work with a cadence, for example:
+
+| Job | Cadence (default) | Does | Report sent |
+|---|---|---|---|
+| `daily_digest` | every day, 09:00 | checks data freshness; yesterday per barber: visits, revenue, busy share, no-shows; today's free hours; new win-back outcomes | Daily digest |
+| `sheet_sync` | every day, 09:00 and 19:00 | pulls the admin's outcomes, attributes returns, pushes approved cases | only on problems |
+| `weekly_review` | Monday, 09:00 | last week vs the week before and the same week last year, per barber and team; overdue clients; goals that changed status | Weekly review |
+| `monthly_review` | 1st of the month, 09:00 | runs every analysis for the month, compares with the previous month and the baseline, updates goal progress | Monthly review (§6.4) |
+| `data_watch` | every day | raises an alert when the newest data is older than N days or an import failed | Alert |
+
+- **How it runs on a laptop:** one launchd agent wakes `insights jobs tick` every 15 minutes. The tick runs every job that is *due* according to `job_runs`, so a run missed while the laptop slept or was off happens at the next tick, once, not once per missed slot. There is no long-running daemon.
+- **Runs are recorded** (`job_runs`: job, scheduled for, started, finished, status, counts, error), visible on *Data & sync*, and safe to repeat: each job is idempotent, like imports and syncs.
+- **Fresh data is the catch** (ADR-0002): until Altegio's REST API works, no job can fetch new appointments by itself. Until then:
+  - jobs report on the data already imported and say how old it is;
+  - fetching stays a person or Claude step (the `barberis-goals-refresh` skill);
+  - *open question:* whether a scheduled headless Claude run can do the fetch through the Altegio Pro connector.
+- **Manual runs:** `insights jobs run <job> [--dry-run]` from the CLI, a *Run now* button in the dashboard, and an MCP tool, all through the same service.
+
+### 6.12 Notifications — channels and recipients
+- **Recipient:** a person (owner, manager, later a barber) with a language (uk/en) and an address per channel.
+- **Subscription:** recipient + report or alert + channel, for example "owner gets the daily digest in Telegram". Barbers could later get only their own numbers.
+- **Channel adapters** share one contract: `send(recipient, message) → delivery id`. A message is built once from a report and rendered per channel: short text for chat apps, full HTML for email or as an attached file.
+- **Channel options:**
+
+| Channel | Fits | Cost and setup | Notes |
+|---|---|---|---|
+| **Telegram bot** *(recommended first)* | daily digest, alerts, weekly summary; buttons that open a report | free; create a bot with @BotFather, put the token in `.env`, each recipient presses *Start* once | the website already uses a Telegram bot for call-back requests; messages up to 4,096 characters, files and simple formatting supported |
+| **Email** | monthly review, long reports with tables and charts | free with Gmail SMTP and an app password | best for archiving and for an accountant or partner |
+| **Viber** | the same as Telegram, if the team prefers Viber | business messaging is paid and needs approval | only if Telegram doesn't fit |
+| **macOS notification** | "job failed", "data is stale" | none | only reaches the laptop owner |
+
+- **Deliveries are recorded** (`deliveries`: subscription, report run, channel, sent at, status, error) and retried a few times; a report is never sent twice for the same run and recipient.
+- **Privacy:** messages leave the laptop and are stored by the channel provider. They carry aggregates and barber names only — never client phone numbers, and client names only if the owner decides so (*open question*). Links to the dashboard work only on the laptop, so a message is complete without opening anything.
+- **Language:** each message is rendered from the i18n catalogs in the recipient's language.
+
+### 6.13 Explore — ad-hoc analysis in the dashboard
+We don't use an external BI tool (ADR-0009); quick "slice it differently" questions are answered by our own components, built on the same metric registry and analyses so every number has one definition.
+- **Explorer page:** pick metrics, scopes (barbers, team, segment), a window and its grain (day, week, month), a lens, and a comparison (previous period, same period last year, baseline). It shows a chart and the table behind it.
+- **Breakdowns:** by weekday, hour, service, booking channel (online or front desk), client type (new, returning, from other barbers), and segment.
+- **Saved views:** a named explorer setup that can be pinned to the overview, added to a report, or sent by a scheduled job.
+- **Reusable components:** line or bar over time, weekday-by-hour heat map, breakdown table, KPI tiles with change, cohort table. Reports and pages use the same components.
+- **Export:** CSV of any table, kept local.
+- **Claude:** answers questions the explorer doesn't cover through MCP (`query_metrics`, `run_analysis`, read-only SQL), and a useful answer can be saved as a view or turned into a new metric or analysis.
+- Anything that matters more than once becomes a metric or an analysis, not a saved SQL query.
 
 ## 7. Cross-cutting
 
@@ -304,6 +359,9 @@ Each feed is a plugin, like a Mirror adapter. *Open question:* which feeds are w
 | a data source | an adapter writing through `ingest/base.py` | Mirror only |
 | a factor feed | a feed adapter producing factors | Context only |
 | a lens | a named treatment set in Context | Context, used by Metrics and Analyses |
+| a scheduled job | a job module with its cadence, calling module services; registered in `jobs/` | Scheduler only |
+| a channel | an adapter implementing `send` in `notifications/channels/` | Notifications only |
+| an explorer breakdown or chart | a component in `web/components/` working on registry metrics | Interfaces only |
 | a page or MCP tool | call module services; no direct table access | Interfaces only |
 
 ## 9. Current state vs target
@@ -317,7 +375,9 @@ Each feed is a plugin, like a Mirror adapter. *Open question:* which feeds are w
 | Owner context | `notes`: free text with dates, scopes and tags | `factors` with effects, treatments, lenses and belief status |
 | Analysis lens | none (raw facts) | every run, measurement and hypothesis records its lens |
 | Module boundaries | services take a database session and read any table; `web/app.py` queries tables | each module exposes a service; cross-module reads go through it |
-| Altegio access | connector files plus a manual export | plus a REST adapter and a scheduler (blocked on the partner token) |
+| Altegio access | connector files plus a manual export | plus a REST adapter, so scheduled jobs can fetch on their own (blocked on the partner token) |
+| Ad-hoc exploration | asking Claude in chat; fixed dashboard pages | an Explorer page with saved views on the metric registry (ADR-0009) |
+| Scheduling and delivery | nothing runs on its own; reports are asked for in chat | Scheduler runs daily, weekly and monthly jobs; Notifications sends reports and alerts to Telegram (then email) |
 
 ## 10. Change process
 This document changes **with** the code, never after it:

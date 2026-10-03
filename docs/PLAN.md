@@ -90,8 +90,22 @@ The second source of truth, built into the analyses. Use `wayfinder`:
 
 **Done when** the owner can record "a power outage cut Tuesday 14–18 short", see the barber book with and without it, and compare runs under the same lens.
 
+### Phase 2c — Explorer *(after Phase 2 metrics are split; alongside 2b)*
+`to-spec` → `to-tickets` → `tdd` for the Explorer page (ARCHITECTURE §6.13, ADR-0009): reusable chart and table components first, then the explorer with comparisons and breakdowns, then saved views that reports and scheduled jobs can use.
+
+**Done when** the owner can answer "how did Tuesday afternoons change for each barber since the price rise, compared with last year?" in the dashboard without asking Claude, and save it as a view.
+
+### Phase 2b — Scheduled reports and delivery *(right after the Phase 2 framework; can start before all analyses exist)*
+`to-spec` → `to-tickets` → `tdd`, after the channel questions below are answered:
+1. **Notifications + Telegram adapter:** recipients, subscriptions, deliveries; `insights notify test` sends a test message.
+2. **Scheduler:** `jobs`, `job_runs`, `insights jobs tick|run|list`, the launchd agent (`insights jobs install`), *Run now* in the dashboard, MCP tools.
+3. **First jobs:** `data_watch` and `sheet_sync` (useful immediately), then `daily_digest`, then `weekly_review`.
+4. **`monthly_review`** once the Reports module (Phase 2, step 5) exists; email as the second channel for it.
+
+**Done when** the owner gets the daily digest in Telegram every morning without doing anything, sees each run in *Data & sync*, and gets an alert when data is older than the agreed limit.
+
 ### Phase 6 — Automation and new data *(blocked or optional)*
-- **Altegio REST adapter + scheduler (launchd)** for the full monthly cycle: blocked until Altegio issues a working partner token (ADR-0002).
+- **Altegio REST adapter:** lets the scheduled jobs fetch new data by themselves. Blocked until Altegio issues a working partner token (ADR-0002).
 - **Factor feeds:** whichever ones Phase 4 recommended.
 - **Finance module:** product sales, costs, payroll, if Altegio access allows.
 
@@ -113,3 +127,9 @@ For the Phase 1 grilling session.
 10. **External factors:** which matter most for this shop and its clients: air-raid alerts, power outages, migration and mobilisation, the economy, weather, holidays, competition?
 11. **Personal data retention:** how long do we keep contact details for clients who haven't visited in years?
 12. **Reports:** how often, for whom, and in what form (dashboard page, HTML export, message)?
+13. **Channels:** Telegram first, then email for the monthly review — or another mix? Same bot as the website's call-back requests, or a separate one (recommended: separate, so business reports never reach the website's chat)?
+14. **Recipients:** only the owner, or managers and barbers too? Should each barber get only their own numbers?
+15. **Daily digest content and time:** which numbers, what time, and on days off too? Weekly on Monday morning, monthly on the 1st?
+16. **Alerts:** which conditions are worth a message (stale data after how many days, failed sync, a goal falling behind, a big drop in bookings)?
+17. **Client names in messages:** allowed (e.g. "Олена booked after the call") or aggregates only?
+18. **Fresh data without the REST API:** is it acceptable that scheduled reports use the last imported data and say how old it is? Should we test a scheduled headless Claude run that fetches through the Altegio Pro connector?

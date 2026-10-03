@@ -109,6 +109,24 @@ _Avoid_: diff, delta report
 A readable page made of analysis runs, goals and context, e.g. a barber book or the monthly review.
 _Avoid_: dashboard (that's the app), analysis
 
+**Job**:
+Work the tool does by itself on a cadence (daily, weekly, monthly), such as sending the daily digest.
+_Avoid_: cron, task (a task is a person's work)
+
+**Digest**:
+A short report sent as a message, such as yesterday's numbers in the morning. A digest summarises; a report explains.
+_Avoid_: newsletter, notification
+
+**Alert**:
+A message sent because something needs attention now, such as data that is too old or a failed sync.
+_Avoid_: warning, notification
+
+**Channel**:
+The way a message reaches a person: Telegram, email, and so on.
+
+**Subscription**:
+Who gets which report or alert, through which channel.
+
 **Revenue**:
 The service price after discounts on visits. It is not cash received, because payments are not recorded in the CRM.
 _Avoid_: income, takings, sales
