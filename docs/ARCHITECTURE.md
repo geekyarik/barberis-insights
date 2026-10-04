@@ -45,7 +45,7 @@ flowchart LR
 ```
 
 1. **Run:** every analysis runs on the data available, for a window, a scope and a lens. Each result is stored as an **Analysis run**, which is reproducible and versioned.
-2. **Baseline:** the first run a goal is set against is its **Baseline**. The analysis of 27 September 2026 is the first baseline.
+2. **Baseline:** the first run a goal is set against is its **Baseline**. The analysis of 27 September 2026 is the first baseline: stored 2026-10-04 as one run of each analysis over 2026-01-12 – 2026-09-27 (runs 28–37), except retention and return cohorts, which use 2026-01-12 – 2026-06-28, the latest window whose 90-day follow-up has happened (runs 38–39). By convention a run whose window ends on `baseline_date` is a baseline run.
 3. **Goals** are set on metrics that the analyses report.
 4. **Compare:** a later run of the same analysis, scope and lens is **compared** with the baseline and with the previous run. The comparison says, metric by metric, whether things moved toward the goals, and Context explains why.
 
