@@ -6,17 +6,29 @@
 </header>
 <form method="get" class="inline card">
   <label>{{ t("common.search") }}<input name="q" value="{{ q }}" placeholder="{{ t('context.search_ph') }}"></label>
-  <label>{{ t("context.about") }}<select name="scope"><option value="">{{ t("context.anything") }}</option><option value="shop" {{ 'selected' if scope=='shop' }}>{{ t("common.shop") }}</option><option value="team" {{ 'selected' if scope=='team' }}>{{ t("common.team") }}</option>{% for b in all_barbers %}<option value="{{ b.key }}" {{ 'selected' if scope==b.key }}>{{ b.name }}</option>{% endfor %}</select></label>
+  <label>{{ t("context.about") }}<select name="scope"><option value="">{{ t("context.anything") }}</option><option value="shop" {{ 'selected' if scope=='shop' }}>{{ t("common.shop") }}</option>{% for b in all_barbers %}<option value="{{ b.key }}" {{ 'selected' if scope==b.key }}>{{ b.name }}</option>{% endfor %}</select></label>
   <button class="ghost">{{ t("common.search") }}</button>
 </form>
 <details class="card"><summary>{{ t("context.add") }}</summary>
   <form method="post" action="/context" style="display:grid;gap:8px;margin-top:8px">
     <label>{{ t("common.title") }}<input name="title" required maxlength="200"></label>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">
       <label>{{ t("common.from") }}<input name="date_from" type="date" required value="{{ today }}"></label>
       <label>{{ t("context.to") }}<input name="date_to" type="date"></label>
-      <label>{{ t("context.kind") }}<select name="kind">{% for k in kinds %}<option value="{{ k }}">{{ label('kind.', k) }}</option>{% endfor %}</select></label>
+      <label>{{ t("context.kind") }}<select name="kind">{% for k in kinds %}<option value="{{ k }}" {{ 'selected' if k == 'internal' }}>{{ label('factorkind.', k) }}</option>{% endfor %}</select></label>
+      <label>{{ t("context.category") }}<select name="category">{% for c in categories %}<option value="{{ c }}" {{ 'selected' if c == 'other' }}>{{ label('category.', c) }}</option>{% endfor %}</select></label>
+      <label>{{ t("context.recurrence") }}<select name="recurrence"><option value="none">{{ label('recurrence.', 'none') }}</option><option value="yearly">{{ label('recurrence.', 'yearly') }}</option></select></label>
+      <label>{{ t("context.lead_days") }}<input name="lead_days" type="number" min="0" value="0"></label>
+      <label>{{ t("context.treatment") }}<select name="treatment">{% for x in treatments %}<option value="{{ x }}">{{ label('treatment.', x) }}</option>{% endfor %}</select></label>
+      <label>{{ t("context.adjust") }}<input name="adjust_factor" type="number" step="0.05" min="0" max="1"></label>
     </div>
+    <fieldset style="border:1px solid var(--rule);border-radius:6px"><legend class="eyebrow">{{ t("context.effect") }}</legend>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px">
+        <label>{{ t("context.effect_metric") }}<select name="effect_metric"><option value="">{{ t("context.none") }}</option>{% for m in catalog %}<option value="{{ m.key }}">{{ mlabel(m.key) }}</option>{% endfor %}</select></label>
+        <label>{{ t("context.effect_dir") }}<select name="effect_direction"><option value="">{{ t("context.none") }}</option><option value="up">{{ t("context.up") }}</option><option value="down">{{ t("context.down") }}</option></select></label>
+        <label>{{ t("context.size_min") }}<input name="size_min" type="number" step="any"></label>
+        <label>{{ t("context.size_max") }}<input name="size_max" type="number" step="any"></label>
+      </div></fieldset>
     <label>{{ t("context.about") }}<select name="scopes" multiple size="4"><option value="shop" selected>{{ t("common.shop") }}</option><option value="team">{{ t("common.team") }}</option>{% for b in all_barbers %}<option value="{{ b.key }}">{{ b.name }}</option>{% endfor %}</select></label>
     <label>{{ t("context.tags") }}<input name="tags" placeholder="{{ t('context.tags_ph') }}"></label>
     <label>{{ t("context.details") }}<textarea name="body"></textarea></label>
@@ -25,12 +37,37 @@
 </details>
 <section>
   {% for n in notes %}
-  <article class="card" style="display:flex;flex-direction:column;gap:4px">
-    <div class="eyebrow">{{ n.date_from }}{% if n.date_to %} – {{ n.date_to }}{% endif %} · {{ label('kind.', n.kind) }} · {{ n.scopes|join(', ') }}{% if n.tags %} · {{ n.tags|join(', ') }}{% endif %} · {{ label('source.', n.source) }}</div>
-    <h3>{{ n.title }}</h3>
+  {% set st = statuses.get(n.id, 'belief') %}
+  <article class="card" style="display:flex;flex-direction:column;gap:6px">
+    <div class="eyebrow">{{ n.date_from }}{% if n.date_to %} – {{ n.date_to }}{% endif %} · {{ label('factorkind.', n.kind) }} · {{ label('category.', n.category) }} · {{ n.scopes|join(', ') }}{% if n.tags %} · {{ n.tags|join(', ') }}{% endif %}</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <h3 style="margin:0">{{ n.title }}</h3>
+      <span class="pill {{ {'supported': 'supported', 'refuted': 'rejected', 'inconclusive': 'inconclusive'}.get(st, '') }}">{{ label('belief.', st) }}</span>
+      <span class="pill">{{ label('treatment.', n.treatment) }}</span>
+      {% if n.recurrence == 'yearly' %}<span class="pill">{{ t("context.recurs") }}{% if n.lead_days %} · {{ t("context.run_up", n=n.lead_days) }}{% endif %}</span>{% endif %}
+    </div>
     {% if n.body %}<p class="sub" style="margin:0">{{ n.body }}</p>{% endif %}
-    <form method="post" action="/context/{{ n.id }}/delete" onsubmit="return this.querySelector('input').checked"><label style="display:inline-flex;gap:6px;align-items:center;font-size:12px"><input type="checkbox"> {{ t("common.confirm") }}</label> <button class="danger" style="padding:3px 8px">{{ t("common.delete") }}</button></form>
+    {% if n.expected_effects %}<div class="muted" style="font-size:13px">{{ t("context.effect") }}: {% for e in n.expected_effects %}{{ mlabel(e.metric) }} {{ t('context.' ~ e.direction) }}{% if e.size_min is not none or e.size_max is not none %} ({{ e.size_min if e.size_min is not none else '' }}…{{ e.size_max if e.size_max is not none else '' }}%){% endif %}{% if not loop.last %}; {% endif %}{% endfor %}</div>{% endif %}
+    {% if n.recurrence == 'yearly' %}{% set ef = effects.get(n.id) %}
+      <div class="muted" style="font-size:13px">{% if ef and ef.enough_history %}{{ t("context.effect_summary", idx=ef.expected_visits_index, years=ef.years_observed, run=ef.run) }}{% elif ef %}{{ t("context.effect_missing", years=ef.years_observed) }}{% else %}{{ t("context.effect_pending") }}{% endif %}</div>{% endif %}
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      {% if n.recurrence == 'yearly' %}<form method="post" action="/context/{{ n.id }}/estimate"><button class="ghost">{{ t("context.estimate_btn") }}</button></form>{% endif %}
+      {% if n.expected_effects %}<form method="post" action="/context/{{ n.id }}/test"><button class="ghost">{{ t("context.test_btn") }}</button></form>{% endif %}
+      <form method="post" action="/context/{{ n.id }}/delete" onsubmit="return this.querySelector('input').checked"><label style="display:inline-flex;gap:6px;align-items:center;font-size:12px"><input type="checkbox"> {{ t("common.confirm") }}</label> <button class="danger">{{ t("common.delete") }}</button></form>
+    </div>
   </article>
   {% else %}<p class="muted">{{ t("context.empty") }}</p>{% endfor %}
+</section>
+<section class="card">
+  <h2>{{ t("lens.title") }}</h2>
+  <p class="sub">{{ t("lens.sub") }}</p>
+  <table><thead><tr><th class="l">{{ t("lens.label") }}</th><th class="l">{{ t("lens.honour") }}</th></tr></thead>
+    <tbody>{% for l in lenses %}<tr><td class="l">{{ l.label }} <span class="muted">({{ l.key }})</span></td><td class="l">{% if l.rule.honour %}{% for x in l.rule.honour %}{{ label('treatment.', x) }}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}{{ t("lens.raw") }}{% endif %}</td></tr>{% endfor %}</tbody></table>
+  <form method="post" action="/lenses" class="inline" style="margin-top:10px">
+    <label>{{ t("lens.key") }}<input name="key" required pattern="[A-Za-z_][A-Za-z0-9_]*"></label>
+    <label>{{ t("lens.label") }}<input name="label" required></label>
+    <fieldset style="border:0;display:flex;gap:10px;flex-wrap:wrap"><legend class="eyebrow">{{ t("lens.honour") }}</legend>{% for x in treatments %}<label style="display:inline-flex;gap:4px"><input type="checkbox" name="honour" value="{{ x }}"> {{ label('treatment.', x) }}</label>{% endfor %}</fieldset>
+    <button>{{ t("lens.save") }}</button>
+  </form>
 </section>
 {% endblock %}

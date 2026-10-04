@@ -92,7 +92,7 @@ Record availability, licence, history depth and reliability.
 
 **Done when** `docs/research/external-factor-feeds.md` recommends which feeds to build, if any.
 
-### Phase 5 — Context v2: factors, treatments, lenses
+### Phase 5 — Context v2: factors, treatments, lenses *(first cut built 2026-10-04: steps 1–3 and the belief link; see ARCHITECTURE §6.5)*
 The second source of truth, built into the analyses. Use `wayfinder`:
 1. The `factors` model and its migration from `notes` (existing notes become *annotate* factors).
 2. Dashboard and MCP: create, edit and list factors; show them on timelines, charts and reports.

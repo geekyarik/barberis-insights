@@ -22,10 +22,10 @@ def _used() -> dict:
 
 
 @analysis("barber_scorecard", "Barber scorecard", "How does each barber do on the key metrics, against last year and against the team?",
-          version=1, metrics_used=_used, default_params={"cohort": None})
+          version=1, metrics_used=_used, default_params={"cohort": None}, lenses=True)
 def run(ctx: AnalysisContext) -> dict:
     cohort = tuple(dt.date.fromisoformat(x) for x in ctx.params["cohort"].split(":")) if ctx.params.get("cohort") else None
-    snap = compute_snapshot(ctx.ds, ctx.f, ctx.t, cohort)
+    snap = compute_snapshot(ctx.ds, ctx.f, ctx.t, cohort, ctx.lens_resolved)
     keep = lambda values: {k: v for k, v in values.items() if ctx.scope == "team" or k in (ctx.scope, "team")}
     kpis = keep(snap["values"])
     team = snap["values"]["team"]
@@ -45,7 +45,7 @@ def run(ctx: AnalysisContext) -> dict:
     f2, t2 = ctx.f - YEAR, ctx.t - YEAR
     last_year = None
     if any(f2 <= a.date <= t2 for a in ctx.ds.arrived):
-        ly = compute_snapshot(ctx.ds, f2, t2)["values"]
+        ly = compute_snapshot(ctx.ds, f2, t2, None, ctx.lens_for(f2, t2))["values"]
         last_year = {"window": [str(f2), str(t2)], "kpis": {sc: {k: v for k, v in vals.items() if not METRICS[k].needs_history}
                                                             for sc, vals in keep(ly).items()}}
         for sc, vals in last_year["kpis"].items():

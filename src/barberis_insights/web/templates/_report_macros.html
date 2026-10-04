@@ -26,6 +26,13 @@
     <td class="l"><span class="pill {{ g.state }}">{{ t(g.label_key) }}</span></td></tr>{% endfor %}</tbody></table></div>{% endif %}
 {% endmacro %}
 
+{% macro factor_list(items) %}
+{% if items %}<section><h2>{{ t("report.sec.factors") }}</h2><div class="tablebox"><table>
+  <thead><tr><th class="l">{{ t("common.title") }}</th><th class="l">{{ t("context.category") }}</th><th class="l">{{ t("context.treatment") }}</th><th class="l">{{ t("data.window") }}</th></tr></thead>
+  <tbody>{% for x in items %}<tr><td class="l wrap">{{ x.title }}</td><td class="l">{{ label('category.', x.category) }}</td><td class="l">{{ label('treatment.', x.treatment) }}</td>
+    <td class="l">{% for p in x.periods %}{{ p[0] }}{% if p[1] != p[0] %} – {{ p[1] }}{% endif %}{% if not loop.last %}; {% endif %}{% endfor %}</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
+{% endmacro %}
+
 {% macro header(c, r) %}
 <header>
   <div class="eyebrow">{{ t("report.window", start=c.window[0], end=c.window[1], asof=c.data_as_of) }}</div>

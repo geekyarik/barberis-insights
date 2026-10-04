@@ -112,11 +112,37 @@ class WindowContext:
     f: dt.date
     t: dt.date
     cohort: tuple[dt.date, dt.date] | None = None
+    lens: list = field(default_factory=list)  # resolved factors (see context.factors.resolve): excluded days and adjusted capacity
     _cache: dict = field(default_factory=dict)
+
+    def _barber_key(self, barber: int | None) -> str | None:
+        return next((b.key for b in self.ds.barbers if b.altegio_id == barber), None)
+
+    def _lens_days(self, treatment: str, barber: int | None) -> dict:
+        """date -> adjust factor (1.0 when excluding) for the days a lens removes or shrinks for this barber (None = whole shop)."""
+        def build():
+            key, out = self._barber_key(barber), {}
+            for item in self.lens:
+                if item["treatment"] != treatment:
+                    continue
+                scopes = set(item["scopes"])
+                if not (scopes & {"shop", "team"} or (key and key in scopes)):
+                    continue
+                for a, b in item["periods"]:
+                    d, end = dt.date.fromisoformat(a), dt.date.fromisoformat(b)
+                    while d <= end:
+                        if self.f <= d <= self.t:
+                            out[d] = item["adjust_factor"] if treatment == "adjust" else 1.0
+                        d += dt.timedelta(days=1)
+            return out
+        return self._memo(("lens", treatment, barber), build)
+
+    def excluded(self, barber: int | None) -> set:
+        return set(self._lens_days("exclude", barber))
 
     @property
     def length(self) -> int:
-        return (self.t - self.f).days + 1
+        return (self.t - self.f).days + 1 - len(self.excluded(None))
 
     @property
     def cohort_window(self) -> tuple[dt.date, dt.date]:
@@ -136,10 +162,21 @@ class WindowContext:
         return self._cache[key]
 
     def sched(self, barber: int) -> dict[dt.date, list[tuple[int, int]]]:
-        return self._memo(("sched", barber), lambda: {d: v for d, v in self.ds.slots.get(barber, {}).items() if self.f <= d <= self.t and v})
+        def build():
+            gone, shrink = self.excluded(barber), self._lens_days("adjust", barber)
+            out = {}
+            for d, v in self.ds.slots.get(barber, {}).items():
+                if self.f <= d <= self.t and v and d not in gone:
+                    m = shrink.get(d)
+                    out[d] = v if m is None else [(a, a + round((b - a) * m)) for a, b in v]
+            return out
+        return self._memo(("sched", barber), build)
 
     def appts(self, barber: int | None) -> list[Appt]:
-        return self._memo(("appts", barber), lambda: [a for a in self.ds.appts if self.f <= a.date <= self.t and (barber is None or a.barber == barber)])
+        def build():
+            return [a for a in self.ds.appts if self.f <= a.date <= self.t and (barber is None or a.barber == barber)
+                    and (not self.lens or a.date not in self.excluded(a.barber))]
+        return self._memo(("appts", barber), build)
 
     def visits(self, barber: int | None) -> list[Appt]:
         return self._memo(("visits", barber), lambda: [a for a in self.appts(barber) if a.status == "arrived"])

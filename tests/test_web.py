@@ -47,8 +47,11 @@ def test_goal_and_note_round_trip(client):
     assert r.status_code == 303
     assert "zz test note" in client.get("/context?q=hello").text
     with session_scope() as s:
-        for n in s.scalars(select(Note).where(Note.title == "zz test note")):
-            s.delete(n)
+        from barberis_insights.db.models import Factor, FactorEvent
+        for f in s.scalars(select(Factor).where(Factor.title == "zz test note")):
+            for e in s.scalars(select(FactorEvent).where(FactorEvent.factor_id == f.id)):
+                s.delete(e)
+            s.delete(f)
 
 
 def test_cross_site_post_blocked(client):

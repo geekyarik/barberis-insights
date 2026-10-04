@@ -6,6 +6,7 @@ import datetime as dt
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from ..context import factors
 from ..db.models import Appointment, AnalysisRun, SyncRun
 from ..metrics import Dataset
 from ..metrics.measurements import save_measurement
@@ -35,15 +36,16 @@ def run(s: Session, key: str, f: dt.date, t: dt.date, scope: str = "team", lens:
         raise KeyError(f"unknown analysis {key!r}; known: {', '.join(sorted(REGISTRY))}")
     validate_window(f, t)
     a = REGISTRY[key]
-    if lens != "raw":
-        raise ValueError("only the 'raw' lens exists so far")
+    if lens != "raw" and not a.lenses:
+        raise ValueError(f"{key} does not honour a lens yet (it runs raw); lens-aware analyses: {', '.join(k for k, x in REGISTRY.items() if x.lenses)}")
+    resolved = factors.resolve(s, lens, f, t)
     ds = ds or Dataset.load(s)
     if scope != "team" and scope not in {b.key for b in ds.barbers}:
         raise ValueError(f"scope must be 'team' or the key of a current barber; got {scope!r}")
     p = a.default_params | (params or {})
-    result = a.run(AnalysisContext(ds, f, t, scope, lens, p))
-    result.setdefault("context", {}).update({"lens": lens, "factors": []})
-    row = AnalysisRun(analysis_key=key, analysis_version=a.version, scope=scope, window_from=f, window_to=t, asof=t, lens=lens, lens_resolved=[],
+    result = a.run(AnalysisContext(ds, f, t, scope, lens, p, resolved, lambda x, y: factors.resolve(s, lens, x, y)))
+    result.setdefault("context", {}).update({"lens": lens, "factors": [r["factor_id"] for r in resolved]})
+    row = AnalysisRun(analysis_key=key, analysis_version=a.version, scope=scope, window_from=f, window_to=t, asof=t, lens=lens, lens_resolved=resolved,
                       params=p, metric_versions=a.metrics_used(), data_fingerprint=_fingerprint(s), created_by=created_by, result=result)
     s.add(row)
     s.flush()

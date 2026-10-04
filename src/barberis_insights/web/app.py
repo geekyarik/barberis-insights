@@ -13,13 +13,14 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..analyses import service as analyses
+from ..analyses import effects, service as analyses
 from ..clients.profile import data_asof, rebuild_profiles
 from ..clients.risk import CALLABLE, risk_list
 from ..config import settings
-from ..context import service as notes
+from ..context import factors, service as notes
 from ..db.models import Appointment, Barber, Client, ClientProfile, Hypothesis, Measurement, OutreachCase, SyncRun
 from ..db.session import session_factory
+from ..experiments import factor_link
 from ..experiments.evaluate import run as run_hypothesis
 from ..goals import service as goals
 from ..i18n import LANGUAGES, normalize, t as tr, translator
@@ -309,22 +310,60 @@ def outreach_sync(request: Request, s: Session = Depends(db)):
 @app.get("/context", response_class=HTMLResponse)
 def context_page(request: Request, q: str = "", scope: str = "", s: Session = Depends(db)):
     found = notes.search(s, q or None, scope or None, limit=200)
-    return page(request, s, "context.html", "context", title="nav.context", notes=found, q=q, scope=scope, kinds=notes.KINDS, today=dt.date.today())
+    return page(request, s, "context.html", "context", title="nav.context", notes=found, q=q, scope=scope, today=dt.date.today(),
+                statuses={f.id: factor_link.status(s, f.id) for f in found}, effects={f.id: effects.summary(s, f) for f in found if f.recurrence == "yearly"},
+                kinds=factors.KINDS, treatments=factors.TREATMENTS, categories=factors.CATEGORIES, lenses=factors.lenses(s), catalog=catalog())
 
 
 @app.post("/context")
-def context_add(request: Request, title: str = Form(...), date_from: str = Form(...), date_to: str = Form(""), kind: str = Form("observation"),
+def context_add(request: Request, title: str = Form(...), date_from: str = Form(...), date_to: str = Form(""), kind: str = Form("internal"),
+                category: str = Form("other"), treatment: str = Form("annotate"), recurrence: str = Form("none"), lead_days: int = Form(0),
+                adjust_factor: str = Form(""), effect_metric: str = Form(""), effect_direction: str = Form(""), size_min: str = Form(""), size_max: str = Form(""),
                 scopes: list[str] = Form(["shop"]), tags: str = Form(""), body: str = Form(""), s: Session = Depends(db)):
-    notes.add(s, title.strip(), date_from, body.strip(), kind, scopes, [t.strip() for t in tags.split(",") if t.strip()], date_to or None)
+    if kind in notes.KINDS:                                  # the old note kinds still work: they become the category
+        category, kind = (category if category != "other" else kind), ("external" if kind == "external" else "internal")
+    effect = []
+    if effect_metric and effect_direction:
+        effect = [{"metric": effect_metric, "direction": effect_direction, "size_min": float(size_min) if size_min else None, "size_max": float(size_max) if size_max else None}]
+    try:
+        factors.add(s, title, date_from, date_to or None, kind, category, body.strip(), scopes, treatment, effect, recurrence, lead_days,
+                    float(adjust_factor) if adjust_factor else None, [t.strip() for t in tags.split(",") if t.strip()], "owner")
+    except ValueError as e:
+        return back(request, "/context", "factor_error", "warn", why=str(e))
     return back(request, "/context", "note_added")
 
 
 @app.post("/context/{nid}/delete")
 def context_delete(request: Request, nid: int, s: Session = Depends(db)):
-    n = s.get(notes.Note, nid)
-    if n:
-        s.delete(n)
+    factors.delete(s, nid)
     return back(request, "/context", "note_deleted")
+
+
+@app.post("/context/{nid}/estimate")
+def context_estimate(request: Request, nid: int, s: Session = Depends(db)):
+    try:
+        run = effects.estimate(s, nid, created_by="dashboard")
+    except (ValueError, KeyError) as e:
+        return back(request, "/context", "factor_error", "warn", why=str(e))
+    return back(request, "/context", "effect_estimated", run=run.id)
+
+
+@app.post("/context/{nid}/test")
+def context_test(request: Request, nid: int, s: Session = Depends(db)):
+    try:
+        h = factor_link.test_belief(s, nid)
+    except (ValueError, KeyError) as e:
+        return back(request, "/context", "factor_error", "warn", why=str(e))
+    return back(request, "/hypotheses", "belief_tested", id=h.id)
+
+
+@app.post("/lenses")
+def lens_add(request: Request, key: str = Form(...), label: str = Form(...), honour: list[str] = Form([]), s: Session = Depends(db)):
+    try:
+        factors.create_lens(s, key.strip(), label.strip(), honour)
+    except ValueError as e:
+        return back(request, "/context", "factor_error", "warn", why=str(e))
+    return back(request, "/context", "lens_saved")
 
 
 # ---------------------------------------------------------------- hypotheses

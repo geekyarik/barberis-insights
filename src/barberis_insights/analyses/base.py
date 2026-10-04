@@ -28,13 +28,18 @@ class AnalysisContext:
     scope: str = "team"
     lens: str = "raw"
     params: dict = field(default_factory=dict)
+    lens_resolved: list = field(default_factory=list)       # the factors the lens resolved to for the window
+    resolver: Callable | None = None                         # (start, end) -> the same lens resolved for another window (last year)
+
+    def lens_for(self, start: dt.date, end: dt.date) -> list:
+        return self.resolver(start, end) if self.resolver else []
 
     @property
     def asof(self) -> dt.date:
         return self.t
 
     def window(self, cohort: tuple[dt.date, dt.date] | None = None) -> WindowContext:
-        return WindowContext(self.ds, self.f, self.t, cohort)
+        return WindowContext(self.ds, self.f, self.t, cohort, self.lens_resolved)
 
     @property
     def barbers(self):
@@ -54,6 +59,7 @@ class AnalysisDef:
     run: Callable[[AnalysisContext], dict]
     default_params: dict = field(default_factory=dict)
     metrics_used: Callable[[], dict] = lambda: {}   # metric key -> version, recorded with every run
+    lenses: bool = False                            # honours a lens (excluded days, adjusted capacity); the others only run raw
 
 
 def validate_window(f: dt.date, t: dt.date) -> None:

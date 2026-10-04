@@ -17,7 +17,7 @@ A dated, scoped piece of Context (days or weeks, never hours) that may affect th
 _Avoid_: event (overloaded), cause, reason
 
 **Treatment**:
-How analysis handles a Factor: annotate, exclude, adjust, or control for.
+How analysis handles a Factor: annotate (show only), exclude (remove the period), adjust (count only a share of scheduled time), control for it, or, for one client, suppress overdue.
 
 **Lens**:
 A named rule (which Factors, and how each is treated) that a calculation runs under. At run time it is resolved to a fixed list of Factors, and the run keeps that list. Two runs with the same Lens name but different resolved Factors are not comparable. Every number states its Lens.

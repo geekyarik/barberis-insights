@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..analyses import service as analyses
 from ..db.models import ReportRun
+from ..context import factors as ctx_factors
 from ..goals import service as goals
 from ..ingest.status import data_status
 
@@ -85,6 +86,12 @@ def _findings(runs: dict, scopes: tuple[str, ...]) -> list[dict]:
     return [f | {"analysis": key} for key, r in runs.items() for f in r.result["findings"] if f["scope"] in scopes]
 
 
+def _factors(s: Session, f: dt.date, t: dt.date, scope: str | None) -> list[dict]:
+    """The Context in force during the window (a recurring factor's run-up included), shown on the report as annotation."""
+    return [{"id": x.id, "title": x.title, "kind": x.kind, "category": x.category, "treatment": x.treatment, "recurrence": x.recurrence,
+             "periods": [[str(a), str(b)] for a, b in ctx_factors.occurrences(x, f, t)]} for x in ctx_factors.in_force(s, f, t, scope)]
+
+
 def _goals(s: Session, scope: str) -> list[dict]:
     keep = ("id", "title", "metric", "baseline", "target", "current", "progress", "label_key", "state", "due")
     return [{k: g[k] for k in keep} for g in goals.board(s, scope)]
@@ -102,7 +109,8 @@ def barber_book(s: Session, key: str, f: dt.date, t: dt.date, created_by: str = 
     content = {"kind": "barber_book", "barber": key, "name": names[key], "window": [str(f), str(t)], "followup_window": [str(rf), str(rt)],
                "data_as_of": str(data_status(s)["last_visit"]), "names": names, "sections": {n: _part(r, key) for n, r in runs.items()},
                "last_year": runs["scorecard"].result["last_year"], "directions": runs["scorecard"].result["directions"],
-               "findings": _findings({spec[n][0]: r for n, r in runs.items()}, (key,)), "goals": _goals(s, key)}
+               "findings": _findings({spec[n][0]: r for n, r in runs.items()}, (key,)), "goals": _goals(s, key),
+               "factors": _factors(s, f, t, key)}
     row = ReportRun(report_key="barber_book", window_from=f, window_to=t, lens="raw", analysis_run_ids=[r.id for r in runs.values()],
                     created_by=created_by, content=content)
     s.add(row); s.flush()
@@ -121,7 +129,8 @@ def team_comparison(s: Session, f: dt.date, t: dt.date, created_by: str = "dashb
                "sections": {n: {"run": r.id, "window": [str(r.window_from), str(r.window_to)], "complete": r.result.get("complete", True), "kpis": r.result["kpis"]}
                             for n, r in runs.items()},
                "last_year": runs["scorecard"].result["last_year"],
-               "findings": _findings({spec[n][0]: r for n, r in runs.items()}, tuple(runs["scorecard"].result["kpis"])), "goals": _goals(s, "team")}
+               "findings": _findings({spec[n][0]: r for n, r in runs.items()}, tuple(runs["scorecard"].result["kpis"])), "goals": _goals(s, "team"),
+               "factors": _factors(s, f, t, None)}
     row = ReportRun(report_key="team_comparison", window_from=f, window_to=t, lens="raw", analysis_run_ids=[r.id for r in runs.values()],
                     created_by=created_by, content=content)
     s.add(row); s.flush()

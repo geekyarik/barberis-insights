@@ -1,4 +1,4 @@
-{% from "_report_macros.html" import findings, goals_list, header with context %}
+{% from "_report_macros.html" import findings, goals_list, header, factor_list with context %}
 {% set S = c.sections %}
 {% set people = vm.people %}
 {{ header(c, r) }}
@@ -22,3 +22,4 @@
 {{ side_by_side(t("report.sec.exclusive"), S.exclusive, ["regulars","exclusive_pct","revenue_share_pct"]) }}
 {{ side_by_side(t("report.sec.overdue"), S.overdue, ["overdue","value_at_stake","avg_days_silent"]) }}
 {% if c.goals %}<section><h2>{{ t("report.sec.goals") }}</h2>{{ goals_list(c.goals) }}</section>{% endif %}
+{{ factor_list(c.get('factors')) }}

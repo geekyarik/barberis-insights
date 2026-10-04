@@ -11,12 +11,13 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from sqlalchemy import select, text
 
-from .analyses import service as analyses
+from .analyses import effects as factor_effects, service as analyses
 from .clients.profile import data_asof, rebuild_profiles
 from .clients.risk import risk_list as _risk_list
-from .context import service as notes
+from .context import factors, service as notes
 from .db.models import Appointment, Barber, Client, ClientProfile, Hypothesis, Measurement, OutreachCase
 from .db.session import engine, session_scope
+from .experiments import factor_link
 from .experiments.evaluate import run as run_hypothesis
 from .goals import service as goals
 from .ingest.connector_files import ingest_files as _ingest
@@ -78,12 +79,13 @@ def list_analyses() -> list[dict]:
 
 
 @mcp.tool()
-def run_analysis(analysis: str, date_from: str, date_to: str, scope: str = "team", params: dict | None = None) -> dict:
+def run_analysis(analysis: str, date_from: str, date_to: str, scope: str = "team", params: dict | None = None, lens: str = "raw") -> dict:
     """Run an analysis over whole ISO weeks (date_from a Monday, date_to a Sunday) and STORE the result as a run.
-    scope = 'team' (everyone, with a per-barber breakdown) or a barber key. Rows hold client ids only. Returns the full result."""
+    scope = 'team' (everyone, with a per-barber breakdown) or a barber key. lens = 'raw' or a lens from list_lenses (only barber_scorecard honours one).
+    Rows hold client ids only. Returns the full result."""
     with session_scope() as s:
         try:
-            row = analyses.run(s, analysis, dt.date.fromisoformat(date_from), dt.date.fromisoformat(date_to), scope, params=params, created_by="claude")
+            row = analyses.run(s, analysis, dt.date.fromisoformat(date_from), dt.date.fromisoformat(date_to), scope, lens=lens, params=params, created_by="claude")
         except (KeyError, ValueError) as e:
             raise ToolError(str(e))
         return _run_dict(row, full=True)
@@ -111,6 +113,63 @@ def _run_dict(r, full: bool = False) -> dict:
     d = {"run": r.id, "analysis": r.analysis_key, "version": r.analysis_version, "scope": r.scope, "window": [str(r.window_from), str(r.window_to)],
          "created_by": r.created_by, "complete": r.result.get("complete", True), "findings": [(f["code"], f["scope"]) for f in r.result.get("findings", [])]}
     return d | ({"result": r.result} if full else {})
+
+
+@mcp.tool()
+def list_factors(date_from: str | None = None, date_to: str | None = None, scope: str | None = None) -> list[dict]:
+    """Context factors (what was going on): period, scope, treatment, recurrence, expected effect and belief status. With dates, only those in force
+    in that period (a recurring factor's run-up included)."""
+    with session_scope() as s:
+        if date_from or date_to:
+            f = dt.date.fromisoformat(date_from or date_to); t = dt.date.fromisoformat(date_to or date_from)
+            found = factors.in_force(s, f, t, scope)
+        else:
+            found = notes.search(s, None, scope, limit=500)
+        return [factors.as_dict(x) | {"status": factor_link.status(s, x.id)} for x in found]
+
+
+@mcp.tool()
+def create_factor(title: str, date_from: str, date_to: str | None = None, kind: str = "internal", category: str = "other", body: str = "",
+                  scopes: list[str] | None = None, treatment: str = "annotate", recurrence: str = "none", lead_days: int = 0,
+                  adjust_factor: float | None = None, expected_metric: str | None = None, expected_direction: str | None = None) -> dict:
+    """Record a Context factor. kind: external | internal. treatment: annotate (just show it) | exclude (remove the period from calculations under a lens) |
+    adjust (scheduled time counts adjust_factor, 0..1) | control | suppress_overdue (one client: scope client:<id>). recurrence: none | yearly
+    (then lead_days is the run-up). Day or week grain only. Ask the owner before recording beliefs as fact."""
+    with session_scope() as s:
+        effect = [{"metric": expected_metric, "direction": expected_direction}] if expected_metric and expected_direction else []
+        try:
+            return factors.as_dict(factors.add(s, title, date_from, date_to, kind, category, body, scopes, treatment, effect, recurrence, lead_days, adjust_factor, source="claude"))
+        except ValueError as e:
+            raise ToolError(str(e))
+
+
+@mcp.tool()
+def estimate_factor_effect(factor_id: int) -> dict:
+    """For a yearly factor: measure its effect from the shop's own history with the seasonality analysis (never typed in). Says so when there are fewer than two earlier years."""
+    with session_scope() as s:
+        try:
+            run = factor_effects.estimate(s, factor_id, created_by="claude")
+        except (ValueError, KeyError) as e:
+            raise ToolError(str(e))
+        return {"run": run.id} | (factor_effects.summary(s, s.get(factors.Factor, factor_id)) or {})
+
+
+@mcp.tool()
+def test_factor_belief(factor_id: int) -> dict:
+    """Turn a factor's expected effect into a before/after hypothesis, evaluate it against the facts, and return the verdict."""
+    with session_scope() as s:
+        try:
+            h = factor_link.test_belief(s, factor_id)
+        except (ValueError, KeyError) as e:
+            raise ToolError(str(e))
+        return {"hypothesis": h.id, "status": factor_link.status(s, factor_id), "verdict": (h.result or {}).get("verdict")}
+
+
+@mcp.tool()
+def list_lenses() -> list[dict]:
+    """Lenses: named rules for which factor treatments a calculation honours (raw honours none)."""
+    with session_scope() as s:
+        return factors.lenses(s)
 
 
 @mcp.tool()

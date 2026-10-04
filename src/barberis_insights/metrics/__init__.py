@@ -21,9 +21,9 @@ def _discover() -> None:
 _discover()
 
 
-def compute_snapshot(ds: Dataset, f: dt.date, t: dt.date, cohort: tuple[dt.date, dt.date] | None = None) -> dict:
+def compute_snapshot(ds: Dataset, f: dt.date, t: dt.date, cohort: tuple[dt.date, dt.date] | None = None, lens: list | None = None) -> dict:
     """Every registered metric for every active barber and the team, over the window f..t."""
-    ctx = WindowContext(ds, f, t, cohort)
+    ctx = WindowContext(ds, f, t, cohort, lens or [])
     values: dict[str, dict] = {}
     for b in ds.barbers:
         sc = Scope(b.key, b.altegio_id)

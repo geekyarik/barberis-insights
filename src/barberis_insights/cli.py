@@ -75,7 +75,8 @@ def snapshot(
 @app.command()
 def analyses(action: str = typer.Argument("list", help="list | <analysis key>"), date_from: Optional[str] = typer.Option(None, "--from", help="Monday, YYYY-MM-DD"),
              date_to: Optional[str] = typer.Option(None, "--to", help="Sunday, YYYY-MM-DD"), scope: str = "team",
-             param: list[str] = typer.Option([], "--param", help="key=value, repeatable")) -> None:
+             param: list[str] = typer.Option([], "--param", help="key=value, repeatable"),
+             lens: str = typer.Option("raw", help="raw, clean or a saved lens (only barber_scorecard honours one)")) -> None:
     """List the analyses, or run one over whole ISO weeks and store the result as a run."""
     from .analyses import service
     from .db.session import session_scope
@@ -86,7 +87,7 @@ def analyses(action: str = typer.Argument("list", help="list | <analysis key>"),
         raise typer.BadParameter("--from and --to are required")
     params = {k: (int(v) if v.isdigit() else v) for k, v in (p.split("=", 1) for p in param)}
     with session_scope() as s:
-        row = service.run(s, action, _date(date_from), _date(date_to), scope, params=params, created_by="cli")
+        row = service.run(s, action, _date(date_from), _date(date_to), scope, lens=lens, params=params, created_by="cli")
         typer.echo(json.dumps({"run": row.id, "analysis": row.analysis_key, "version": row.analysis_version, "window": [str(row.window_from), str(row.window_to)],
                                "complete": row.result["complete"], "team": row.result["kpis"].get("team"),
                                "findings": [(f["code"], f["scope"]) for f in row.result["findings"]]}, ensure_ascii=False, indent=1))
@@ -110,6 +111,44 @@ def compare(after: int, before: Optional[int] = typer.Argument(None, help="Defau
     with session_scope() as s:
         out = service.compare(s, before, after) if before else service.compare_with_previous(s, after)
     typer.echo(json.dumps(out, ensure_ascii=False, indent=1))
+
+
+factors_app = typer.Typer(help="Context factors: list, measure a recurring one's effect, test a belief.", no_args_is_help=True)
+app.add_typer(factors_app, name="factors")
+
+
+@factors_app.command("list")
+def factors_list(date_from: Optional[str] = typer.Option(None, "--from"), date_to: Optional[str] = typer.Option(None, "--to")) -> None:
+    """Factors, or only those in force between two dates."""
+    from .context import factors, service as notes
+    from .db.session import session_scope
+    from .experiments import factor_link
+    with session_scope() as s:
+        found = factors.in_force(s, _date(date_from or date_to), _date(date_to or date_from)) if (date_from or date_to) else notes.search(s, None, None, limit=500)
+        for f in found:
+            typer.echo(f"{f.id:>4}  {f.date_from}{('..' + str(f.date_to)) if f.date_to else ''}  {f.kind:8} {f.category:13} {f.treatment:12} "
+                       f"{'yearly+' + str(f.lead_days) if f.recurrence == 'yearly' else 'once':9} {factor_link.status(s, f.id):12} {f.title}")
+
+
+@factors_app.command("estimate")
+def factors_estimate(factor_id: int) -> None:
+    """Measure a yearly factor's effect from the shop's own history (seasonality analysis)."""
+    from .analyses import effects
+    from .context.factors import Factor
+    from .db.session import session_scope
+    with session_scope() as s:
+        run = effects.estimate(s, factor_id)
+        typer.echo(json.dumps({"run": run.id} | (effects.summary(s, s.get(Factor, factor_id)) or {}), indent=1))
+
+
+@factors_app.command("belief")
+def factors_belief(factor_id: int) -> None:
+    """Test a factor's expected effect against the facts."""
+    from .db.session import session_scope
+    from .experiments import factor_link
+    with session_scope() as s:
+        h = factor_link.test_belief(s, factor_id)
+        typer.echo(json.dumps({"hypothesis": h.id, "status": factor_link.status(s, factor_id), "verdict": (h.result or {}).get("verdict")}, ensure_ascii=False, indent=1))
 
 
 @jobs_app.command("list")
@@ -190,9 +229,9 @@ def notify_discover(save: bool = typer.Option(False, "--save", help="Write the c
         typer.echo(str(e), err=True)
         raise typer.Exit(1)
     for u in updates:
-        c = (u.get("message") or u.get("my_chat_member") or {}).get("chat") or {}
-        if c.get("type") == "private":
-            chats[c["id"]] = c.get("first_name", "")
+        c = (u.get("message") or u.get("channel_post") or u.get("my_chat_member") or {}).get("chat") or {}
+        if c.get("type") in ("private", "group", "supergroup", "channel"):
+            chats[c["id"]] = f"{c['type']}: {c.get('title') or c.get('first_name', '')}"
     if not chats:
         typer.echo("No chat yet: open the bot in Telegram and press Start, then run this again.")
         raise typer.Exit(1)
@@ -200,7 +239,7 @@ def notify_discover(save: bool = typer.Option(False, "--save", help="Write the c
         typer.echo(f"{cid}  {name}")
     if save:
         if len(chats) != 1:
-            raise typer.BadParameter("more than one chat wrote to the bot; put the right id in .env yourself")
+            raise typer.BadParameter("more than one chat wrote to the bot; put the right id in .env yourself (INSIGHTS_TELEGRAM_OWNER_CHAT_ID)")
         env = ROOT / ".env"
         lines = [l for l in (env.read_text().splitlines() if env.exists() else []) if not l.startswith("INSIGHTS_TELEGRAM_OWNER_CHAT_ID=")]
         env.write_text("\n".join(lines + [f"INSIGHTS_TELEGRAM_OWNER_CHAT_ID={next(iter(chats))}"]) + "\n")

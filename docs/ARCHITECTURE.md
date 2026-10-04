@@ -276,6 +276,14 @@ Each feed is a plugin, like a Mirror adapter. Which feeds are worth building is 
 
 **Belief ↔ evidence:** any factor with `expected_effects` can produce a Hypothesis in one click. Its verdict is what the factor's `status` shows.
 
+**Built 2026-10-04 (Context v2):**
+- **Factors** (`factors`, with a `factor_events` trail) replace notes: the eight existing notes migrated in as annotate-only factors, and the old note calls (`add_note`, `search_context`, the old form) still work on top of them. Checked on save: an `adjust` factor needs a share between 0 and 1, `suppress_overdue` needs a `client:<id>` scope, and an expected effect needs a direction.
+- **Recurrence:** a yearly factor recurs in every year, including years before the one it was entered for; `lead_days` is the run-up.
+- **Lenses** (`raw`, `clean` built in; others saved in `lenses`): a rule listing which treatments to honour. `exclude` removes the days from the window (appointments, shifts and the window length) and `adjust` shrinks scheduled time. A run stores the factors its lens resolved to (id, version, periods), and runs whose lens or resolved factors differ are not compared. So far only `barber_scorecard` honours a lens; the others refuse one with a message. Client-history figures are not lens-aware yet.
+- **Effect of a recurring factor:** `insights factors estimate` / the *Measure the effect* button runs `seasonality` over the factor's latest finished occurrence and links the run; fewer than two earlier years shows "not enough history". `control` is stored but not yet used by Experiments.
+- **Belief status** is read from linked Hypotheses (`hypotheses.factor_id`) by `experiments/factor_link.py` and never stored on the factor; *Test this belief* makes a before/after hypothesis from the first expected effect.
+- **Where it shows:** the Context page, both reports (a *What was in force* section), the CLI (`insights factors`, `--lens`) and MCP (`list_factors`, `create_factor`, `estimate_factor_effect`, `test_factor_belief`, `list_lenses`).
+
 ### 6.6 Clients
 - **Profiles** are derived from Mirror on every ingest: first and last visit, visits, spend, usual barber, usual gap.
 - **Segments:** active, slipping, overdue, lapsed, one-time, switched. The rules are in `clients/risk.py`.
@@ -402,8 +410,8 @@ We don't use an external BI tool (ADR-0009); quick "slice it differently" questi
 | Analyses | done 2026-10-04: `analyses/` with a service, stored immutable `analysis_runs`, comparison, CLI (`insights analyses|runs|compare`), MCP tools and all twelve analyses | dashboard pages from stored runs (Reports) |
 | Baseline / comparison | one stored measurement (2026-09-27); goals compare with the latest measurement | baseline and previous runs compared per analysis; goal history from runs |
 | Reports | done 2026-10-04: barber book and team comparison composed from stored runs, in the dashboard, exported to HTML; the two claude.ai artifact pages still exist | retire the artifact pages (owner's go-ahead) |
-| Owner context | `notes`: free text with dates, scopes and tags | `factors` with effects, treatments, lenses and belief status |
-| Analysis lens | none (raw facts) | every run, measurement and hypothesis records its lens |
+| Owner context | done 2026-10-04: `factors` with effects, treatments, recurrence, lenses and belief status; notes migrated | feeds that create factors (research under way); lens support in the other analyses |
+| Analysis lens | runs record their lens and the factors it resolved to; only `barber_scorecard` honours one | the other analyses; measurements and hypotheses record their lens |
 | Module boundaries | services take a database session and read any table; `web/app.py` queries tables | each module exposes a service; cross-module reads go through it |
 | Altegio access | connector files plus a manual export; read-only | plus a REST adapter (blocked on the partner token); Outreach may write tagged lines to client descriptions (ADR-0010) |
 | Ad-hoc exploration | asking Claude in chat; fixed dashboard pages | an Explorer page with saved views on the metric registry (ADR-0009) |

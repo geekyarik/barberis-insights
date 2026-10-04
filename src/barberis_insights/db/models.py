@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, BigInteger, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy import Index, event
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -197,6 +197,47 @@ class Note(Base):
     created: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
+class Factor(Base):
+    """A dated, scoped piece of Context that may affect the numbers, with how analysis should treat it (successor of `notes`)."""
+    __tablename__ = "factors"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    title: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text, default="")
+    kind: Mapped[str] = mapped_column(String(10), default="internal")  # external (not under our control) | internal (our decision)
+    category: Mapped[str] = mapped_column(String(30), default="other")  # holiday, mobilisation, security, competition, price, staff, schedule, ...
+    date_from: Mapped[dt.date] = mapped_column(Date, index=True)  # day or week grain: never hours
+    date_to: Mapped[dt.date | None] = mapped_column(Date)  # None = a single day
+    recurrence: Mapped[str] = mapped_column(String(10), default="none")  # none | yearly
+    lead_days: Mapped[int] = mapped_column(Integer, default=0)  # days before date_from that already count (the run-up to a holiday)
+    scopes: Mapped[list] = mapped_column(JSON, default=list)  # "shop", "team", barber keys, or "client:<id>"
+    expected_effects: Mapped[list] = mapped_column(JSON, default=list)  # [{"metric", "direction": up|down, "size_min", "size_max"}]: the owner's belief
+    treatment: Mapped[str] = mapped_column(String(20), default="annotate")  # annotate | exclude | adjust | control | suppress_overdue
+    adjust_factor: Mapped[float | None] = mapped_column(Float)  # with `adjust`: scheduled time in the period is multiplied by this (0..1)
+    tags: Mapped[list] = mapped_column(JSON, default=list)
+    source: Mapped[str] = mapped_column(String(40), default="owner")  # owner | manager | claude | note | feed:<name>
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    effect_run_id: Mapped[int | None] = mapped_column(Integer)  # the `seasonality` run that measured a recurring factor's effect
+    created: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+
+
+class FactorEvent(Base):
+    __tablename__ = "factor_events"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    factor_id: Mapped[int] = mapped_column(Integer, index=True)
+    at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now)
+    kind: Mapped[str] = mapped_column(String(20))  # created | updated | deleted | effect_estimated | belief_tested
+    detail: Mapped[dict | None] = mapped_column(JSON)
+
+
+class Lens(Base):
+    """A named rule for which Factor treatments a calculation honours. `raw` always exists and honours none."""
+    __tablename__ = "lenses"
+    key: Mapped[str] = mapped_column(String(40), primary_key=True)
+    label: Mapped[str] = mapped_column(String(80))
+    rule: Mapped[dict] = mapped_column(JSON)  # {"honour": ["exclude", "adjust"], "categories": null | [...], "ids": null | [...]}
+
+
 class Hypothesis(Base):
     __tablename__ = "hypotheses"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -212,6 +253,7 @@ class Hypothesis(Base):
     expected: Mapped[str] = mapped_column(String(10), default="up")  # up | down | none
     status: Mapped[str] = mapped_column(String(20), default="open")  # open | supported | rejected | inconclusive
     result: Mapped[dict | None] = mapped_column(JSON)
+    factor_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("factors.id"), index=True)  # the Factor whose belief this tests
     created: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now)
     evaluated: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -285,7 +327,7 @@ class Recipient(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(80))
     lang: Mapped[str] = mapped_column(String(5), default="uk")
-    telegram_chat_id: Mapped[int | None] = mapped_column(Integer)
+    telegram_chat_id: Mapped[int | None] = mapped_column(BigInteger)  # group ids are negative and longer than 32 bits
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
