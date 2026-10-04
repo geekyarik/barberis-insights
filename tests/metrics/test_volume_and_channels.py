@@ -15,3 +15,8 @@ def test_online_share(s):
 
 def test_addon_share(s):
     assert addon_share(ctx(shop(s)), A) == 25.0       # the massage visit
+
+
+def test_visits_counts_arrived_appointments_only(s):
+    from barberis_insights.metrics.volume.visits import visits
+    assert visits(ctx(shop(s)), A) == 4               # the no-show is not a visit

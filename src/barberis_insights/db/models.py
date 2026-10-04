@@ -261,6 +261,70 @@ class AnalysisRun(Base):
     result: Mapped[dict] = mapped_column(JSON)
 
 
+class ReportRun(Base):
+    """One frozen report: the analysis runs, goal states and lens it was composed from. Delivered and reopened unchanged."""
+    __tablename__ = "report_runs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    report_key: Mapped[str] = mapped_column(String(40), index=True)
+    window_from: Mapped[dt.date] = mapped_column(Date)
+    window_to: Mapped[dt.date] = mapped_column(Date)
+    lens: Mapped[str] = mapped_column(String(40), default="raw")
+    analysis_run_ids: Mapped[list] = mapped_column(JSON, default=list)
+    created_by: Mapped[str] = mapped_column(String(20), default="schedule")
+    created: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now)
+    content: Mapped[dict] = mapped_column(JSON)  # everything the report shows; client ids only, names are looked up when rendered
+
+
+@event.listens_for(ReportRun, "before_update")
+def _reports_are_immutable(mapper, connection, target):
+    raise ValueError("report runs are immutable")
+
+
+class Recipient(Base):
+    __tablename__ = "recipients"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(80))
+    lang: Mapped[str] = mapped_column(String(5), default="uk")
+    telegram_chat_id: Mapped[int | None] = mapped_column(Integer)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+    __table_args__ = (UniqueConstraint("recipient_id", "kind", "channel"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    recipient_id: Mapped[int] = mapped_column(Integer, ForeignKey("recipients.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(30))  # weekly_review | alert
+    channel: Mapped[str] = mapped_column(String(20))  # telegram | console
+
+
+class Delivery(Base):
+    __tablename__ = "deliveries"
+    __table_args__ = (UniqueConstraint("subscription_id", "dedupe_key"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    subscription_id: Mapped[int] = mapped_column(Integer, ForeignKey("subscriptions.id"), index=True)
+    report_run_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("report_runs.id"))
+    dedupe_key: Mapped[str] = mapped_column(String(80))  # "report:<id>" or "alert:<code>:<day>": the same thing is never sent twice
+    channel: Mapped[str] = mapped_column(String(20))
+    status: Mapped[str] = mapped_column(String(20))  # sent | failed
+    attempts: Mapped[int] = mapped_column(Integer, default=1)
+    error: Mapped[str] = mapped_column(Text, default="")
+    external_id: Mapped[str] = mapped_column(String(40), default="")
+    created: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class JobRun(Base):
+    __tablename__ = "job_runs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job: Mapped[str] = mapped_column(String(40), index=True)
+    slot: Mapped[str] = mapped_column(String(20))  # the date (or date-time) the run was scheduled for
+    started: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now)
+    finished: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(20), default="running")  # running | ok | failed | blocked | skipped
+    counts: Mapped[dict | None] = mapped_column(JSON)
+    error: Mapped[str] = mapped_column(Text, default="")
+
+
 @event.listens_for(AnalysisRun, "before_update")
 def _runs_are_immutable(mapper, connection, target):
     raise ValueError("analysis runs are immutable: run the analysis again to create a new run")

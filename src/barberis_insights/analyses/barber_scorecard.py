@@ -58,4 +58,4 @@ def run(ctx: AnalysisContext) -> dict:
 
     return {"kpis": kpis, "directions": {k: m.direction for k, m in METRICS.items()}, "units": {k: m.unit for k, m in METRICS.items()},
             "tables": tables, "findings": findings, "complete": True, "last_year": last_year,
-            "context": {"cohort_window": snap["cohort_window"]}}
+            "context": {"cohort_window": snap["cohort_window"], "names": {b.key: b.name for b in ctx.barbers}}}

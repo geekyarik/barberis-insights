@@ -43,6 +43,12 @@ class Settings(BaseSettings):
     # google sheet for the admin call list
     sheet_id: str | None = None
     sheet_lang: str = "uk"  # language of the call sheet's tabs, headers and dropdowns ("uk" or "en"); the sync reads both
+    # notifications and jobs
+    telegram_bot_token: str | None = None
+    telegram_owner_chat_id: int | None = None
+    owner_lang: str = "uk"
+    timezone: str = "Europe/Kyiv"  # the shop's local time: jobs run on its clock
+    data_stale_days: int = 3  # an Alert when the newest completed visit is older than this
     host: str = "127.0.0.1"
     port: int = 8765
 
