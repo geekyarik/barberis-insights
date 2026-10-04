@@ -161,6 +161,7 @@ Dependencies point **one way**, from left to right. Mirror and Context depend on
   - cancelled appointments are deleted in Altegio
   - no-show marking is manual
   - service payments are not recorded
+  - shifts of team members deleted in Altegio (four former barbers, one with 1,715 appointments through April 2025) cannot be fetched (HTTP 404), so shop-level capacity before mid-2025 is understated
 
 ### 6.2 Metrics — one module per metric
 - **Layout:**
