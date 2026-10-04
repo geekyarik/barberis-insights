@@ -22,3 +22,15 @@ def mondays(f: dt.date, t: dt.date):
     while d <= t:
         yield d
         d += dt.timedelta(days=7)
+
+
+def data_end(ds) -> dt.date | None:
+    return ds.arrived[-1].date if ds.arrived else None
+
+
+def history_note(ctx, days: int = 180):
+    """A finding when the window starts so close to the first loaded day that 'new' clients may only be unseen ones."""
+    from .base import finding
+    if ctx.f < ctx.ds.history_from + dt.timedelta(days=days):
+        return finding("history_too_short", "info", "team", history_from=str(ctx.ds.history_from), window_from=str(ctx.f))
+    return None
