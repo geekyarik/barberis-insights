@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block content %}
+<header><h1>{{ t("report.title") }}</h1><p class="sub">{{ t("report.sub") }}</p></header>
+<section class="card">
+  <h2>{{ t("report.build") }}</h2>
+  <form method="post" action="/reports/build" class="inline">
+    <label>{{ t("report.f.kind") }}<select name="kind"><option value="barber_book">{{ t("report.kind.barber_book") }}</option><option value="team_comparison">{{ t("report.kind.team_comparison") }}</option></select></label>
+    <label>{{ t("report.f.barber") }}<select name="barber">{% for b in all_barbers %}<option value="{{ b.key }}">{{ b.name }}</option>{% endfor %}</select></label>
+    <label>{{ t("common.from") }}<input type="date" name="date_from" required value="{{ suggest_from }}"></label>
+    <label>{{ t("data.to_sunday") }}<input type="date" name="date_to" required value="{{ suggest_to }}"></label>
+    <button>{{ t("report.build_btn") }}</button>
+  </form>
+</section>
+<section><h2>{{ t("report.stored") }}</h2>
+  <div class="tablebox"><table>
+    <thead><tr><th class="l">№</th><th class="l">{{ t("report.c.kind") }}</th><th class="l">{{ t("report.c.barber") }}</th><th class="l">{{ t("data.window") }}</th><th class="l">{{ t("report.c.created") }}</th><th></th></tr></thead>
+    <tbody>{% for r in reports %}<tr><td class="l">{{ r.id }}</td><td class="l">{{ t("report.kind." ~ r.report_key) if r.report_key in kinds else r.report_key }}</td><td class="l">{{ r.content.get("name", "—") }}</td>
+      <td class="l">{{ r.window_from }} – {{ r.window_to }}</td><td class="l">{{ r.created.strftime('%Y-%m-%d %H:%M') }}</td>
+      <td class="l"><a href="/reports/{{ r.id }}">{{ t("report.open") }}</a> · <a href="/reports/{{ r.id }}/export">{{ t("report.export") }}</a></td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+{% endblock %}

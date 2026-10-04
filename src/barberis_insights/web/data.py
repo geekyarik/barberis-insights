@@ -54,6 +54,24 @@ def fmt(metric: str, v) -> str:
     return f"{v:g}"
 
 
+MONEY = {"value_at_stake", "exclusive_revenue", "revenue", "spend", "lifetime_spend", "avg_price", "avg_check", "rev_per_sched_h", "revenue_ly"}
+
+
+def kfmt(key: str, v) -> str:
+    """Format any analysis figure by its key: percentages, money, counts."""
+    if v is None:
+        return "—"
+    if key.endswith("_pct") or key.startswith("util"):
+        return f"{v:g}%"
+    if key in MONEY:
+        return f"{v:,.0f} ₴".replace(",", " ")
+    return (f"{v:,.1f}" if isinstance(v, float) else f"{v:,}").replace(",", " ")
+
+
+def signed(v, digits: int = 1) -> str:
+    return "" if v is None or round(v, digits) == 0 else f"{v:+,.{digits}f}".replace(",", " ")
+
+
 def delta_class(metric: str, now, before) -> str:
     if now is None or before is None or now == before:
         return ""

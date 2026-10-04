@@ -48,7 +48,7 @@ def run(ctx: AnalysisContext) -> dict:
         all_ids += len(mine); all_value += value; all_days += days
         rows += mine[:TOP]
         if len(mine) >= 10 and value and sum(r["lifetime_spend"] for r in mine[:10]) > 0.5 * value:
-            findings.append(finding("value_concentrated", "info", b.key, top10_share=round(sum(r["lifetime_spend"] for r in mine[:10]) / value, 2)))
+            findings.append(finding("value_concentrated", "info", b.key, top10_share_pct=round(100 * sum(r["lifetime_spend"] for r in mine[:10]) / value)))
     kpis["team"] = {"overdue": all_ids, "value_at_stake": round(all_value), "avg_days_silent": round(all_days / all_ids) if all_ids else None}
     if ctx.scope != "team":
         kpis = {k: v for k, v in kpis.items() if k in (ctx.scope, "team")}

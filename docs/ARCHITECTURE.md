@@ -234,7 +234,8 @@ An **analysis** answers one business question for a window, scope and lens, with
   - *Monthly review* *(deferred, TODO)*: all of the above, compared with the previous run and the baseline. When built, its Window is the last 4 or 5 complete ISO weeks, ending in the week that contains the 14th; its label shows the real dates. Goal due dates snap to the end of a week.
 - **Where they appear:** reports render in the dashboard and export to HTML. Claude adds the narrative through MCP, citing run IDs.
 - **Report runs:** a Report is frozen as a `report_run` (the analysis run IDs, goal states and resolved Lens it used). Re-rendering never changes what was sent, and deliveries refer to a Report run.
-- **They replace the two hand-built artifact pages.**
+- **Built 2026-10-04:** the *barber book* (scorecard against the team and last year, week by week, weekdays and hours, retention, return cohorts, sources, exclusive clients, overdue regulars, services, goals) and the *team comparison* (every barber side by side), under *Reports* in the dashboard, built from stored runs and frozen as `report_runs`. Retention and cohorts need 90 days of follow-up, so they run on the latest window that has fully happened and the page says so. Each report exports as one HTML file (no navigation, no scripts). Reports render from their own frozen content, so a report never changes after it was made. The monthly review stays deferred.
+- **They replace the two hand-built artifact pages.** *(Retiring them needs the owner's go-ahead.)*
 
 ### 6.5 Context — the second source of truth
 This module turns the owner's knowledge into data the analysis can act on.
@@ -400,7 +401,7 @@ We don't use an external BI tool (ADR-0009); quick "slice it differently" questi
 | Metrics layout | done 2026-10-04: 16 keys, one module per metric under `metrics/<family>/` with a `VERSION`, discovered at start-up, each with a fixture test in `tests/metrics/` | done 2026-10-04: `metric_version` on measurements and goals |
 | Analyses | done 2026-10-04: `analyses/` with a service, stored immutable `analysis_runs`, comparison, CLI (`insights analyses|runs|compare`), MCP tools and all twelve analyses | dashboard pages from stored runs (Reports) |
 | Baseline / comparison | one stored measurement (2026-09-27); goals compare with the latest measurement | baseline and previous runs compared per analysis; goal history from runs |
-| Reports | two hand-built claude.ai artifact pages; dashboard pages | reports composed from stored runs, in the dashboard and exported to HTML |
+| Reports | done 2026-10-04: barber book and team comparison composed from stored runs, in the dashboard, exported to HTML; the two claude.ai artifact pages still exist | retire the artifact pages (owner's go-ahead) |
 | Owner context | `notes`: free text with dates, scopes and tags | `factors` with effects, treatments, lenses and belief status |
 | Analysis lens | none (raw facts) | every run, measurement and hypothesis records its lens |
 | Module boundaries | services take a database session and read any table; `web/app.py` queries tables | each module exposes a service; cross-module reads go through it |

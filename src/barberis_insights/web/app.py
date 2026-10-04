@@ -13,6 +13,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from ..analyses import service as analyses
 from ..clients.profile import data_asof, rebuild_profiles
 from ..clients.risk import CALLABLE, risk_list
 from ..config import settings
@@ -29,13 +30,15 @@ from ..metrics.weekly import weekly_rows
 from ..outreach import service as outreach
 from ..outreach.offers import active_offers
 from ..playbook import service as playbook
+from ..reports import service as reports
 from . import data as vm
+from .report_views import VIEWS
 
 HERE = Path(__file__).parent
 app = FastAPI(title="BARBERIS insights", docs_url="/api/docs", openapi_url="/api/openapi.json")
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 templates = Jinja2Templates(directory=HERE / "templates")
-templates.env.globals.update(fmt=vm.fmt, delta_class=vm.delta_class, REGISTRY=REGISTRY)
+templates.env.globals.update(fmt=vm.fmt, kfmt=vm.kfmt, signed=vm.signed, delta_class=vm.delta_class, REGISTRY=REGISTRY)
 SEGMENTS = ("overdue", "lapsed", "one_time", "slipping", "switched", "active")
 
 
@@ -399,9 +402,53 @@ def data_snapshot(request: Request, date_from: str = Form(...), date_to: str = F
     f, t = dt.date.fromisoformat(date_from), dt.date.fromisoformat(date_to)
     if (t - f).days < 13:
         return back(request, "/data", "measure_short", "warn")
-    snap = compute_snapshot(vm.dataset(s), f, t)
-    n = save_measurement(s, snap, "Monthly measurement")
-    return back(request, "/data", "measure_saved", date=t, n=n)
+    if f.weekday() != 0 or t.weekday() != 6:
+        return back(request, "/data", "measure_weeks", "warn")
+    run = analyses.run(s, "barber_scorecard", f, t, created_by="dashboard", ds=vm.dataset(s), label="Monthly measurement")
+    return back(request, "/data", "measure_saved", date=t, n=sum(len(v) for v in run.result["kpis"].values()))
+
+
+# ---------------------------------------------------------------- reports
+@app.get("/reports", response_class=HTMLResponse)
+def reports_page(request: Request, s: Session = Depends(db)):
+    today = dt.date.today()
+    end = today - dt.timedelta(days=today.weekday() + 1)           # the last Sunday
+    return page(request, s, "reports.html", "reports", title="nav.reports", reports=reports.list_reports(s, limit=50),
+                kinds=("barber_book", "team_comparison"), suggest_to=end, suggest_from=end - dt.timedelta(weeks=8) + dt.timedelta(days=1))
+
+
+@app.post("/reports/build")
+def reports_build(request: Request, kind: str = Form(...), barber: str = Form(""), date_from: str = Form(...), date_to: str = Form(...),
+                  s: Session = Depends(db)):
+    f, t = dt.date.fromisoformat(date_from), dt.date.fromisoformat(date_to)
+    if f.weekday() != 0 or t.weekday() != 6 or t < f:
+        return back(request, "/reports", "report_bad_window", "warn")
+    try:
+        r = reports.barber_book(s, barber, f, t) if kind == "barber_book" else reports.team_comparison(s, f, t)
+    except (ValueError, KeyError) as e:
+        return back(request, "/reports", "report_unknown", "warn", why=str(e))
+    return RedirectResponse(f"/reports/{r.id}", status_code=303)
+
+
+def _report_page(request: Request, s: Session, rid: int, export: bool):
+    r = reports.get(s, rid)
+    if r is None or r.report_key not in VIEWS:
+        raise HTTPException(404)
+    c = r.content
+    return page(request, s, "report.html", "reports", title=f"report.kind.{r.report_key}", r=r, c=c, names=c.get("names", {}), vm=VIEWS[r.report_key](c), export=export)
+
+
+@app.get("/reports/{rid}", response_class=HTMLResponse)
+def report_view(request: Request, rid: int, s: Session = Depends(db)):
+    return _report_page(request, s, rid, False)
+
+
+@app.get("/reports/{rid}/export")
+def report_export(request: Request, rid: int, s: Session = Depends(db)):
+    """The same report as one HTML file (no navigation, no scripts) to save or send."""
+    resp = _report_page(request, s, rid, True)
+    resp.headers["Content-Disposition"] = f'attachment; filename="barberis-report-{rid}.html"'
+    return resp
 
 
 # ---------------------------------------------------------------- JSON API (for scripts, Claude, a future SPA)
