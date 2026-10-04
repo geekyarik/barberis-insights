@@ -28,7 +28,7 @@ Phases below keep their descriptions; this is the order they ship in.
 1. **History import** *(appointments done 2026-10-04: 2022–2024, 18,643 rows, no gaps)*. Shifts done 2026-10-04: continuous from 2022-01-03 for the six current barbers and eleven former ones, who were added to `barbers` as inactive; four deleted team members have no fetchable shifts.
 2. **Metrics split** *(done 2026-10-04, with versioned measurements and goals)*. The 2026-09-27 baseline test stays green; `risk_n` is at version 2.
 3. **Analysis framework** and the first three analyses: `client_retention`, `overdue_regulars`, `barber_scorecard`, with `analysis_runs`. *(Done 2026-10-04.)*
-4. **Thin Phase 2b:** Notifications with a Telegram adapter (separate bot), the Scheduler with `data_watch` and `sheet_sync`, then `weekly_review`.
+4. **Thin Phase 2b:** Notifications with a Telegram adapter (separate bot), the Scheduler with `data_watch` and `sheet_sync`, then `weekly_review`. *(Built 2026-10-04; going live needs the owner to press Start in the bot and load the launchd agent.)*
 5. **The remaining analyses** in the order `weekly_book`, `weekday_pattern`, `return_cohorts`, `new_clients`, `client_sources`, `exclusive_clients`, `departure_impact`, `price_demand`, `service_mix`, `seasonality`; then Reports with `report_runs`; then retire the two artifact pages (with your go-ahead).
 6. **Research** (Phase 4) any time after step 1. **Context v2** (Phase 5) after step 5. **Explorer** (Phase 2c) last.
 

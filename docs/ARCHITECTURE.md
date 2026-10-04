@@ -324,6 +324,8 @@ Each feed is a plugin, like a Mirror adapter. Which feeds are worth building is 
   - A window is complete when appointments are covered through its end and shifts are imported for every week in it, both checked against `sync_runs`.
   - An incomplete window blocks the chain (`blocked: needs data`) and sends one Alert, at most once a day, naming the missing weeks and the exact refresh command.
   - Catch-up creates every analysis run and Goal history entry, but sends one message: the latest week in full, older weeks as one-line deltas. Older Report runs can be reopened.
+- **Built 2026-10-04:** `data_watch`, `sheet_sync` and `weekly_review` (jobs are code in `jobs/`, so there is no `jobs` table; `job_runs` records every run). Statuses: ok, skipped, blocked, failed, running. A failed slot is retried after an hour; a run that has been `running` for less than 30 minutes stops a second one starting. `insights jobs plist` prints the launchd agent; loading it is left to the owner.
+  - Alerts implemented: stale data, failed or blocked job, failed import, a goal that turned to "behind". *Not yet:* a barber's weekly visits falling 30 % under their 8-week average.
 - **Runs are recorded** (`job_runs`: job, scheduled for, started, finished, status, counts, error), visible on *Data & sync*, and safe to repeat: each job is idempotent, like imports and syncs.
 - **Fresh data is the catch** (ADR-0002): until Altegio's REST API works, no job can fetch new appointments by itself. Until then:
   - jobs report on the data already imported and say how old it is;
@@ -404,7 +406,7 @@ We don't use an external BI tool (ADR-0009); quick "slice it differently" questi
 | Module boundaries | services take a database session and read any table; `web/app.py` queries tables | each module exposes a service; cross-module reads go through it |
 | Altegio access | connector files plus a manual export; read-only | plus a REST adapter (blocked on the partner token); Outreach may write tagged lines to client descriptions (ADR-0010) |
 | Ad-hoc exploration | asking Claude in chat; fixed dashboard pages | an Explorer page with saved views on the metric registry (ADR-0009) |
-| Scheduling and delivery | nothing runs on its own; reports are asked for in chat | Scheduler runs the weekly review and data checks (daily and monthly jobs deferred); Notifications sends them to the owner on Telegram (email later) |
+| Scheduling and delivery | built 2026-10-04: Scheduler (`jobs/`), Reports (`report_runs`), Notifications with a Telegram channel and recorded deliveries; waiting for the owner to press Start in the bot and load the launchd agent | a Run-now button and job list on *Data & sync*; the visits-drop alert; email |
 
 ## 10. Change process
 This document changes **with** the code, never after it:

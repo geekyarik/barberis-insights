@@ -11,6 +11,10 @@ import typer
 from .config import ROOT, settings
 
 app = typer.Typer(help="BARBERIS insights: data, metrics, goals, clients and win-back.", no_args_is_help=True)
+jobs_app = typer.Typer(help="Scheduled jobs: run what is due, run one now, list.", no_args_is_help=True)
+notify_app = typer.Typer(help="Telegram: find your chat, send a test message.", no_args_is_help=True)
+app.add_typer(jobs_app, name="jobs")
+app.add_typer(notify_app, name="notify")
 
 
 def _date(s: str) -> dt.date:
@@ -106,6 +110,115 @@ def compare(after: int, before: Optional[int] = typer.Argument(None, help="Defau
     with session_scope() as s:
         out = service.compare(s, before, after) if before else service.compare_with_previous(s, after)
     typer.echo(json.dumps(out, ensure_ascii=False, indent=1))
+
+
+@jobs_app.command("list")
+def jobs_list() -> None:
+    """The jobs, their cadence and their last run."""
+    from .db.session import session_scope
+    from .jobs import service
+    with session_scope() as s:
+        typer.echo(json.dumps(service.list_jobs(s), ensure_ascii=False, indent=1))
+
+
+@jobs_app.command("tick")
+def jobs_tick(dry_run: bool = typer.Option(False, "--dry-run", help="Only show what is due"), only: Optional[str] = typer.Option(None, help="One job")) -> None:
+    """Run every job that is due (this is what the launchd agent calls every 15 minutes). Missed slots are caught up in order."""
+    from .db.session import session_factory
+    from .jobs import service
+    s = session_factory()()
+    try:
+        typer.echo(json.dumps(service.tick(s, dry_run=dry_run, only=only), ensure_ascii=False, indent=1, default=str))
+    finally:
+        s.close()
+
+
+@jobs_app.command("run")
+def jobs_run(job: str, slot: Optional[str] = typer.Option(None, help="YYYY-MM-DD[THH], the slot to run (default: the latest one)"),
+             dry_run: bool = typer.Option(False, "--dry-run", help="Build and print, store and send nothing")) -> None:
+    """Run one job now, whether or not it is due."""
+    from .db.session import session_factory
+    from .jobs import service
+    from .jobs.registry import JOBS
+    if job not in JOBS:
+        raise typer.BadParameter(f"unknown job; known: {', '.join(JOBS)}")
+    when = dt.datetime.strptime(slot if "T" in slot else slot + "T09", service.FMT) if slot else None
+    s = session_factory()()
+    try:
+        out = service.run_now(s, job, when, dry_run)
+        if dry_run:
+            if job == "weekly_review" and out.get("report_id"):
+                from .clients.names import names_for
+                from .db.models import ReportRun
+                from .notifications import render
+                r = s.get(ReportRun, out["report_id"])
+                typer.echo(render.weekly_review(r.content, settings.owner_lang, names_for(s, [x["client_id"] for x in r.content["overdue"]["top"]])))
+            s.rollback()
+        else:
+            s.commit()
+        typer.echo(json.dumps(out, ensure_ascii=False, indent=1, default=str))
+    finally:
+        s.close()
+
+
+@jobs_app.command("plist")
+def jobs_plist() -> None:
+    """Print the launchd agent that runs `jobs tick` every 15 minutes. Save it to ~/Library/LaunchAgents/ and load it yourself."""
+    import shutil
+    uv = shutil.which("uv") or "uv"
+    typer.echo(f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.barberis.insights.jobs</string>
+  <key>ProgramArguments</key><array><string>{uv}</string><string>--directory</string><string>{ROOT}</string><string>run</string><string>insights</string><string>jobs</string><string>tick</string></array>
+  <key>StartInterval</key><integer>900</integer>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>{ROOT}/var/jobs.log</string>
+  <key>StandardErrorPath</key><string>{ROOT}/var/jobs.log</string>
+</dict></plist>""")
+
+
+@notify_app.command("discover")
+def notify_discover(save: bool = typer.Option(False, "--save", help="Write the chat id to .env as INSIGHTS_TELEGRAM_OWNER_CHAT_ID")) -> None:
+    """After pressing Start in the bot, show the chats that wrote to it (and optionally save yours)."""
+    from .notifications.channels import get
+    from .notifications.channels import ChannelError
+    chats = {}
+    try:
+        updates = get("telegram").updates()
+    except ChannelError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1)
+    for u in updates:
+        c = (u.get("message") or u.get("my_chat_member") or {}).get("chat") or {}
+        if c.get("type") == "private":
+            chats[c["id"]] = c.get("first_name", "")
+    if not chats:
+        typer.echo("No chat yet: open the bot in Telegram and press Start, then run this again.")
+        raise typer.Exit(1)
+    for cid, name in chats.items():
+        typer.echo(f"{cid}  {name}")
+    if save:
+        if len(chats) != 1:
+            raise typer.BadParameter("more than one chat wrote to the bot; put the right id in .env yourself")
+        env = ROOT / ".env"
+        lines = [l for l in (env.read_text().splitlines() if env.exists() else []) if not l.startswith("INSIGHTS_TELEGRAM_OWNER_CHAT_ID=")]
+        env.write_text("\n".join(lines + [f"INSIGHTS_TELEGRAM_OWNER_CHAT_ID={next(iter(chats))}"]) + "\n")
+        typer.echo("saved to .env")
+
+
+@notify_app.command("test")
+def notify_test(channel: Optional[str] = typer.Option(None, help="telegram or console")) -> None:
+    """Send a test message to the owner."""
+    from .db.session import session_scope
+    from .notifications import service
+    with session_scope() as s:
+        if not service.ensure_owner(s):
+            raise typer.BadParameter("INSIGHTS_TELEGRAM_OWNER_CHAT_ID is not set: run `insights notify discover --save` after pressing Start in the bot")
+        out = service.send_test(s, channel)
+        typer.echo(json.dumps([{"channel": d.channel, "status": d.status, "error": d.error} for d in out]))
+        if any(d.status != "sent" for d in out):
+            raise typer.Exit(1)
 
 
 @app.command("import-clients")

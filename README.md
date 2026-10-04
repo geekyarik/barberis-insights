@@ -22,7 +22,7 @@ uv run pytest                              # 32 tests, incl. baseline regression
 **Private files.** These live in `var/` and are never committed:
 - `var/barbers.json`: the initial staff roster, `[{"key", "altegio_id", "name", "tier"}]`, used by `import-legacy`. After that, manage barbers with `insights barber …`.
 - `var/seed_notes.json`: known business events loaded by `insights seed`, as `[{"date_from", "date_to", "kind", "scopes", "title", "body", "tags"}]`.
-- `.env`: settings such as `INSIGHTS_SHEET_ID`.
+- `.env`: settings such as `INSIGHTS_SHEET_ID`, `INSIGHTS_TELEGRAM_BOT_TOKEN` and `INSIGHTS_TELEGRAM_OWNER_CHAT_ID` (press Start in the bot, then `insights notify discover --save`). Scheduled jobs: `insights jobs list|tick|run`; `insights jobs plist` prints a launchd agent that calls `tick` every 15 minutes.
 - `var/google_oauth_client.json` and `var/google_token.json`: Google sign-in.
 - client exports in `var/imports/`.
 

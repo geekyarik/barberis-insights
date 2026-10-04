@@ -114,6 +114,28 @@ def _run_dict(r, full: bool = False) -> dict:
 
 
 @mcp.tool()
+def list_jobs() -> list[dict]:
+    """The scheduled jobs (daily data check, call-sheet sync, weekly review), their cadence and their last run."""
+    from .jobs import service as jobs
+    with session_scope() as s:
+        return jobs.list_jobs(s)
+
+
+@mcp.tool()
+def run_job(job: str, dry_run: bool = True) -> dict:
+    """Run one scheduled job now. dry_run (the default) builds the result and stores and sends nothing; a real run is recorded and delivers to the owner."""
+    from .jobs import service as jobs
+    from .jobs.registry import JOBS
+    if job not in JOBS:
+        raise ToolError(f"unknown job; known: {', '.join(JOBS)}")
+    with session_scope() as s:
+        out = jobs.run_now(s, job, dry_run=dry_run)
+        if dry_run:
+            s.rollback()
+        return out
+
+
+@mcp.tool()
 def list_goals(scope: str | None = None) -> list[dict]:
     """Goals with start, current (latest measurement), target, progress and on-track state."""
     with session_scope() as s:

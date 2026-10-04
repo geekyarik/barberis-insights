@@ -116,6 +116,9 @@ One frozen Report: the analysis runs, goal states and Lens it was composed from.
 Work the tool does by itself on a cadence (daily, weekly, monthly), such as sending the daily digest.
 _Avoid_: cron, task (a task is a person's work)
 
+**Slot**:
+One scheduled moment of a Job, a date and an hour on the shop's clock. Every missed Slot is processed, in order; a Slot whose data is incomplete is blocked until the data arrives.
+
 **Digest**:
 A short message of yesterday's or today's numbers, built from day-level facts. It is not an Analysis, is not stored as a Measurement, and does not feed Goals. A digest summarises; a report explains.
 _Avoid_: newsletter, notification
