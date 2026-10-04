@@ -5,13 +5,13 @@ from conftest import visit
 from barberis_insights.db.models import Measurement, OutreachCase, ScheduleSlot
 from barberis_insights.experiments.evaluate import evaluate_did, evaluate_offer_ab, status_for
 from barberis_insights.goals import service as goals
-from barberis_insights.metrics import Dataset
+from barberis_insights.metrics import REGISTRY, Dataset
 
 D = dt.date.fromisoformat
 
 
 def meas(s, asof, scope, metric, value):
-    s.add(Measurement(asof=D(asof), window_from=D(asof), window_to=D(asof), scope=scope, metric=metric, value=value))
+    s.add(Measurement(asof=D(asof), window_from=D(asof), window_to=D(asof), scope=scope, metric=metric, metric_version=REGISTRY[metric].version, value=value))
 
 
 def test_goal_states(s):
@@ -62,3 +62,12 @@ def test_offer_ab(s):
     r = evaluate_offer_ab(s)
     assert r["arms"]["pct10"]["rate"] == 0.5 and r["arms"]["call_only"]["rate"] == 0.25
     assert "p_value" in r
+
+
+def test_goal_on_an_older_metric_definition_is_flagged_not_compared(s):
+    meas(s, "2026-09-27", "a", "risk_n", 70)
+    g = goals.upsert(s, {"scope": "a", "title": "Fewer overdue", "metric": "risk_n", "baseline": 70, "target": 50, "due": "2026-12-31"})
+    g.metric_version = 1                               # set before the definition changed
+    s.flush()
+    out = goals.assess(s, g)
+    assert out["label_key"] == "goal.state.redefined" and out["current"] is None   # v2 measurements are not compared with a v1 baseline

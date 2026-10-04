@@ -39,3 +39,9 @@ def test_overdue_regular(s):
     visit(s, 23, "2026-01-19", 1)                       # fewer than three visits: not a regular
     assert risk_n(ctx(s), A) == 1
     assert risk_n(ctx(s), TEAM) == 1
+
+
+def test_overdue_stops_at_the_lapsed_limit(s):
+    for d in ("2025-06-01", "2025-06-08", "2025-06-15"):
+        visit(s, 31, d, 1)                              # silent ~274 days at 2026-03-16: Lapsed, not Overdue
+    assert risk_n(ctx(s), A) == 0

@@ -183,7 +183,7 @@ Dependencies point **one way**, from left to right. Mirror and Context depend on
   - a fixture test in `tests/metrics/`
 - **Scopes:** barber, team, shop, and later segment.
 - **Measurements** are a projection of runs, written only as a side effect of a run or a manual snapshot (itself a run). Stored in long format (`asof`, window, scope, metric, metric version, lens, value), so a new metric needs no schema change.
-- **Changing a definition** raises the metric's `VERSION`, and comparisons only compare equal versions. A re-run of an old window under the new version creates a new run, and the Goal's Baseline is re-pointed to it with an audit event; this is a person's decision, not automatic. The bump command lists the Goals and Baselines affected. It only works while the Mirror still holds the data, so the data fingerprint flags windows that can no longer be reproduced.
+- **Changing a definition** raises the metric's `VERSION`, and comparisons only compare equal versions. Measurements and Goals store the version (`metric_version`); a Goal whose metric has moved on shows "definition changed" until its baseline and target are re-set. Example: `risk_n` is at version 2 since 2026-10-04 (the 180-day Lapsed cap that the glossary always had); the baseline window holds both versions. A re-run of an old window under the new version creates a new run, and the Goal's Baseline is re-pointed to it with an audit event; this is a person's decision, not automatic. The bump command lists the Goals and Baselines affected. It only works while the Mirror still holds the data, so the data fingerprint flags windows that can no longer be reproduced.
 - **History:** the Mirror holds appointments from 2022-01-03. Client profiles, segments and win-back read all of it (`history_start`). The existing Goal metrics keep reading from 2025-01-01 (`metrics_history_start`) until each is re-versioned in the Metrics split; widening it silently would move `risk_n` (73 → 194 for one barber) and `conv_new90`, which active Goals use. Per-barber output covers only currently employed barbers; shop-level analytics use every barber's appointments.
 - **Windows** are whole ISO weeks. Date-range Windows (such as the owner's 15th–14th month) are deferred until needed.
 - **Regression:** the 2026-09-27 baseline is pinned by `tests/test_metrics_baseline.py`.
@@ -393,7 +393,7 @@ We don't use an external BI tool (ADR-0009); quick "slice it differently" questi
 
 | Area | Today | Target |
 |---|---|---|
-| Metrics layout | done 2026-10-04: 16 keys, one module per metric under `metrics/<family>/` with a `VERSION`, discovered at start-up, each with a fixture test in `tests/metrics/` | per-metric versions stored with measurements and goals (next) |
+| Metrics layout | done 2026-10-04: 16 keys, one module per metric under `metrics/<family>/` with a `VERSION`, discovered at start-up, each with a fixture test in `tests/metrics/` | done 2026-10-04: `metric_version` on measurements and goals |
 | Analyses | done by hand in chat or in one-off scripts (`legacy/`); partly in `metrics/weekly.py` and dashboard handlers | `analyses/` modules with `run` and `compare`, stored `analysis_runs` |
 | Baseline / comparison | one stored measurement (2026-09-27); goals compare with the latest measurement | baseline and previous runs compared per analysis; goal history from runs |
 | Reports | two hand-built claude.ai artifact pages; dashboard pages | reports composed from stored runs, in the dashboard and exported to HTML |

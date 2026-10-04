@@ -102,6 +102,7 @@
   "goal.state.waiting": "Waiting for first measurement",
   "goal.state.on_track": "On track",
   "goal.state.behind": "Behind",
+  "goal.state.redefined": "Metric definition changed: set a new baseline and target",
   "goals.sub": "Each goal compares its metric's start value with the latest measurement. \"On track\" means progress is keeping pace with the time elapsed toward the due date.",
   "goals.add": "Add a goal",
 

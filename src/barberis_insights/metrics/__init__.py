@@ -30,7 +30,8 @@ def compute_snapshot(ds: Dataset, f: dt.date, t: dt.date, cohort: tuple[dt.date,
         values[b.key] = {m.key: v for m in REGISTRY.values() if "barber" in m.scopes and (v := m.fn(ctx, sc)) is not None}
     values["team"] = {m.key: v for m in REGISTRY.values() if "team" in m.scopes and (v := m.fn(ctx, Scope("team"))) is not None}
     co = ctx.cohort_window
-    return {"asof": str(t), "window_from": str(f), "window_to": str(t), "cohort_window": [str(co[0]), str(co[1])], "values": values}
+    versions = {m.key: m.version for m in REGISTRY.values()}
+    return {"asof": str(t), "versions": versions, "window_from": str(f), "window_to": str(t), "cohort_window": [str(co[0]), str(co[1])], "values": values}
 
 
 __all__ = ["Dataset", "WindowContext", "Scope", "REGISTRY", "catalog", "compute_snapshot"]

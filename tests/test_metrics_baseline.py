@@ -2,6 +2,7 @@
 
 Runs against var/insights.sqlite after `insights import-legacy`; skipped when that database is absent.
 """
+import dataclasses
 import datetime as dt
 import json
 import subprocess
@@ -25,7 +26,15 @@ def ds():
         yield Dataset.load(s)
 
 
-def test_reproduces_baseline(ds):
+@pytest.fixture
+def v1_risk(monkeypatch):
+    """The baseline was measured with risk_n version 1 (no 180-day cap); compare it under that definition."""
+    from barberis_insights.metrics import REGISTRY
+    from barberis_insights.metrics.clients.overdue_regulars import risk_n_v1
+    monkeypatch.setitem(REGISTRY, "risk_n", dataclasses.replace(REGISTRY["risk_n"], fn=risk_n_v1))
+
+
+def test_reproduces_baseline(ds, v1_risk):
     from barberis_insights.metrics import compute_snapshot
     base = json.loads(BASELINE.read_text())["values"]
     snap = compute_snapshot(ds, dt.date(2026, 1, 12), dt.date(2026, 9, 27), (dt.date(2026, 1, 12), dt.date(2026, 6, 30)))["values"]
@@ -35,7 +44,7 @@ def test_reproduces_baseline(ds):
 
 
 @pytest.mark.skipif(not SKILL_SNAPSHOT.exists(), reason="refresh skill not installed")
-def test_month_matches_skill_script(ds, tmp_path):
+def test_month_matches_skill_script(ds, tmp_path, v1_risk):
     from barberis_insights.metrics import compute_snapshot
     out = tmp_path / "skill.json"
     subprocess.run(["python3", str(SKILL_SNAPSHOT), "--from", "2026-08-31", "--to", "2026-09-27", "--out", str(out)], check=True, capture_output=True)
@@ -43,3 +52,14 @@ def test_month_matches_skill_script(ds, tmp_path):
     mine = compute_snapshot(ds, dt.date(2026, 8, 31), dt.date(2026, 9, 27))["values"]
     diffs = [(k, m, v, mine[k].get(m)) for k in skill for m, v in skill[k].items() if mine[k].get(m) != v]
     assert diffs == []
+
+
+def test_risk_n_v2_never_counts_more_than_v1(ds):
+    """Version 2 only removes clients silent beyond 180 days (Lapsed), so it cannot exceed version 1."""
+    from barberis_insights.metrics import Scope, WindowContext
+    from barberis_insights.metrics.clients.overdue_regulars import risk_n, risk_n_v1
+    ctx = WindowContext(ds, dt.date(2026, 1, 12), dt.date(2026, 9, 27))
+    for b in ds.barbers:
+        sc = Scope(b.key, b.altegio_id)
+        assert risk_n(ctx, sc) <= risk_n_v1(ctx, sc)
+    assert risk_n(ctx, Scope("team")) < risk_n_v1(ctx, Scope("team"))

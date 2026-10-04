@@ -50,7 +50,7 @@ def get_measurements(scope: str | None = None, metric: str | None = None) -> lis
             q = q.where(Measurement.scope == scope)
         if metric:
             q = q.where(Measurement.metric == metric)
-        return [{"asof": str(m.asof), "window": [str(m.window_from), str(m.window_to)], "scope": m.scope, "metric": m.metric, "value": m.value}
+        return [{"asof": str(m.asof), "window": [str(m.window_from), str(m.window_to)], "scope": m.scope, "metric": m.metric, "metric_version": m.metric_version, "value": m.value}
                 for m in s.scalars(q)]
 
 

@@ -98,13 +98,14 @@ class ScheduleSlot(Base):
 
 class Measurement(Base):
     __tablename__ = "measurements"
-    __table_args__ = (UniqueConstraint("asof", "scope", "metric"),)
+    __table_args__ = (UniqueConstraint("asof", "scope", "metric", "metric_version"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     asof: Mapped[dt.date] = mapped_column(Date, index=True)
     window_from: Mapped[dt.date] = mapped_column(Date)
     window_to: Mapped[dt.date] = mapped_column(Date)
     scope: Mapped[str] = mapped_column(String(40), index=True)  # barber key or "team"
     metric: Mapped[str] = mapped_column(String(40), index=True)
+    metric_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")  # definition the value was computed under
     value: Mapped[float] = mapped_column(Float)
     label: Mapped[str] = mapped_column(String(80), default="")
 
@@ -160,6 +161,7 @@ class Goal(Base):
     scope: Mapped[str] = mapped_column(String(40), index=True)  # barber key or "team"
     title: Mapped[str] = mapped_column(String(200))
     metric: Mapped[str] = mapped_column(String(40))
+    metric_version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")  # progress compares only this version
     baseline: Mapped[float] = mapped_column(Float)
     target: Mapped[float] = mapped_column(Float)
     due: Mapped[dt.date] = mapped_column(Date)

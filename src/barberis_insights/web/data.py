@@ -38,7 +38,7 @@ def measurement_dates(s: Session) -> list[dt.date]:
 def values_at(s: Session, asof: dt.date | None) -> dict[str, dict[str, float]]:
     out: dict = C.defaultdict(dict)
     if asof:
-        for m in s.scalars(select(Measurement).where(Measurement.asof == asof)):
+        for m in s.scalars(select(Measurement).where(Measurement.asof == asof).order_by(Measurement.metric_version)):  # newest definition wins
             out[m.scope][m.metric] = m.value
     return out
 

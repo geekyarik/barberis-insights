@@ -417,7 +417,7 @@ def api_measurements(scope: str | None = None, metric: str | None = None, s: Ses
         q = q.where(Measurement.scope == scope)
     if metric:
         q = q.where(Measurement.metric == metric)
-    return [{"asof": str(m.asof), "scope": m.scope, "metric": m.metric, "value": m.value, "window": [str(m.window_from), str(m.window_to)]} for m in s.scalars(q)]
+    return [{"asof": str(m.asof), "scope": m.scope, "metric": m.metric, "value": m.value, "metric_version": m.metric_version, "window": [str(m.window_from), str(m.window_to)]} for m in s.scalars(q)]
 
 
 @app.get("/api/goals")
