@@ -30,7 +30,8 @@ class Settings(BaseSettings):
 
     location_id: int = 209563
     data_dir: Path = ROOT / "var"
-    history_start: str = "2025-01-01"
+    history_start: str = "2022-01-03"  # client profiles, segments, win-back: all imported history
+    metrics_history_start: str = "2025-01-01"  # Goal metrics keep this until their definitions are versioned
     addon_keywords: tuple[str, ...] = ("Масаж", "Камуфляж", "Воскове", "брів")
     baseline_date: str = "2026-09-27"
     # risk rules

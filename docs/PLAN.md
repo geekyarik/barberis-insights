@@ -25,7 +25,7 @@ From the `mattpocock-skills` plugin, plus our own skills:
 
 ## Build order (decided 2026-10-03)
 Phases below keep their descriptions; this is the order they ship in.
-1. **History import:** 2022–2024 appointments and shifts from Altegio into the Mirror. First ticket; no new modules.
+1. **History import** *(appointments done 2026-10-04: 2022–2024, 18,643 rows, no gaps)*. Still to do: 2022–2024 shifts (a few weeks per call; former barbers are not in `barbers`).
 2. **Metrics split** (Phase 2, step 1). The 2026-09-27 baseline test stays green.
 3. **Analysis framework** and the first three analyses: `client_retention`, `overdue_regulars`, `barber_scorecard`, with `analysis_runs`.
 4. **Thin Phase 2b:** Notifications with a Telegram adapter (separate bot), the Scheduler with `data_watch` and `sheet_sync`, then `weekly_review`.

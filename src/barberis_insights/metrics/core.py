@@ -102,7 +102,7 @@ def conv_new90(ctx, sc):
         if len(coh) < 5:
             return None
         return round(100 * sum(1 for c in coh if any(0 < (d - min(mine[c])).days <= 90 for d in mine[c])) / len(coh))
-    hist = ctx.ds.shop_history
+    hist = ctx.ds.metrics_history
     coh = [c for c, v in hist.items() if co_from <= v[0].date <= co_to]
     if len(coh) < 5:
         return None

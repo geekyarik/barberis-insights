@@ -182,6 +182,7 @@ Dependencies point **one way**, from left to right. Mirror and Context depend on
 - **Scopes:** barber, team, shop, and later segment.
 - **Measurements** are a projection of runs, written only as a side effect of a run or a manual snapshot (itself a run). Stored in long format (`asof`, window, scope, metric, metric version, lens, value), so a new metric needs no schema change.
 - **Changing a definition** raises the metric's `VERSION`, and comparisons only compare equal versions. A re-run of an old window under the new version creates a new run, and the Goal's Baseline is re-pointed to it with an audit event; this is a person's decision, not automatic. The bump command lists the Goals and Baselines affected. It only works while the Mirror still holds the data, so the data fingerprint flags windows that can no longer be reproduced.
+- **History:** the Mirror holds appointments from 2022-01-03. Client profiles, segments and win-back read all of it (`history_start`). The existing Goal metrics keep reading from 2025-01-01 (`metrics_history_start`) until each is re-versioned in the Metrics split; widening it silently would move `risk_n` (73 → 194 for one barber) and `conv_new90`, which active Goals use. Per-barber output covers only currently employed barbers; shop-level analytics use every barber's appointments.
 - **Windows** are whole ISO weeks. Date-range Windows (such as the owner's 15th–14th month) are deferred until needed.
 - **Regression:** the 2026-09-27 baseline is pinned by `tests/test_metrics_baseline.py`.
 

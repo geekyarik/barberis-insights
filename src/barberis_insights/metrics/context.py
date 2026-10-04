@@ -33,6 +33,7 @@ class Dataset:
     appts: list[Appt]
     slots: dict[int, dict[dt.date, list[tuple[int, int]]]]
     barbers: list[Barber]
+    _hist: dict = field(default_factory=dict, repr=False)
 
     @classmethod
     def load(cls, s: Session) -> "Dataset":
@@ -52,18 +53,29 @@ class Dataset:
     def arrived(self) -> list[Appt]:
         return [a for a in self.appts if a.status == "arrived"]
 
-    @cached_property
+    def history_since(self, start: str) -> dict[int, list[Appt]]:
+        """client -> arrived visits on or after `start`, in date order."""
+        if start not in self._hist:
+            d0 = dt.date.fromisoformat(start)
+            h = C.defaultdict(list)
+            for a in self.arrived:
+                if a.client and a.date >= d0:
+                    h[a.client].append(a)
+            self._hist[start] = h
+        return self._hist[start]
+
+    @property
     def shop_history(self) -> dict[int, list[Appt]]:
-        """client -> arrived visits since history_start, in date order."""
-        start = dt.date.fromisoformat(settings.history_start)
-        h = C.defaultdict(list)
-        for a in self.arrived:
-            if a.client and a.date >= start:
-                h[a.client].append(a)
-        return h
+        """Full history (from `history_start`): client profiles, segments and win-back."""
+        return self.history_since(settings.history_start)
+
+    @property
+    def metrics_history(self) -> dict[int, list[Appt]]:
+        """History the Goal metrics read (from `metrics_history_start`), until they get versioned definitions."""
+        return self.history_since(settings.metrics_history_start)
 
     def visited_before(self, client: int, d: dt.date, barber: int | None = None) -> bool:
-        return any(a.date < d and (barber is None or a.barber == barber) for a in self.shop_history.get(client, ()))
+        return any(a.date < d and (barber is None or a.barber == barber) for a in self.metrics_history.get(client, ()))
 
 
 def is_addon(a: Appt) -> bool:
@@ -132,10 +144,10 @@ class WindowContext:
         return self._memo(("busy", barber), lambda: busy_minutes(self.appts(barber), self.sched(barber)))
 
     def barber_dates(self, barber: int) -> dict[int, list[dt.date]]:
-        """client -> dates of arrived visits to this barber since history_start (all time, not just the window)."""
+        """client -> dates of arrived visits to this barber since metrics_history_start (all time, not just the window)."""
         def build():
             m = C.defaultdict(list)
-            for c, vs in self.ds.shop_history.items():
+            for c, vs in self.ds.metrics_history.items():
                 for a in vs:
                     if a.barber == barber:
                         m[c].append(a.date)
