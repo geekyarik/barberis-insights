@@ -3,9 +3,22 @@ from __future__ import annotations
 
 import datetime as dt
 
-from . import core  # noqa: F401  (registers built-in metrics)
 from .context import Dataset, Scope, WindowContext
 from .registry import REGISTRY, catalog
+
+
+def _discover() -> None:
+    """Import every module under metrics/<family>/ so its @metric registers itself."""
+    import importlib
+    import pkgutil
+    for fam in pkgutil.iter_modules(__path__):
+        if fam.ispkg:
+            pkg = importlib.import_module(f"{__name__}.{fam.name}")
+            for m in pkgutil.iter_modules(pkg.__path__):
+                importlib.import_module(f"{pkg.__name__}.{m.name}")
+
+
+_discover()
 
 
 def compute_snapshot(ds: Dataset, f: dt.date, t: dt.date, cohort: tuple[dt.date, dt.date] | None = None) -> dict:

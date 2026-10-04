@@ -166,13 +166,15 @@ Dependencies point **one way**, from left to right. Mirror and Context depend on
 - **Layout:**
   ```
   metrics/
-    registry.py          discovery + MetricDef (key, label, unit, direction, scopes, version)
-    context.py           WindowContext: loaded facts, schedules and lens for one window
-    capacity/            busy_share.py, busy_share_by_weekday.py, scheduled_hours.py
-    revenue/             revenue.py, revenue_per_hour.py, average_check.py, revenue_per_workday.py
-    volume/              visits.py, visits_per_week.py, visits_per_workday.py, booking_length.py
-    clients/             unique_clients.py, new_to_shop.py, return_90d.py, overdue_regulars.py, revenue_concentration.py, usual_gap.py
-    channels/            online_share.py, addon_share.py
+    registry.py          MetricDef (key, label, unit, direction, scopes, version) and @metric
+    context.py           Dataset and WindowContext: loaded facts, schedules and history for one window
+    capacity/            busy_share.py (util), busy_share_by_weekday.py (util_d0..d6)
+    revenue/             revenue_per_hour.py (rph), average_check.py (check)
+    volume/              visits_per_week.py (visits_wk)
+    clients/             new_to_shop.py (new_share), return_90d.py (conv_new90), overdue_regulars.py (risk_n)
+    channels/            online_share.py (online), addon_share.py (addon)
+  ```
+  Metric keys are stable; module names describe the metric. New modules are discovered at start-up.
   ```
 - **Each metric module holds:**
   - one `@metric` definition: a pure function `(WindowContext, Scope) → value`
@@ -391,7 +393,7 @@ We don't use an external BI tool (ADR-0009); quick "slice it differently" questi
 
 | Area | Today | Target |
 |---|---|---|
-| Metrics layout | all metrics (17 keys) in one `metrics/core.py` | one module per metric, versioned, each with its own test |
+| Metrics layout | done 2026-10-04: 16 keys, one module per metric under `metrics/<family>/` with a `VERSION`, discovered at start-up, each with a fixture test in `tests/metrics/` | per-metric versions stored with measurements and goals (next) |
 | Analyses | done by hand in chat or in one-off scripts (`legacy/`); partly in `metrics/weekly.py` and dashboard handlers | `analyses/` modules with `run` and `compare`, stored `analysis_runs` |
 | Baseline / comparison | one stored measurement (2026-09-27); goals compare with the latest measurement | baseline and previous runs compared per analysis; goal history from runs |
 | Reports | two hand-built claude.ai artifact pages; dashboard pages | reports composed from stored runs, in the dashboard and exported to HTML |
