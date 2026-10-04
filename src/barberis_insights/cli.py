@@ -56,16 +56,56 @@ def snapshot(
     save: bool = typer.Option(True, help="Store the measurement"), label: str = "Monthly measurement",
 ) -> None:
     """Compute every metric for every barber and the team over a window, and store it as a measurement."""
+    from .analyses import service as analyses
     from .db.session import session_scope
-    from .ingest.legacy import save_measurement
-    from .metrics import Dataset, compute_snapshot
-    co = tuple(_date(x) for x in cohort.split(":")) if cohort else None
     with session_scope() as s:
-        snap = compute_snapshot(Dataset.load(s), _date(date_from), _date(date_to), co)
+        row = analyses.run(s, "barber_scorecard", _date(date_from), _date(date_to), params={"cohort": cohort}, created_by="cli",
+                           label=label if save else None)
+        snap = {"asof": str(row.asof), "run": row.id, "window_from": str(row.window_from), "window_to": str(row.window_to),
+                "cohort_window": row.result["context"]["cohort_window"], "versions": row.metric_versions, "values": row.result["kpis"]}
         if save:
-            n = save_measurement(s, snap, label)
-            typer.echo(f"saved {n} values for {snap['asof']}", err=True)
+            typer.echo(f"stored run {row.id} and its measurement for {snap['asof']}", err=True)
     typer.echo(json.dumps(snap, ensure_ascii=False, indent=1))
+
+
+@app.command()
+def analyses(action: str = typer.Argument("list", help="list | <analysis key>"), date_from: Optional[str] = typer.Option(None, "--from", help="Monday, YYYY-MM-DD"),
+             date_to: Optional[str] = typer.Option(None, "--to", help="Sunday, YYYY-MM-DD"), scope: str = "team",
+             param: list[str] = typer.Option([], "--param", help="key=value, repeatable")) -> None:
+    """List the analyses, or run one over whole ISO weeks and store the result as a run."""
+    from .analyses import service
+    from .db.session import session_scope
+    if action == "list":
+        typer.echo(json.dumps(service.catalog(), ensure_ascii=False, indent=1))
+        return
+    if not (date_from and date_to):
+        raise typer.BadParameter("--from and --to are required")
+    params = {k: (int(v) if v.isdigit() else v) for k, v in (p.split("=", 1) for p in param)}
+    with session_scope() as s:
+        row = service.run(s, action, _date(date_from), _date(date_to), scope, params=params, created_by="cli")
+        typer.echo(json.dumps({"run": row.id, "analysis": row.analysis_key, "version": row.analysis_version, "window": [str(row.window_from), str(row.window_to)],
+                               "complete": row.result["complete"], "team": row.result["kpis"].get("team"),
+                               "findings": [(f["code"], f["scope"]) for f in row.result["findings"]]}, ensure_ascii=False, indent=1))
+
+
+@app.command()
+def runs(key: Optional[str] = None, scope: Optional[str] = None, limit: int = 20) -> None:
+    """List stored analysis runs, newest window first."""
+    from .analyses import service
+    from .db.session import session_scope
+    with session_scope() as s:
+        for r in service.list_runs(s, key, scope, limit):
+            typer.echo(f"{r.id:>4}  {r.analysis_key:18} v{r.analysis_version}  {r.scope:9} {r.window_from}..{r.window_to}  {'complete' if r.result.get('complete', True) else 'incomplete'}  by {r.created_by}")
+
+
+@app.command()
+def compare(after: int, before: Optional[int] = typer.Argument(None, help="Defaults to the previous comparable run")) -> None:
+    """Compare two analysis runs (ids from `insights runs`), metric by metric."""
+    from .analyses import service
+    from .db.session import session_scope
+    with session_scope() as s:
+        out = service.compare(s, before, after) if before else service.compare_with_previous(s, after)
+    typer.echo(json.dumps(out, ensure_ascii=False, indent=1))
 
 
 @app.command("import-clients")

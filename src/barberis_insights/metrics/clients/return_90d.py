@@ -12,7 +12,7 @@ VERSION = 1
 
 @metric("conv_new90", "New clients back within 90 days", "%", "up",
         help="Clients new to the shop whose first visit (to this barber) fell in the cohort window; % with another visit "
-             "(to the same barber; team: to the shop) within 90 days. Omitted below 5 clients.", version=VERSION)
+             "(to the same barber; team: to the shop) within 90 days. Omitted below 5 clients.", version=VERSION, needs_history=True)
 def return_90d(ctx, sc):
     co_from, co_to = ctx.cohort_window
     if sc.barber_id:

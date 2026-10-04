@@ -11,6 +11,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from sqlalchemy import select, text
 
+from .analyses import service as analyses
 from .clients.profile import data_asof, rebuild_profiles
 from .clients.risk import risk_list as _risk_list
 from .context import service as notes
@@ -19,7 +20,6 @@ from .db.session import engine, session_scope
 from .experiments.evaluate import run as run_hypothesis
 from .goals import service as goals
 from .ingest.connector_files import ingest_files as _ingest
-from .ingest.legacy import save_measurement
 from .metrics import Dataset, compute_snapshot as _compute, catalog
 from .outreach import service as outreach
 from .outreach.attribution import attribute
@@ -65,10 +65,52 @@ def query_metrics(date_from: str, date_to: str) -> dict:
 def compute_snapshot(date_from: str, date_to: str) -> dict:
     """Compute and STORE a measurement for the window (use whole ISO weeks, at least 2). Goals then update."""
     with session_scope() as s:
-        snap = _compute(Dataset.load(s), dt.date.fromisoformat(date_from), dt.date.fromisoformat(date_to))
-        n = save_measurement(s, snap, "Monthly measurement")
+        row = analyses.run(s, "barber_scorecard", dt.date.fromisoformat(date_from), dt.date.fromisoformat(date_to), created_by="claude",
+                           label="Monthly measurement")
         attribute(s)
-        return {"saved_values": n} | snap
+        return {"run": row.id, "asof": str(row.asof), "versions": row.metric_versions, "values": row.result["kpis"]}
+
+
+@mcp.tool()
+def list_analyses() -> list[dict]:
+    """The analyses that can be run, each with the business question it answers and its default parameters."""
+    return analyses.catalog()
+
+
+@mcp.tool()
+def run_analysis(analysis: str, date_from: str, date_to: str, scope: str = "team", params: dict | None = None) -> dict:
+    """Run an analysis over whole ISO weeks (date_from a Monday, date_to a Sunday) and STORE the result as a run.
+    scope = 'team' (everyone, with a per-barber breakdown) or a barber key. Rows hold client ids only. Returns the full result."""
+    with session_scope() as s:
+        try:
+            row = analyses.run(s, analysis, dt.date.fromisoformat(date_from), dt.date.fromisoformat(date_to), scope, params=params, created_by="claude")
+        except (KeyError, ValueError) as e:
+            raise ToolError(str(e))
+        return _run_dict(row, full=True)
+
+
+@mcp.tool()
+def list_runs(analysis: str | None = None, scope: str | None = None, limit: int = 20) -> list[dict]:
+    """Stored analysis runs, newest window first (summaries; use run_analysis to produce one)."""
+    with session_scope() as s:
+        return [_run_dict(r) for r in analyses.list_runs(s, analysis, scope, limit)]
+
+
+@mcp.tool()
+def compare_runs(after_run: int, before_run: int | None = None) -> dict:
+    """Compare two stored runs metric by metric (better / worse by each metric's direction). Without before_run, uses the
+    previous run that can be compared. Runs with different versions, lens, parameters or window lengths are refused with the reason."""
+    with session_scope() as s:
+        try:
+            return analyses.compare(s, before_run, after_run) if before_run else analyses.compare_with_previous(s, after_run)
+        except KeyError as e:
+            raise ToolError(str(e))
+
+
+def _run_dict(r, full: bool = False) -> dict:
+    d = {"run": r.id, "analysis": r.analysis_key, "version": r.analysis_version, "scope": r.scope, "window": [str(r.window_from), str(r.window_to)],
+         "created_by": r.created_by, "complete": r.result.get("complete", True), "findings": [(f["code"], f["scope"]) for f in r.result.get("findings", [])]}
+    return d | ({"result": r.result} if full else {})
 
 
 @mcp.tool()

@@ -224,6 +224,7 @@ An **analysis** answers one business question for a window, scope and lens, with
 | `overdue_regulars` | Who is overdue, and how much are they worth? | at-risk analysis |
 
 - **Analysis run** (`analysis_runs` table): analysis key and version, scope, window, lens, `asof`, data fingerprint (appointment count and last import), created by (person, schedule or Claude), and the result JSON. Runs are immutable; re-running creates a new run.
+- **Built so far:** `barber_scorecard`, `client_retention` (stayed / switched / lost within a 90-day follow-up, new vs returning) and `overdue_regulars`. Windows are whole ISO weeks; scope is `team` (with a per-barber breakdown) or one current barber; former barbers never appear. Rows hold client ids only. A scorecard run stores its metric values as a measurement when asked (`insights snapshot`), so there is one write path.
 - **Comparison:** `compare(before, after)` gives each KPI's change and whether it is better or worse (using the metric's direction), plus what is new or resolved among the findings. Runs are only comparable when the analysis version, metric versions, scope and lens match; otherwise the comparison says why not.
 
 ### 6.4 Reports
@@ -395,7 +396,7 @@ We don't use an external BI tool (ADR-0009); quick "slice it differently" questi
 | Area | Today | Target |
 |---|---|---|
 | Metrics layout | done 2026-10-04: 16 keys, one module per metric under `metrics/<family>/` with a `VERSION`, discovered at start-up, each with a fixture test in `tests/metrics/` | done 2026-10-04: `metric_version` on measurements and goals |
-| Analyses | done by hand in chat or in one-off scripts (`legacy/`); partly in `metrics/weekly.py` and dashboard handlers | `analyses/` modules with `run` and `compare`, stored `analysis_runs` |
+| Analyses | framework done 2026-10-04: `analyses/` with a service, stored immutable `analysis_runs`, comparison, CLI (`insights analyses|runs|compare`) and MCP tools; three analyses built (`barber_scorecard`, `client_retention`, `overdue_regulars`) | the other nine (see §6.3 and PLAN) |
 | Baseline / comparison | one stored measurement (2026-09-27); goals compare with the latest measurement | baseline and previous runs compared per analysis; goal history from runs |
 | Reports | two hand-built claude.ai artifact pages; dashboard pages | reports composed from stored runs, in the dashboard and exported to HTML |
 | Owner context | `notes`: free text with dates, scopes and tags | `factors` with effects, treatments, lenses and belief status |

@@ -6,7 +6,7 @@ from ..registry import metric
 VERSION = 1
 
 
-@metric("new_share", "Clients new to the shop", "%", "up", scopes=("barber",), version=VERSION)
+@metric("new_share", "Clients new to the shop", "%", "up", scopes=("barber",), version=VERSION, needs_history=True)
 def new_to_shop(ctx, sc):
     if not sc.barber_id:
         return None

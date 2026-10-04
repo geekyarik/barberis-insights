@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime as dt
 
 from sqlalchemy import JSON, Boolean, Date, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Index, event
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -237,3 +238,29 @@ class SyncRun(Base):
     counts: Mapped[dict | None] = mapped_column(JSON)
     status: Mapped[str] = mapped_column(String(20), default="running")
     log: Mapped[str] = mapped_column(Text, default="")
+
+
+class AnalysisRun(Base):
+    """One stored, unchangeable result of an analysis for a window, scope and lens. Re-running creates a new run."""
+    __tablename__ = "analysis_runs"
+    __table_args__ = (Index("ix_analysis_runs_lookup", "analysis_key", "scope", "window_to"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    analysis_key: Mapped[str] = mapped_column(String(40), index=True)
+    analysis_version: Mapped[int] = mapped_column(Integer)
+    scope: Mapped[str] = mapped_column(String(40))  # "team" (everyone tracked, with a per-barber breakdown) or a barber key
+    window_from: Mapped[dt.date] = mapped_column(Date)
+    window_to: Mapped[dt.date] = mapped_column(Date)
+    asof: Mapped[dt.date] = mapped_column(Date)  # the last day of the window
+    lens: Mapped[str] = mapped_column(String(40), default="raw")
+    lens_resolved: Mapped[list] = mapped_column(JSON, default=list)  # the factors the lens resolved to, frozen at run time
+    params: Mapped[dict] = mapped_column(JSON, default=dict)
+    metric_versions: Mapped[dict] = mapped_column(JSON, default=dict)
+    data_fingerprint: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_by: Mapped[str] = mapped_column(String(20), default="cli")  # cli | dashboard | schedule | claude
+    created: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now)
+    result: Mapped[dict] = mapped_column(JSON)
+
+
+@event.listens_for(AnalysisRun, "before_update")
+def _runs_are_immutable(mapper, connection, target):
+    raise ValueError("analysis runs are immutable: run the analysis again to create a new run")

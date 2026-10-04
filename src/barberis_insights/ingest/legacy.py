@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from ..config import default_barbers
 from ..db.models import Barber, Goal, Measurement, Tip
+from ..metrics.measurements import save_measurement  # noqa: F401  (kept importable from here)
 from .base import parse_schedule_line, replace_schedule, sync_run, upsert_appointments
 
 from ..config import settings
@@ -24,22 +25,6 @@ def ensure_barbers(s: Session) -> int:
         if s.get(Barber, b.altegio_id) is None:
             s.add(Barber(altegio_id=b.altegio_id, key=b.key, name=b.name, tier=b.tier, active=True)); n += 1
     s.flush()
-    return n
-
-
-def save_measurement(s: Session, snap: dict, label: str = "") -> int:
-    asof = dt.date.fromisoformat(snap["asof"]); wf = dt.date.fromisoformat(snap["window_from"]); wt = dt.date.fromisoformat(snap["window_to"])
-    versions = snap.get("versions", {})
-    existing = {(m.scope, m.metric, m.metric_version): m for m in s.scalars(select(Measurement).where(Measurement.asof == asof))}
-    n = 0
-    for scope, vals in snap["values"].items():
-        for metric, v in vals.items():
-            if v is None:
-                continue
-            ver = versions.get(metric, 1)
-            m = existing.get((scope, metric, ver)) or Measurement(asof=asof, scope=scope, metric=metric, metric_version=ver)
-            m.window_from, m.window_to, m.value, m.label = wf, wt, float(v), label or snap.get("label", "")
-            s.add(m); n += 1
     return n
 
 

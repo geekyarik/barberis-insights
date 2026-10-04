@@ -35,7 +35,7 @@ def _count(ctx, sc, cap_days):
     return sum(len(overdue_regulars(ctx, b, cap_days)) for b in ids)
 
 
-@metric("risk_n", "Overdue regulars", "", "down", help="As of the day after the window; silent up to 180 days, then Lapsed. Team: sum over barbers.", version=VERSION)
+@metric("risk_n", "Overdue regulars", "", "down", help="As of the day after the window; silent up to 180 days, then Lapsed. Team: sum over barbers.", version=VERSION, needs_history=True)
 def risk_n(ctx, sc):
     return _count(ctx, sc, settings.lapsed_after_days)
 

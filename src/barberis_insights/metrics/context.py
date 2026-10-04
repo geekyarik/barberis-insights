@@ -74,6 +74,10 @@ class Dataset:
         """History the Goal metrics read (from `metrics_history_start`), until they get versioned definitions."""
         return self.history_since(settings.metrics_history_start)
 
+    @property
+    def history_from(self) -> dt.date:
+        return dt.date.fromisoformat(settings.history_start)
+
     def visited_before(self, client: int, d: dt.date, barber: int | None = None) -> bool:
         return any(a.date < d and (barber is None or a.barber == barber) for a in self.metrics_history.get(client, ()))
 

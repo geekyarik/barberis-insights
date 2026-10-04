@@ -23,15 +23,16 @@ class MetricDef:
     fn: Callable
     scopes: tuple[str, ...] = ("barber", "team")
     help: str = ""
+    needs_history: bool = False  # reads client history, so it is not comparable across the start of the loaded history
     version: int = 1  # raised when the definition changes; only equal versions are compared
 
 
 REGISTRY: dict[str, MetricDef] = {}
 
 
-def metric(key: str, label: str, unit: str = "", direction: str = "up", scopes: tuple[str, ...] = ("barber", "team"), help: str = "", version: int = 1):
+def metric(key: str, label: str, unit: str = "", direction: str = "up", scopes: tuple[str, ...] = ("barber", "team"), help: str = "", version: int = 1, needs_history: bool = False):
     def deco(fn):
-        REGISTRY[key] = MetricDef(key, label, unit, direction, fn, scopes, help, version)
+        REGISTRY[key] = MetricDef(key, label, unit, direction, fn, scopes, help, needs_history, version)
         return fn
     return deco
 
