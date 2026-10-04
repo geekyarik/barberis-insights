@@ -130,6 +130,15 @@ def factors_list(date_from: Optional[str] = typer.Option(None, "--from"), date_t
                        f"{'yearly+' + str(f.lead_days) if f.recurrence == 'yearly' else 'once':9} {factor_link.status(s, f.id):12} {f.title}")
 
 
+@factors_app.command("seed-holidays")
+def factors_seed_holidays() -> None:
+    """Add Ukraine's public holidays as recurring factors (from the law; Easter and Trinity are left out). Safe to repeat."""
+    from .context import holidays
+    from .db.session import session_scope
+    with session_scope() as s:
+        typer.echo(f"holidays added: {holidays.seed(s)}")
+
+
 @factors_app.command("estimate")
 def factors_estimate(factor_id: int) -> None:
     """Measure a yearly factor's effect from the shop's own history (seasonality analysis)."""

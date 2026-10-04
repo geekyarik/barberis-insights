@@ -272,7 +272,7 @@ This module turns the owner's knowledge into data the analysis can act on.
 - air-raid alert history for Lviv (low priority: rare impact)
 - Not worth tracking: power outages (reserve power), weather (too fine-grained), the economy (too wide)
 
-Each feed is a plugin, like a Mirror adapter. Which feeds are worth building is settled by the `research` skill, based on the list above. Recurring factors are estimated from the shop's own history; the local mirror starts in January 2025, so the 2022–2024 appointments and shifts must be imported from Altegio first, which Altegio can provide.
+Each feed is a plugin, like a Mirror adapter. Settled by the research of 2026-10-04 (`docs/research/external-factor-feeds.md`): no live feed is worth building. Public holidays are a hand-maintained list from the Labour Code, seeded by `insights factors seed-holidays` (nine recurring factors; Easter and Trinity are left out because they move). Migration and mobilisation are dated legal milestones entered by hand, because no Lviv-level series exists (the CRM's own male-client cohorts are the better proxy). Air-raid alerts are skipped (no official history API; a one-off CSV import if ever wanted). Competition is entered by hand. School breaks are not used (set per school under martial law).
 
 **Belief ↔ evidence:** any factor with `expected_effects` can produce a Hypothesis in one click. Its verdict is what the factor's `status` shows.
 

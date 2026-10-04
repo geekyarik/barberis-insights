@@ -81,7 +81,7 @@ Then `to-tickets`, and `tdd` per ticket.
 
 **Done when** no interface queries another module's tables and §9 "Module boundaries" is marked done.
 
-### Phase 4 — Research outside data *(can run any time from Phase 1)*
+### Phase 4 — Research outside data *(done 2026-10-04: see docs/research/external-factor-feeds.md)*
 Run `research` on candidate sources for external factors:
 - air-raid alert history for Lviv
 - planned power-outage schedules
@@ -138,4 +138,6 @@ Owner-only, local-first for now; client retention is the first goal; analyses ar
 - **Hosting**: needs authentication and its own ADR.
 
 ## Open questions
-1. **Research (Phase 4):** holidays and the run-up to them, migration and mobilisation (a proxy), air-raid alerts (low priority), competition (unsure).
+1. **Mobilisation and migration milestones:** the research lists dated legal milestones (24.02.2022 general mobilisation, 18.05.2024 the new mobilisation law, 28.08.2025 men 18-22 may leave, and the 90-day martial-law extensions). Which should be entered as factors? Some details are unverified in the file.
+2. **Which holidays carry a belief?** The nine seeded holidays have measured effects but no owner belief; add one where you expect an effect, so it can be tested.
+3. **Lens support** in the analyses other than the scorecard, and `control` in Experiments.
