@@ -25,6 +25,7 @@ class Appt:
     duration: int
     cost: float
     titles: tuple[str, ...]
+    lines: tuple[tuple[str, float], ...] = ()  # (service title, price x amount) per service on the appointment
 
 
 @dataclass
@@ -33,13 +34,15 @@ class Dataset:
     appts: list[Appt]
     slots: dict[int, dict[dt.date, list[tuple[int, int]]]]
     barbers: list[Barber]
+    former: list[Barber] = field(default_factory=list)  # barbers no longer employed: never reported per barber, but their history counts
     _hist: dict = field(default_factory=dict, repr=False)
 
     @classmethod
     def load(cls, s: Session) -> "Dataset":
         rows = s.scalars(select(Appointment).where(Appointment.deleted.is_(False), Appointment.status != "cancelled")).all()
         appts = [Appt(a.id, a.date, int(a.start[:2]) * 60 + int(a.start[3:5]), a.barber_id, a.client_id, a.status, a.online,
-                      a.duration_min, a.total_cost, tuple(sv.title for sv in a.services)) for a in rows]
+                      a.duration_min, a.total_cost, tuple(sv.title for sv in a.services),
+                      tuple((sv.title, sv.cost * sv.amount) for sv in a.services)) for a in rows]
         appts.sort(key=lambda a: (a.date, a.start))
         slots: dict[int, dict[dt.date, list]] = C.defaultdict(lambda: C.defaultdict(list))
         for sl in s.scalars(select(ScheduleSlot)):
@@ -47,7 +50,8 @@ class Dataset:
         barbers = list(s.scalars(select(Barber).where(Barber.active.is_(True)).order_by(Barber.altegio_id)))
         order = {"olia": 0, "tina": 1, "yanina": 2, "solomiia": 3, "iryna": 4, "kseniia": 5}
         barbers.sort(key=lambda b: order.get(b.key, 99))
-        return cls(appts, slots, barbers)
+        former = list(s.scalars(select(Barber).where(Barber.active.is_(False)).order_by(Barber.altegio_id)))
+        return cls(appts, slots, barbers, former)
 
     @cached_property
     def arrived(self) -> list[Appt]:
@@ -78,8 +82,10 @@ class Dataset:
     def history_from(self) -> dt.date:
         return dt.date.fromisoformat(settings.history_start)
 
-    def visited_before(self, client: int, d: dt.date, barber: int | None = None) -> bool:
-        return any(a.date < d and (barber is None or a.barber == barber) for a in self.metrics_history.get(client, ()))
+    def visited_before(self, client: int, d: dt.date, barber: int | None = None, full: bool = False) -> bool:
+        """Any earlier visit (to the barber)? `full` looks at all loaded history instead of the Goal-metric window."""
+        hist = self.shop_history if full else self.metrics_history
+        return any(a.date < d and (barber is None or a.barber == barber) for a in hist.get(client, ()))
 
 
 def is_addon(a: Appt) -> bool:

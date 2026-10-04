@@ -11,7 +11,7 @@ def iso_monday(d: dt.date) -> dt.date:
     return d - dt.timedelta(days=d.weekday())
 
 
-def weekly_rows(ds: Dataset, barber: int, start: dt.date, end: dt.date) -> list[dict]:
+def weekly_rows(ds: Dataset, barber: int, start: dt.date, end: dt.date, full: bool = False) -> list[dict]:
     """One row per ISO week from start's Monday to end; 2025 comparison by ISO week number."""
     mine = [a for a in ds.appts if a.barber == barber]
     by_week = C.defaultdict(list)
@@ -30,8 +30,8 @@ def weekly_rows(ds: Dataset, barber: int, start: dt.date, end: dt.date) -> list[
         bmin = busy_minutes(wa, days)
         rev = sum(a.cost for a in visits)
         clients = {a.client for a in visits if a.client}
-        new_shop = sum(1 for c in clients if not ds.visited_before(c, w0))
-        from_other = sum(1 for c in clients if ds.visited_before(c, w0) and not ds.visited_before(c, w0, barber))
+        new_shop = sum(1 for c in clients if not ds.visited_before(c, w0, full=full))
+        from_other = sum(1 for c in clients if ds.visited_before(c, w0, full=full) and not ds.visited_before(c, w0, barber, full=full))
         try:
             ly = [a for a in by_week.get((y - 1, wk), []) if a.status == "arrived"]
         except ValueError:
