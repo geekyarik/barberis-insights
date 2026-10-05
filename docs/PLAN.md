@@ -131,6 +131,7 @@ Owner-only, local-first for now; client retention is the first goal; analyses ar
 - **Profitability** per service and per barber (needs costs and payroll in the Finance module).
 - **Front-desk vs online conversion** (Altegio gives no funnel, only `online_share`).
 - **Capacity planning** for next quarter (needs forecasts).
+- **Mobilisation and migration milestones** as dated factors: the research lists the verified ones (24.02.2022, 18.05.2024, 28.08.2025, the 90-day martial-law extensions); there are many dates, so the owner will enter them gradually. Some details are unverified in `docs/research/external-factor-feeds.md`.
 - **Daily digest** job (deferred; only weekly reports for now).
 - **Monthly review** job and report (deferred; the window rule is in ARCHITECTURE §6.4).
 - **Date-range Windows** (the owner's 15th–14th month), if the weekly month proves too coarse.
@@ -138,6 +139,5 @@ Owner-only, local-first for now; client retention is the first goal; analyses ar
 - **Hosting**: needs authentication and its own ADR.
 
 ## Open questions
-1. **Mobilisation and migration milestones:** the research lists dated legal milestones (24.02.2022 general mobilisation, 18.05.2024 the new mobilisation law, 28.08.2025 men 18-22 may leave, and the 90-day martial-law extensions). Which should be entered as factors? Some details are unverified in the file.
-2. **Which holidays carry a belief?** The nine seeded holidays have measured effects but no owner belief; add one where you expect an effect, so it can be tested.
-3. **Lens support** in the analyses other than the scorecard, and `control` in Experiments.
+1. **Which holidays carry a belief?** The nine seeded holidays have measured effects but no owner belief; add one where you expect an effect, so it can be tested.
+2. **Lens support** in the analyses other than the scorecard, and `control` in Experiments.
