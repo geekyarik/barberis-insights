@@ -12,8 +12,8 @@
     <div><div class="eyebrow">{{ t("goal.target") }}</div><b style="font:600 22px var(--f-display)">{{ fmt(g.metric, g.target) }}</b></div>
   </div>
   {% set pct = (g.progress*100)|round|int %}
-  <div class="bar" role="img" aria-label="{{ t('goal.progress_aria', pct=pct) }}"><i style="width:{{ pct }}%"></i></div>
-  {% if g.trend|length > 1 %}<canvas class="spark" height="40" data-points='{{ g.trend|map("last")|list|tojson }}' data-target="{{ g.target }}"></canvas>{% endif %}
+  {{ goal_bullet(g) }}
+  <div class="muted">{{ t("goal.progress_aria", pct=pct) }}</div>
   {% if g.actions %}<p class="sub" style="margin:0">{{ g.actions }}</p>{% endif %}
   <div class="muted" style="font-size:13px">{{ t("goal.due", date=g.due) }}{% if g.measured %} · {{ t("goal.measured", date=g.measured) }}{% endif %}</div>
   <details><summary>{{ t("common.edit") }}</summary>{{ goal_form(g, catalog, scope_names, next_url) }}</details>
@@ -48,16 +48,4 @@
   <button class="danger">{{ t("goal.delete") }}</button>
 </form>
 {% endif %}
-{% endmacro %}
-
-{% macro spark_script() %}
-<script>
-document.querySelectorAll('canvas.spark').forEach(cv => {
-  const pts = JSON.parse(cv.dataset.points), tgt = +cv.dataset.target;
-  new Chart(cv, { type: 'line', data: { labels: pts.map((_, i) => i), datasets: [
-      { data: pts, borderColor: css('--s1'), borderWidth: 2, pointRadius: 2, tension: 0 },
-      { data: pts.map(() => tgt), borderColor: css('--ink-3'), borderDash: [3, 3], borderWidth: 1, pointRadius: 0 }] },
-    options: { animation: false, plugins: { legend: { display: false }, tooltip: { enabled: true } }, scales: { x: { display: false }, y: { display: false } }, maintainAspectRatio: false } });
-});
-</script>
 {% endmacro %}
