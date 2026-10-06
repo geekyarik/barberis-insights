@@ -17,6 +17,7 @@ from ..analyses import effects, service as analyses
 from ..clients.profile import data_asof, rebuild_profiles
 from ..clients.risk import CALLABLE, risk_list
 from ..config import settings
+from ..clients.names import names_for
 from ..context import factors, service as notes
 from ..db.models import Appointment, Barber, Client, ClientProfile, Hypothesis, Measurement, OutreachCase, SyncRun
 from ..db.session import session_factory
@@ -25,6 +26,8 @@ from ..experiments.evaluate import run as run_hypothesis
 from ..goals import service as goals
 from ..i18n import LANGUAGES, normalize, t as tr, translator
 from ..ingest.legacy import save_measurement
+from ..ingest.status import data_status
+from ..jobs import service as jobs_service
 from ..metrics import compute_snapshot
 from ..metrics.registry import REGISTRY, catalog
 from ..metrics.weekly import weekly_rows
@@ -123,6 +126,13 @@ def set_language(code: str, next: str = "/"):
     return r
 
 
+def freshness(s: Session) -> dict:
+    """How old the newest completed visit is, and whether that is too old (the same limit the data_watch alert uses)."""
+    last = data_status(s)["last_visit"]
+    age = (dt.date.today() - last).days if last else None
+    return {"last_visit": last, "age_days": age, "stale": age is None or age > settings.data_stale_days}
+
+
 def names(s: Session) -> dict[int, str]:
     return {b.altegio_id: b.name for b in s.scalars(select(Barber))}
 
@@ -143,9 +153,11 @@ def overview(request: Request, s: Session = Depends(db)):
     seg = C.Counter(st for (st,) in s.execute(select(ClientProfile.segment)))
     no_phone = s.scalar(select(func.count(ClientProfile.client_id)).where(ClientProfile.segment.in_(CALLABLE))) or 0
     with_phone = s.scalar(select(func.count(Client.altegio_id)).where(Client.phone.is_not(None))) or 0
+    review = next(iter(reports.list_reports(s, "weekly_review", 1)), None)
+    review_job = next((j["last"] for j in jobs_service.list_jobs(s) if j["job"] == "weekly_review"), None)
     return page(request, s, "overview.html", "overview", title="nav.overview", latest=latest, prev=prev, cur=cur, before=before,
                 key_metrics=KEY_METRICS, board=board, states=states, cases=cases, seg=seg, callable_n=no_phone, with_phone=with_phone,
-                data_asof=data_asof(s))
+                data_asof=data_asof(s), fresh=freshness(s), review=review, review_job=review_job, hide_sm=("visits_wk", "online", "addon", "conv_new90", "risk_n"))
 
 
 # ---------------------------------------------------------------- barber
@@ -308,9 +320,9 @@ def outreach_sync(request: Request, s: Session = Depends(db)):
 
 # ---------------------------------------------------------------- context
 @app.get("/context", response_class=HTMLResponse)
-def context_page(request: Request, q: str = "", scope: str = "", s: Session = Depends(db)):
-    found = notes.search(s, q or None, scope or None, limit=200)
-    return page(request, s, "context.html", "context", title="nav.context", notes=found, q=q, scope=scope, today=dt.date.today(),
+def context_page(request: Request, q: str = "", scope: str = "", category: str = "", s: Session = Depends(db)):
+    found = [f for f in notes.search(s, q or None, scope or None, limit=200) if not category or f.category == category]
+    return page(request, s, "context.html", "context", title="nav.context", notes=found, q=q, scope=scope, category=category, today=dt.date.today(),
                 statuses={f.id: factor_link.status(s, f.id) for f in found}, effects={f.id: effects.summary(s, f) for f in found if f.recurrence == "yearly"},
                 kinds=factors.KINDS, treatments=factors.TREATMENTS, categories=factors.CATEGORIES, lenses=factors.lenses(s), catalog=catalog())
 
@@ -432,8 +444,18 @@ def data_page(request: Request, s: Session = Depends(db)):
     last = s.scalar(select(func.max(Measurement.window_to)))
     suggest_from = (last + dt.timedelta(days=1)) if last else None
     today = dt.date.today(); suggest_to = today - dt.timedelta(days=today.weekday() + 1)
-    return page(request, s, "data.html", "data", title="nav.data", runs=runs, months=months, snaps=snaps, data_asof=data_asof(s),
-                suggest_from=suggest_from, suggest_to=suggest_to)
+    return page(request, s, "data.html", "data", title="nav.data", runs=runs, months=months[-12:], older_months=months[:-12], snaps=snaps, data_asof=data_asof(s),
+                suggest_from=suggest_from, suggest_to=suggest_to, fresh=freshness(s), jobs=jobs_service.list_jobs(s))
+
+
+@app.post("/jobs/{key}/run")
+def job_run_now(request: Request, key: str, s: Session = Depends(db)):
+    """Run one scheduled job now (the same code the scheduler runs; a real run is recorded and may send a Telegram message)."""
+    from ..jobs.registry import JOBS
+    if key not in JOBS:
+        raise HTTPException(404)
+    out = jobs_service.run_now(s, key)
+    return back(request, "/data", "job_ran", "warn" if out["status"] in ("failed", "blocked") else "", job=JOBS[key].label, status=out["status"])
 
 
 @app.post("/data/snapshot")
@@ -448,12 +470,17 @@ def data_snapshot(request: Request, date_from: str = Form(...), date_to: str = F
 
 
 # ---------------------------------------------------------------- reports
+def _report_names(s: Session, r) -> dict:
+    ids = [x["client_id"] for x in r.content.get("overdue", {}).get("top", [])] if r.report_key == "weekly_review" else []
+    return names_for(s, ids)
+
+
 @app.get("/reports", response_class=HTMLResponse)
 def reports_page(request: Request, s: Session = Depends(db)):
     today = dt.date.today()
     end = today - dt.timedelta(days=today.weekday() + 1)           # the last Sunday
     return page(request, s, "reports.html", "reports", title="nav.reports", reports=reports.list_reports(s, limit=50),
-                kinds=("barber_book", "team_comparison"), suggest_to=end, suggest_from=end - dt.timedelta(weeks=8) + dt.timedelta(days=1))
+                kinds=("barber_book", "team_comparison", "weekly_review"), suggest_to=end, suggest_from=end - dt.timedelta(weeks=8) + dt.timedelta(days=1))
 
 
 @app.post("/reports/build")
@@ -474,7 +501,7 @@ def _report_page(request: Request, s: Session, rid: int, export: bool):
     if r is None or r.report_key not in VIEWS:
         raise HTTPException(404)
     c = r.content
-    return page(request, s, "report.html", "reports", title=f"report.kind.{r.report_key}", r=r, c=c, names=c.get("names", {}), vm=VIEWS[r.report_key](c), export=export)
+    return page(request, s, "report.html", "reports", title=f"report.kind.{r.report_key}", r=r, c=c, names=c.get("names", {}), vm=VIEWS[r.report_key](c), export=export, client_names=_report_names(s, r))
 
 
 @app.get("/reports/{rid}", response_class=HTMLResponse)

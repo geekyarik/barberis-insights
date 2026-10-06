@@ -186,9 +186,9 @@ def test_testing_a_belief_makes_a_linked_hypothesis(s):
 def test_the_holiday_seed_is_idempotent_and_recurs_every_year(s):
     from barberis_insights.context import holidays
     assert holidays.seed(s) == 9 and holidays.seed(s) == 0
-    ny = next(f for f in factors.in_force(s, D("2024-12-20"), D("2025-01-02")) if f.title == "New Year")
+    ny = next(f for f in factors.in_force(s, D("2024-12-20"), D("2025-01-02")) if f.title == "Новий рік")
     assert (ny.kind, ny.category, ny.recurrence, ny.treatment, ny.source) == ("external", "holiday", "yearly", "annotate", "research:holidays")
     assert factors.occurrences(ny, D("2023-12-20"), D("2024-01-03")) == [(D("2023-12-24"), D("2024-01-01"))]
     assert ny.expected_effects == []                                # no belief is put in the owner's mouth
-    womens = next(f for f in factors.in_force(s, D("2023-03-01"), D("2023-03-10")) if "Women" in f.title)
+    womens = next(f for f in factors.in_force(s, D("2023-03-01"), D("2023-03-10")) if "жіночий" in f.title)
     assert factors.occurrences(womens, D("2023-03-01"), D("2023-03-10")) == [(D("2023-03-05"), D("2023-03-08"))]

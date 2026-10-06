@@ -31,7 +31,11 @@ def weekly_review(s: Session, f: dt.date, t: dt.date, created_by: str = "schedul
     counts: dict[str, int] = {}
     for g in board:
         counts[g["label_key"].rsplit(".", 1)[1]] = counts.get(g["label_key"].rsplit(".", 1)[1], 0) + 1
-    top = sorted(overdue.result["tables"]["overdue"], key=lambda r: -r["priority"])[:5]
+    top, seen = [], set()
+    for r in sorted(overdue.result["tables"]["overdue"], key=lambda r: -r["priority"]):       # one line per client, even if overdue with two barbers
+        if r["client_id"] not in seen:
+            seen.add(r["client_id"]); top.append(r)
+    top = top[:5]
     ov = overdue.result["kpis"]["team"]
     iso = f.isocalendar()
     content = {

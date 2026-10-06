@@ -7,6 +7,7 @@
 <form method="get" class="inline card">
   <label>{{ t("common.search") }}<input name="q" value="{{ q }}" placeholder="{{ t('context.search_ph') }}"></label>
   <label>{{ t("context.about") }}<select name="scope"><option value="">{{ t("context.anything") }}</option><option value="shop" {{ 'selected' if scope=='shop' }}>{{ t("common.shop") }}</option>{% for b in all_barbers %}<option value="{{ b.key }}" {{ 'selected' if scope==b.key }}>{{ b.name }}</option>{% endfor %}</select></label>
+  <label>{{ t("context.category") }}<select name="category"><option value="">{{ t("context.all") }}</option>{% for c in categories %}<option value="{{ c }}" {{ 'selected' if category==c }}>{{ label('category.', c) }}</option>{% endfor %}</select></label>
   <button class="ghost">{{ t("common.search") }}</button>
 </form>
 <details class="card"><summary>{{ t("context.add") }}</summary>
@@ -39,7 +40,7 @@
   {% for n in notes %}
   {% set st = statuses.get(n.id, 'belief') %}
   <article class="card" style="display:flex;flex-direction:column;gap:6px">
-    <div class="eyebrow">{{ n.date_from }}{% if n.date_to %} – {{ n.date_to }}{% endif %} · {{ label('factorkind.', n.kind) }} · {{ label('category.', n.category) }} · {{ n.scopes|join(', ') }}{% if n.tags %} · {{ n.tags|join(', ') }}{% endif %}</div>
+    <div class="eyebrow">{{ n.date_from }}{% if n.date_to %} – {{ n.date_to }}{% endif %} · {{ label('factorkind.', n.kind) }} · {{ label('category.', n.category) }} · {% for sc in n.scopes %}{{ t('common.' ~ sc) if sc in ('shop', 'team') else (all_barbers|selectattr('key', 'equalto', sc)|map(attribute='name')|first or sc) }}{% if not loop.last %}, {% endif %}{% endfor %}{% if n.tags %} · {{ n.tags|join(', ') }}{% endif %}</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <h3 style="margin:0">{{ n.title }}</h3>
       <span class="pill {{ {'supported': 'supported', 'refuted': 'rejected', 'inconclusive': 'inconclusive'}.get(st, '') }}">{{ label('belief.', st) }}</span>

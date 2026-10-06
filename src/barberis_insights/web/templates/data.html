@@ -2,9 +2,19 @@
 {% block content %}
 <header>
   <div class="eyebrow">{{ t("data.upto", date=data_asof) }}</div>
+  <div class="flash {{ 'warn' if fresh.stale }}" style="margin:6px 0">{{ t("overview.data_stale" if fresh.stale else "overview.data_fresh", date=fresh.last_visit or "—", days=fresh.age_days if fresh.age_days is not none else "—") }}</div>
   <h1>{{ t("nav.data") }}</h1>
   <p class="sub">{{ t("data.sub") }} <code>insights ingest FILE…</code> · <code>insights import-clients FILE</code></p>
 </header>
+<section class="card">
+  <h2>{{ t("data.jobs") }}</h2>
+  <p class="sub">{{ t("data.jobs_sub") }}</p>
+  <div class="tablebox"><table><thead><tr><th class="l">{{ t("data.job") }}</th><th class="l">{{ t("data.job_last") }}</th><th></th></tr></thead>
+    <tbody>{% for j in jobs %}<tr><td class="l" style="font-family:var(--f-body)">{{ label('job.', j.job, j.label) }}</td>
+      <td class="l">{% if j.last %}{{ j.last.slot }} · <span class="pill {{ {'ok': 'ok', 'blocked': 'behind', 'failed': 'rejected'}.get(j.last.status, '') }}">{{ j.last.status }}</span>{% if j.last.error %} <span class="muted">{{ j.last.error[:90] }}</span>{% endif %}{% else %}<span class="muted">{{ t("data.job_never") }}</span>{% endif %}</td>
+      <td class="l"><form method="post" action="/jobs/{{ j.job }}/run" onsubmit="return confirm('{{ t('data.run_confirm') }}')"><button class="ghost">{{ t("data.run_now") }}</button></form></td></tr>{% endfor %}</tbody></table></div>
+</section>
+
 <section class="card">
   <h2>{{ t("data.save") }}</h2>
   <p class="sub">{{ t("data.save_sub") }}</p>
@@ -18,7 +28,8 @@
   <section class="card"><h3>{{ t("data.measurements") }}</h3><table><thead><tr><th class="l">{{ t("data.asof") }}</th><th class="l">{{ t("data.window") }}</th><th class="l">{{ t("data.label") }}</th><th>{{ t("data.values") }}</th></tr></thead>
     <tbody>{% for asof, f, to, lbl, n in snaps|reverse %}<tr><td class="l">{{ asof }}</td><td class="l">{{ f }} – {{ to }}</td><td class="l">{{ lbl }}</td><td>{{ n }}</td></tr>{% endfor %}</tbody></table></section>
   <section class="card"><h3>{{ t("data.by_month") }}</h3><table><thead><tr><th class="l">{{ t("data.month") }}</th><th>{{ t("data.rows") }}</th></tr></thead>
-    <tbody>{% for m, n in months|reverse %}<tr><td class="l">{{ m }}</td><td>{{ n }}</td></tr>{% endfor %}</tbody></table></section>
+    <tbody>{% for m, n in months|reverse %}<tr><td class="l">{{ m }}</td><td>{{ n }}</td></tr>{% endfor %}</tbody></table>
+    {% if older_months %}<details style="margin-top:8px"><summary>{{ t("data.older_months") }}</summary><table><tbody>{% for m, n in older_months|reverse %}<tr><td class="l">{{ m }}</td><td>{{ n }}</td></tr>{% endfor %}</tbody></table></details>{% endif %}</section>
 </div>
 <section><h2>{{ t("data.runs") }}</h2>
   <div class="tablebox"><table><thead><tr><th class="l">{{ t("data.started") }}</th><th class="l">{{ t("data.source") }}</th><th class="l">{{ t("col.status") }}</th><th class="l">{{ t("data.counts") }}</th><th class="l">{{ t("data.log") }}</th></tr></thead>

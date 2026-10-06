@@ -49,3 +49,12 @@ def test_a_team_comparison_has_every_barber_side_by_side(s):
     c = reports.team_comparison(s, F, T).content
     assert c["kind"] == "team_comparison" and set(c["sections"]["scorecard"]["kpis"]) == {"a", "b", "team"}
     assert c["sections"]["retention"]["kpis"]["a"]["clients"] == 3
+
+
+def test_the_weekly_review_lists_a_client_once_even_if_overdue_with_two_barbers(s):
+    for barber in (1, 2):
+        for d in ("2026-01-05", "2026-01-12", "2026-01-19"):
+            visit(s, 77, d, barber)                    # a regular of both barbers, silent since January
+    s.flush()
+    top = reports.weekly_review(s, F, T).content["overdue"]["top"]
+    assert [r["client_id"] for r in top] == [77]

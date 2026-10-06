@@ -1,0 +1,23 @@
+{% set T = vm.team_rows %}
+<header>
+  <div class="eyebrow">{{ t("report.window", start=c.window[0], end=c.window[1], asof=c.data_as_of) }}</div>
+  <h1>{{ t("report.kind.weekly_review") }} · {{ c.week.split("-W")[1] }}</h1>
+  <p class="sub">{{ t("report.frozen", id=r.id, runs=r.analysis_run_ids|join(", ")) }}</p>
+</header>
+<section><h2>{{ t("common.team") }}</h2>
+  <div class="kpis">{% for row in T %}<div class="kpi"><span class="l">{{ mlabel(row.metric) }}</span><span class="v">{{ fmt(row.metric, row.value) }}</span>
+    <span class="d {{ {'better': 'up', 'worse': 'down'}.get(row.verdict, '') }}">{% if row.delta %}{{ row.delta }} · {{ t("report.wr.vs_prev") }}{% else %}&nbsp;{% endif %}</span></div>{% endfor %}</div>
+</section>
+<section><h2>{{ t("nav.barbers") }}</h2>
+  <div class="tablebox"><table><thead><tr><th class="l">{{ t("common.barber") }}</th><th>{{ mlabel("util") }}</th><th>{{ mlabel("rph") }}</th><th>{{ mlabel("visits") }}</th><th class="hide-sm">{{ mlabel("revenue") }}</th></tr></thead>
+    <tbody>{% for b in vm.barber_rows %}<tr><td class="l">{{ b.name }}</td><td>{{ fmt("util", b.util) }}</td><td>{{ fmt("rph", b.rph) }}</td><td>{{ b.visits if b.visits is not none else "—" }}</td><td class="hide-sm">{{ fmt("revenue", b.revenue) }}</td></tr>{% endfor %}</tbody></table></div>
+</section>
+<section><h2>{{ t("report.sec.overdue") }}</h2>
+  <p class="sub">{{ t("report.wr.overdue", n=c.overdue.count, value=kfmt("value_at_stake", c.overdue.value)) }}</p>
+  {% if c.overdue.top %}<div class="tablebox"><table><thead><tr><th class="l">{{ t("col.client") }}</th><th class="l">{{ t("common.barber") }}</th><th>{{ t("col.silent") }}</th><th>{{ t("col.spend") }}</th></tr></thead>
+    <tbody>{% for o in c.overdue.top %}<tr><td class="l"><a href="/client/{{ o.client_id }}">{{ client_names.get(o.client_id) or o.client_id }}</a> <span class="muted" style="font-size:11px">#{{ o.client_id }}</span></td><td class="l">{{ names.get(o.barber, o.barber) }}</td><td>{{ o.days_silent }}</td><td>{{ kfmt("spend", o.lifetime_spend) }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+</section>
+<section><h2>{{ t("report.sec.goals") }}</h2>
+  <p class="sub">{{ t("report.wr.goals", on_track=c.goals.counts.get("on_track", 0), behind=c.goals.counts.get("behind", 0), reached=c.goals.counts.get("reached", 0), waiting=c.goals.counts.get("waiting", 0)) }}</p>
+  {% for g in c.goals.behind %}<div class="flash warn" style="margin-top:4px">{{ g.title }}</div>{% endfor %}
+</section>

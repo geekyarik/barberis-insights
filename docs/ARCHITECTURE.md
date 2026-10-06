@@ -314,6 +314,7 @@ Each feed is a plugin, like a Mirror adapter. Settled by the research of 2026-10
 - **JSON API** at `/api/*`.
 - **CLI:** `insights …`, including `insights analyze` and `insights compare` (planned).
 - **MCP server:** for Claude.
+- **Reviewed in a real browser 2026-10-06** at desktop and phone width (screenshots of every page). Fixed: the weekly review report page (it 404ed), a phone menu button instead of a four-row nav, phone-width tables and heatmap, a data-freshness banner and an *attention* panel on the Overview, a jobs list with Run-now on *Data & sync*, client ids next to names, Ukrainian holiday titles. Not yet done: a first-use flow, and the weekly tables are still wide on a phone.
 - **Rule:** interfaces call module services and never query another module's tables directly. Today `web/app.py` does in places; that's a refactor target.
 - **Scheduled work** lives in the Scheduler module (§6.11), not in the interfaces.
 

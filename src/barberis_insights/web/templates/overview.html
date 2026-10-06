@@ -6,6 +6,14 @@
   <p class="sub">{{ t("overview.latest", date=latest or "—") }}{% if prev %}{{ t("overview.compared", date=prev) }}{% endif %}. {{ t("overview.arrows") }}</p>
 </header>
 
+<section class="card fresh {{ 'stale' if fresh.stale }}" style="gap:6px;flex-direction:column;align-items:flex-start">
+  <h2 style="margin:0">{{ t("overview.attention") }}</h2>
+  <div class="flash {{ 'warn' if fresh.stale }}" style="width:100%">{% if fresh.last_visit %}{{ t("overview.data_stale" if fresh.stale else "overview.data_fresh", date=fresh.last_visit, days=fresh.age_days) }}{% else %}{{ t("overview.data_stale", date="—", days="—") }}{% endif %}</div>
+  <div class="flash {{ 'warn' if review_job and review_job.status in ('blocked', 'failed') }}" style="width:100%">
+    {% if review_job and review_job.status in ('blocked', 'failed') %}{{ t("overview.review_blocked") }}{% elif review %}{{ t("overview.review_last", week=review.content.week) }} · <a href="/reports/{{ review.id }}">{{ t("report.open") }}</a>{% else %}{{ t("overview.review_none") }}{% endif %}
+  </div>
+</section>
+
 {% if with_phone == 0 %}
 <div class="flash warn">{{ t("overview.no_phones") }} <code>insights import-clients FILE</code>.</div>
 {% endif %}
@@ -23,10 +31,10 @@
 <section>
   <h2>{{ t("nav.barbers") }}</h2>
   <div class="tablebox"><table>
-    <thead><tr><th class="l">{{ t("common.barber") }}</th>{% for m in key_metrics %}<th>{{ mlabel(m) }}</th>{% endfor %}</tr></thead>
+    <thead><tr><th class="l">{{ t("common.barber") }}</th>{% for m in key_metrics %}<th class="{{ 'hide-sm' if m in hide_sm }}">{{ mlabel(m) }}</th>{% endfor %}</tr></thead>
     <tbody>{% for b in all_barbers %}<tr><td class="l"><a href="/barber/{{ b.key }}">{{ b.name }}</a> <span class="muted">{{ b.tier }}</span></td>
       {% for m in key_metrics %}{% set v = cur.get(b.key, {}).get(m) %}{% set p = before.get(b.key, {}).get(m) %}
-      <td><span class="{{ delta_class(m, v, p) if p is not none else '' }}">{{ fmt(m, v) }}</span></td>{% endfor %}</tr>{% endfor %}</tbody>
+      <td class="{{ 'hide-sm' if m in hide_sm }}"><span class="{{ delta_class(m, v, p) if p is not none else '' }}">{{ fmt(m, v) }}</span></td>{% endfor %}</tr>{% endfor %}</tbody>
   </table></div>
 </section>
 
@@ -44,7 +52,8 @@
   <section class="card">
     <h2>{{ t("nav.goals") }}</h2>
     <p class="sub" style="margin:0">{{ t("overview.goal_counts", ok=states.get('ok', 0), behind=states.get('behind', 0), new=states.get('new', 0), done=states.get('done', 0)) }}</p>
-    <ul style="margin:6px 0 0;padding-left:18px">{% for g in board if g.state == 'behind' %}<li>{{ g.scope }}: {{ g.title }}</li>{% else %}<li class="muted">{{ t("overview.nothing_behind") }}</li>{% endfor %}</ul>
+    {% if states.get('new', 0) == board|length %}<p class="muted" style="margin:6px 0 0">{{ t("overview.goals_waiting") }}</p>
+    {% else %}<ul style="margin:6px 0 0;padding-left:18px">{% for g in board if g.state == 'behind' %}<li>{{ g.scope }}: {{ g.title }}</li>{% else %}<li class="muted">{{ t("overview.nothing_behind") }}</li>{% endfor %}</ul>{% endif %}
     <a href="/goals">{{ t("overview.all_goals") }} →</a>
   </section>
   <section class="card">

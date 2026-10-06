@@ -35,4 +35,11 @@ def team_comparison(c: dict) -> dict:
     return {"people": list(c["sections"]["scorecard"]["kpis"])}
 
 
-VIEWS = {"barber_book": barber_book, "team_comparison": team_comparison}
+def weekly_review(c: dict) -> dict:
+    vs = c.get("vs_prev") or {}
+    return {"team_rows": [{"metric": m, "value": c["team"].get(m), "delta": _signed((vs.get("team", {}).get(m) or {}).get("delta"), m),
+                           "verdict": (vs.get("team", {}).get(m) or {}).get("verdict")} for m in ("revenue", "visits", "util", "rph", "check")],
+            "barber_rows": [{"key": k, "name": c["names"].get(k, k), **v} for k, v in c["barbers"].items() if any(x is not None for x in v.values())]}
+
+
+VIEWS = {"barber_book": barber_book, "team_comparison": team_comparison, "weekly_review": weekly_review}
