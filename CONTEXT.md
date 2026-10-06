@@ -179,11 +179,8 @@ A client the shop must not call for win-back. It is a Fact held in Altegio (a ta
 _Avoid_: blacklist, opt-out
 
 **Client flag**:
-A reason someone who knows the client gives for not calling them (left the country, mobilised, moved, declined themselves, other), with a comment, who said it, and an optional date to check again. A flagged client leaves the call list until the flag is lifted or its date passes. A flag stays in this tool only.
+A reason someone who knows the client gives for not calling them (left the country, mobilised, moved, declined themselves, other), with a comment and an optional date to check again. A flagged client leaves the call list until the flag is lifted or its date passes. A flag stays in this tool only.
 _Avoid_: blacklist, note
-
-**Manual phone**:
-A number a barber remembers that Altegio lacks. It is kept apart from Altegio's number, so an import never overwrites it; calls and the call sheet use Altegio's number first, then this one. It is never written back to Altegio (ADR-0010).
 
 **Win-back case**:
 One attempt to bring one client back. A person proposes and approves it, the admin calls, and the client's return is recorded.

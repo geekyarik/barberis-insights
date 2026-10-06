@@ -40,8 +40,6 @@ class Client(Base):
     tags: Mapped[list | None] = mapped_column(JSON)
     do_not_contact: Mapped[bool] = mapped_column(Boolean, default=False)
     altegio_comment: Mapped[str | None] = mapped_column(Text)  # staff comment from the Altegio client card
-    phone_manual: Mapped[str | None] = mapped_column(String(40))  # a number a barber knows; never overwritten by an import, never written back to Altegio
-    phone_manual_by: Mapped[str | None] = mapped_column(String(80))
     updated_from_altegio_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
 
@@ -53,7 +51,6 @@ class ClientFlag(Base):
     reason: Mapped[str] = mapped_column(String(20))  # abroad | mobilised | moved | not_interested | other
     comment: Mapped[str] = mapped_column(Text, default="")
     until: Mapped[dt.date | None] = mapped_column(Date)  # recheck on this day; the client is offered again after it
-    by: Mapped[str] = mapped_column(String(80), default="")  # who said so (a barber, the admin)
     created: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now)
     lifted: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 

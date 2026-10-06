@@ -18,7 +18,6 @@ import random
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..clients.contact import contact_phone
 from ..config import settings
 from ..db.models import Client, ClientProfile, OutreachCase, OutreachEvent, now
 
@@ -55,7 +54,7 @@ def _hold(case: OutreachCase, client: Client | None, today: dt.date) -> dict | N
     if st == "declined":
         return {"reason": "declined", "until": None, "case_id": case.id}
     if st == "wrong_number":
-        changed = client and contact_phone(client) and case.phone and contact_phone(client) != case.phone
+        changed = client and client.phone and case.phone and client.phone != case.phone
         return None if changed else {"reason": "wrong_number", "until": None, "case_id": case.id}
     days = {"skipped": settings.hold_skipped_days, "handled": settings.hold_handled_days, "not_returned": settings.hold_not_returned_days}.get(st)
     if days is None:
@@ -101,7 +100,7 @@ def mark_handled(s: Session, client_ids, note: str | None = None) -> int:
     for cid in sorted(ids - busy):
         p, cl = profiles.get(cid), clients.get(cid)
         c = OutreachCase(client_id=cid, segment=p.segment if p else "overdue", barber_id=p.usual_barber if p else None,
-                         priority=p.priority if p else 0, phone=contact_phone(cl), reason="handled by hand",
+                         priority=p.priority if p else 0, phone=cl.phone if cl else None, reason="handled by hand",
                          status="handled", closed=now(), events=[])
         _event(c, "status", "dashboard", outcome="handled", note=note)
         s.add(c); n += 1
@@ -177,7 +176,7 @@ def case_rows(s: Session, statuses: tuple[str, ...] = OPEN) -> list[dict]:
     out = []
     for c in cases:
         cl, pr = clients.get(c.client_id), profiles.get(c.client_id)
-        out.append({"case_id": c.id, "client_id": c.client_id, "name": cl.name if cl else "", "phone": contact_phone(cl),
+        out.append({"case_id": c.id, "client_id": c.client_id, "name": cl.name if cl else "", "phone": cl.phone if cl else None,
                     "status": c.status, "segment": c.segment, "priority": c.priority, "suggested_offer": c.suggested_offer,
                     "offer_arm": c.offer_arm, "offer_given": c.offer_given, "assigned_to": c.assigned_to, "reason": c.reason,
                     "last_visit": str(pr.last_visit) if pr else None, "days_since": pr.days_since_last if pr else None,

@@ -347,7 +347,7 @@ def status() -> None:
         asof = data_asof(s)
         last = s.scalar(select(func.max(Measurement.window_to)))
         sched = s.scalar(select(func.max(ScheduleSlot.date)))
-        phones = s.scalar(select(func.count(Client.altegio_id)).where(Client.phone.is_not(None) | Client.phone_manual.is_not(None)))
+        phones = s.scalar(select(func.count(Client.altegio_id)).where(Client.phone.is_not(None)))
         appts = s.scalar(select(func.count(Appointment.id)))
     today = dt.date.today()
     nxt_to = today - dt.timedelta(days=today.weekday() + 1)

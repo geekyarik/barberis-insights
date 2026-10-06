@@ -1,4 +1,4 @@
-"""What people who know a client tell us: why not to call them, and a phone number Altegio does not have."""
+"""What people who know a client tell us: why not to call them."""
 from __future__ import annotations
 
 import datetime as dt
@@ -6,15 +6,9 @@ import datetime as dt
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..db.models import Client, ClientFlag, now
-from ..ingest.client_match import norm_phone
+from ..db.models import ClientFlag, now
 
 REASONS = ("abroad", "mobilised", "moved", "not_interested", "other")
-
-
-def contact_phone(c: Client | None) -> str | None:
-    """The Altegio number, else the one a person added."""
-    return (c.phone or c.phone_manual) if c else None
 
 
 def active_flags(s: Session, client_ids=None, today: dt.date | None = None) -> dict[int, ClientFlag]:
@@ -26,14 +20,14 @@ def active_flags(s: Session, client_ids=None, today: dt.date | None = None) -> d
     return {f.client_id: f for f in s.scalars(q) if f.until is None or f.until >= today}
 
 
-def add_flag(s: Session, client_id: int, reason: str, comment: str = "", until: dt.date | None = None, by: str = "") -> ClientFlag:
+def add_flag(s: Session, client_id: int, reason: str, comment: str = "", until: dt.date | None = None) -> ClientFlag:
     """Replaces the client's earlier flag: the newest word wins, the old one stays as history."""
     if reason not in REASONS:
         raise ValueError(f"unknown reason {reason!r}; use one of {', '.join(REASONS)}")
     if until and until < dt.date.today():
         raise ValueError("the recheck date is in the past")
     lift_flag(s, client_id)
-    f = ClientFlag(client_id=client_id, reason=reason, comment=comment.strip()[:500], until=until, by=by.strip()[:80])
+    f = ClientFlag(client_id=client_id, reason=reason, comment=comment.strip()[:500], until=until)
     s.add(f); s.flush()
     return f
 
@@ -47,14 +41,3 @@ def lift_flag(s: Session, client_id: int) -> int:
 
 def history(s: Session, client_id: int) -> list[ClientFlag]:
     return list(s.scalars(select(ClientFlag).where(ClientFlag.client_id == client_id).order_by(ClientFlag.id.desc())))
-
-
-def set_phone(s: Session, client_id: int, phone: str, by: str = "") -> str:
-    """A number someone knows. Returns it normalised, or raises when it is not a phone number."""
-    p = norm_phone(phone)
-    if not p or len(p) < 11:
-        raise ValueError("not a phone number")
-    c = s.get(Client, client_id) or Client(altegio_id=client_id)
-    c.phone_manual, c.phone_manual_by = p, by.strip()[:80]
-    s.add(c); s.flush()
-    return p

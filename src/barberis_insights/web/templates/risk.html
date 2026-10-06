@@ -66,9 +66,9 @@
       <td class="l sel">{% if r.eligible %}<input type="checkbox" name="client_id" value="{{ r.client_id }}" onchange="riskCount()" aria-label="{{ t('risk.select_client', id=r.client_id) }}">{% endif %}</td>
       <td class="l"><a href="/client/{{ r.client_id }}">{{ r.name or t('client.fallback', id=r.client_id) }}</a>
         <span class="muted sm">#{{ r.client_id }}{% if bnames.get(r.usual_barber) %} · {{ bnames.get(r.usual_barber) }}{% endif %}</span>
-        <span class="sm">{% if r.phone %}<a href="tel:{{ r.phone }}">{{ r.phone }}</a>{% if r.phone_manual %} <span class="muted">({{ t("risk.phone_manual") }})</span>{% endif %}{% else %}<span class="muted">{{ t("risk.no_phone") }}</span>{% endif %}</span>
-        {% if r.flag and (r.flag.comment or r.flag.by or r.flag.until) %}<span class="sm flagline">{% if r.flag.comment %}«{{ r.flag.comment }}»{% endif %}<span class="muted"> {{ r.flag.by or "" }}{% if r.flag.until %} · {{ t("flag.until", date=r.flag.until) }}{% endif %}</span></span>{% endif %}
-        <button type="button" class="linkbtn sm" data-id="{{ r.client_id }}" data-name="{{ r.name or t('client.fallback', id=r.client_id) }}" data-phone="{{ r.phone if r.phone_manual else '' }}" data-flag="{{ '1' if r.flag else '' }}" onclick="riskNote(this)">{{ t("flag.edit") }}</button>
+        <span class="sm">{% if r.phone %}<a href="tel:{{ r.phone }}">{{ r.phone }}</a>{% else %}<span class="muted">{{ t("risk.no_phone") }}</span>{% endif %}</span>
+        {% if r.flag and (r.flag.comment or r.flag.until) %}<span class="sm flagline">{% if r.flag.comment %}«{{ r.flag.comment }}»{% endif %}{% if r.flag.until %}<span class="muted"> {{ t("flag.until", date=r.flag.until) }}</span>{% endif %}</span>{% endif %}
+        <button type="button" class="linkbtn sm" data-id="{{ r.client_id }}" data-name="{{ r.name or t('client.fallback', id=r.client_id) }}" data-flag="{{ '1' if r.flag else '' }}" onclick="riskNote(this)">{{ t("flag.edit") }}</button>
         {% if r.won_back %}<span class="chip won_back sm"><i></i>{{ t("risk.won_back_n", n=r.won_back.n, date=r.won_back.last) if r.won_back.last else t("risk.won_back_n_nodate", n=r.won_back.n) }}</span>{% endif %}
         {% if not r.eligible %}<span class="chip {{ 'hold' if (r.ineligible_reasons|reject('in', releasable)|reject('eq', 'in_progress')|list)|length == 0 else 'warn' }} sm"><i></i>{{ reasons(r.ineligible_reasons) }}{% if r.hold_until %} · {{ t("risk.until_n", date=r.hold_until) }}{% endif %}</span>
           {% if r.ineligible_reasons|select('in', releasable)|list %}<button name="release" value="{{ r.client_id }}" formaction="/risk/release" class="linkbtn">{{ t("risk.release") }}</button>{% endif %}{% endif %}</td>
@@ -97,21 +97,13 @@
     <label>{{ t("flag.reason") }}<select name="reason" required>{% for k in flag_reasons %}<option value="{{ k }}">{{ label("flag.", k) }}</option>{% endfor %}</select></label>
     <label>{{ t("flag.comment") }}<input name="comment" maxlength="500" placeholder="{{ t('flag.comment_ph') }}"></label>
     <label>{{ t("flag.until_label") }}<input name="until" type="date" min="{{ today }}"></label>
-    <label>{{ t("flag.by") }}<input name="by" maxlength="80" placeholder="{{ t('flag.by_ph') }}" required></label>
     <div><button>{{ t("flag.save") }}</button></div>
   </form>
   <form method="post" id="lift-form" class="note-f" hidden><input type="hidden" name="next_url" value="{{ here }}"><div><button class="ghost">{{ t("flag.lift") }}</button></div></form>
-  <form method="post" id="phone-form" class="note-f">
-    <input type="hidden" name="next_url" value="{{ here }}">
-    <h3>{{ t("phone.title") }}</h3><p class="muted sm">{{ t("phone.help") }}</p>
-    <label>{{ t("phone.number") }}<input name="phone" inputmode="tel" required placeholder="+380…"></label>
-    <label>{{ t("flag.by") }}<input name="by" maxlength="80" placeholder="{{ t('flag.by_ph') }}"></label>
-    <div><button>{{ t("phone.save") }}</button></div>
-  </form>
 </dialog>
 <script>function riskNote(b){var d=document.getElementById('note'),id=b.dataset.id;document.getElementById('note-name').textContent=b.dataset.name+' · #'+id;
-document.getElementById('flag-form').action='/client/'+id+'/flag';document.getElementById('phone-form').action='/client/'+id+'/phone';
+document.getElementById('flag-form').action='/client/'+id+'/flag';
 var l=document.getElementById('lift-form');l.action='/client/'+id+'/flag/lift';l.hidden=!b.dataset.flag;
-document.querySelector('#phone-form input[name=phone]').value=b.dataset.phone||'';d.showModal()}</script>
+d.showModal()}</script>
 <script>function riskCount(){var n=document.querySelectorAll('#propose input[name=client_id]:checked').length,e=document.getElementById('risk-count');e.textContent=e.dataset.tpl.replace('%n',n);document.getElementById('propose-btn').disabled=!n;document.getElementById('handle-btn').disabled=!n}</script>
 {% endblock %}

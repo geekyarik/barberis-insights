@@ -476,7 +476,7 @@ def client_page(request: Request, cid: int, s: Session = Depends(db)):
     flag = contact.active_flags(s, [cid]).get(cid)
     return page(request, s, "client.html", "risk", title=c.name if c and c.name else tr("client.fallback", lang_of(request), id=cid), cid=cid, c=c, p=p, visits=visits,
                 cases=cases, per_barber=per_barber, bnames=names(s), flag=flag, flag_history=contact.history(s, cid), flag_reasons=contact.REASONS,
-                phone=contact.contact_phone(c), here=f"/client/{cid}", today=dt.date.today(), hold=outreach.holds(s, {cid}).get(cid), won=outreach.won_back_history(s, {cid}).get(cid), releasable=outreach.RELEASABLE)
+                here=f"/client/{cid}", today=dt.date.today(), hold=outreach.holds(s, {cid}).get(cid), won=outreach.won_back_history(s, {cid}).get(cid), releasable=outreach.RELEASABLE)
 
 
 def _next(url: str, cid: int) -> str:
@@ -484,11 +484,11 @@ def _next(url: str, cid: int) -> str:
 
 
 @app.post("/client/{cid}/flag")
-def client_flag(request: Request, cid: int, reason: str = Form(...), comment: str = Form(""), until: str = Form(""), by: str = Form(""),
+def client_flag(request: Request, cid: int, reason: str = Form(...), comment: str = Form(""), until: str = Form(""),
                 next_url: str = Form(""), s: Session = Depends(db)):
     """Someone who knows the client says why not to call them (abroad, mobilised, ...), optionally until a date."""
     try:
-        contact.add_flag(s, cid, reason, comment, dt.date.fromisoformat(until) if until else None, by)
+        contact.add_flag(s, cid, reason, comment, dt.date.fromisoformat(until) if until else None)
     except ValueError as e:
         return back(request, _next(next_url, cid), "flag_bad", "warn", why=str(e))
     return back(request, _next(next_url, cid), "flag_saved")
@@ -498,16 +498,6 @@ def client_flag(request: Request, cid: int, reason: str = Form(...), comment: st
 def client_flag_lift(request: Request, cid: int, next_url: str = Form(""), s: Session = Depends(db)):
     contact.lift_flag(s, cid)
     return back(request, _next(next_url, cid), "flag_lifted")
-
-
-@app.post("/client/{cid}/phone")
-def client_phone(request: Request, cid: int, phone: str = Form(...), by: str = Form(""), next_url: str = Form(""), s: Session = Depends(db)):
-    """A number a barber knows. Kept apart from Altegio's, so an import never overwrites it."""
-    try:
-        contact.set_phone(s, cid, phone, by)
-    except ValueError:
-        return back(request, _next(next_url, cid), "phone_bad", "warn")
-    return back(request, _next(next_url, cid), "phone_saved")
 
 
 @app.post("/client/{cid}/dnc")

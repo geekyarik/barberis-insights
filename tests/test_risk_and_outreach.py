@@ -257,10 +257,10 @@ def test_a_flag_takes_the_client_off_the_list_and_says_why(s):
     for cid in (30, 31):
         regular(s, cid, "2026-07-20"); client(s, cid)
     build(s)
-    contact.add_flag(s, 30, "mobilised", "serves since the spring", by="Оля")
+    contact.add_flag(s, 30, "mobilised", "serves since the spring")
     assert list(_ids(s)) == [31]
     row = _ids(s, include_ineligible=True)[30]
-    assert row["ineligible_reasons"] == ["flag_mobilised"] and row["flag"]["comment"] == "serves since the spring" and row["flag"]["by"] == "Оля"
+    assert row["ineligible_reasons"] == ["flag_mobilised"] and row["flag"]["comment"] == "serves since the spring"
 
 
 def test_a_flag_with_a_recheck_date_ends_by_itself_and_can_be_lifted(s):
@@ -290,23 +290,7 @@ def test_an_unknown_reason_or_a_past_date_is_refused(s):
         contact.add_flag(s, 35, "abroad", until=dt.date.today() - dt.timedelta(days=1))
 
 
-def test_a_phone_a_barber_knows_makes_the_client_callable_and_survives_an_import(s):
-    from barberis_insights.clients import contact
-    from barberis_insights.ingest.clients import upsert_clients
+def test_a_client_without_a_phone_cannot_be_called(s):
     regular(s, 36, "2026-07-20"); client(s, 36, phone=None)
     build(s)
     assert 36 not in _ids(s) and "no_phone" in _ids(s, include_ineligible=True)[36]["ineligible_reasons"]
-    assert contact.set_phone(s, 36, "050 111 22 33", by="Тіна") == "+380501112233"
-    row = _ids(s)[36]
-    assert row["phone"] == "+380501112233" and row["phone_manual"] is True
-    upsert_clients(s, [{"id": 36, "name": "X"}])                          # an import without a phone changes nothing
-    assert _ids(s)[36]["phone"] == "+380501112233"
-    upsert_clients(s, [{"id": 36, "phone": "+380991234567"}])             # Altegio's own number wins once it has one
-    assert _ids(s)[36]["phone"] == "+380991234567" and _ids(s)[36]["phone_manual"] is False
-
-
-def test_a_bad_phone_is_refused(s):
-    import pytest
-    from barberis_insights.clients import contact
-    with pytest.raises(ValueError):
-        contact.set_phone(s, 37, "12")

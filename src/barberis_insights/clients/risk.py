@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from ..config import settings
 from ..db.models import Client, ClientProfile
 from ..outreach.service import holds, won_back_history
-from .contact import active_flags, contact_phone
+from .contact import active_flags
 from .profile import Facts
 
 CALLABLE = ("overdue", "lapsed", "one_time")
@@ -98,11 +98,11 @@ def risk_list(s: Session, segments: tuple[str, ...] = ("overdue", "lapsed"), bar
         flag = flags.get(p.client_id)
         if flag:
             reasons.append(f"flag_{flag.reason}")
-        if not contact_phone(c):
+        if not c or not c.phone:
             reasons.append("no_phone")
         if reasons and not include_ineligible:
             continue
-        out.append({"client_id": p.client_id, "name": c.name if c else "", "phone": contact_phone(c), "phone_manual": bool(c and not c.phone and c.phone_manual), "flag": ({"reason": flag.reason, "comment": flag.comment, "by": flag.by, "until": flag.until, "since": flag.created.date()} if flag else None), "segment": p.segment,
+        out.append({"client_id": p.client_id, "name": c.name if c else "", "phone": c.phone if c else None, "flag": ({"reason": flag.reason, "comment": flag.comment, "until": flag.until, "since": flag.created.date()} if flag else None), "segment": p.segment,
                     "visits": p.visits, "lifetime_spend": p.lifetime_spend, "last_visit": str(p.last_visit), "days_since": p.days_since_last,
                     "median_gap": p.median_gap_days, "usual_barber": p.usual_barber, "priority": p.priority,
                     "suggested_offer": p.suggested_offer, "eligible": not reasons, "ineligible_reasons": reasons,
