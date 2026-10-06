@@ -40,7 +40,22 @@ class Client(Base):
     tags: Mapped[list | None] = mapped_column(JSON)
     do_not_contact: Mapped[bool] = mapped_column(Boolean, default=False)
     altegio_comment: Mapped[str | None] = mapped_column(Text)  # staff comment from the Altegio client card
+    phone_manual: Mapped[str | None] = mapped_column(String(40))  # a number a barber knows; never overwritten by an import, never written back to Altegio
+    phone_manual_by: Mapped[str | None] = mapped_column(String(80))
     updated_from_altegio_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ClientFlag(Base):
+    """Why a client is not to be called, as told by someone who knows them (abroad, mobilised, ...). Optionally ends on a date."""
+    __tablename__ = "client_flags"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    client_id: Mapped[int] = mapped_column(Integer, index=True)
+    reason: Mapped[str] = mapped_column(String(20))  # abroad | mobilised | moved | not_interested | other
+    comment: Mapped[str] = mapped_column(Text, default="")
+    until: Mapped[dt.date | None] = mapped_column(Date)  # recheck on this day; the client is offered again after it
+    by: Mapped[str] = mapped_column(String(80), default="")  # who said so (a barber, the admin)
+    created: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now)
+    lifted: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ClientProfile(Base):
@@ -133,6 +148,7 @@ class OutreachCase(Base):
     offer_arm: Mapped[str | None] = mapped_column(String(40))
     offer_given: Mapped[str | None] = mapped_column(String(40))
     assigned_to: Mapped[str | None] = mapped_column(String(80))
+    phone: Mapped[str | None] = mapped_column(String(40))  # the number the case was made for; a wrong-number hold ends when it changes
     status: Mapped[str] = mapped_column(String(20), default="new", index=True)
     contacted_on: Mapped[dt.date | None] = mapped_column(Date)
     returned_on: Mapped[dt.date | None] = mapped_column(Date)

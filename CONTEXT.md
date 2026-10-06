@@ -178,9 +178,23 @@ Still visits the shop, but no longer with their usual barber.
 A client the shop must not call for win-back. It is a Fact held in Altegio (a tagged line in the client's description), so staff can set or clear it there; the tool also writes it when the admin marks a case that way.
 _Avoid_: blacklist, opt-out
 
+**Client flag**:
+A reason someone who knows the client gives for not calling them (left the country, mobilised, moved, declined themselves, other), with a comment, who said it, and an optional date to check again. A flagged client leaves the call list until the flag is lifted or its date passes. A flag stays in this tool only.
+_Avoid_: blacklist, note
+
+**Manual phone**:
+A number a barber remembers that Altegio lacks. It is kept apart from Altegio's number, so an import never overwrites it; calls and the call sheet use Altegio's number first, then this one. It is never written back to Altegio (ADR-0010).
+
 **Win-back case**:
 One attempt to bring one client back. A person proposes and approves it, the admin calls, and the client's return is recorded.
 _Avoid_: lead, ticket, task
+
+**Hold**:
+The time a client stays out of the risk list because of their latest win-back case: while it is open; 10 days after a skip; 60 days after a person marks the client handled; 120 days after the call if they did not return; for good after a decline; until the phone changes after a wrong number. A person can lift a hold. A client we won back is not held, and shows "won back before" if they lapse again.
+_Avoid_: cool-down, blacklist
+
+**Handled**:
+A client a person already dealt with outside the tool and flagged, with an optional note, so nobody calls them twice. It is recorded as a case that never reaches the call sheet.
 
 **Offer**:
 What the admin may give a client to come back, a call only, or 15% off if the client books during the call (docs/OFFERS.md).

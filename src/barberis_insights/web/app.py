@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from ..analyses import effects, service as analyses
 from ..clients.profile import data_asof, rebuild_profiles
+from ..clients import contact
 from ..clients.risk import CALLABLE, risk_list
 from ..config import settings
 from ..clients.names import names_for
@@ -405,8 +406,15 @@ def risk_page(request: Request, segment: list[str] = Query(default=[]), barber: 
     proposed = outreach.case_rows(s, ("proposed",))
     seg = C.Counter(st for (st,) in s.execute(select(ClientProfile.segment)))
     asof = s.scalar(select(func.max(ClientProfile.asof)))
+    comma = lang_of(request) == "uk"
+    factor = f"{settings.overdue_gap_factor:g}".replace(".", ",") if comma else f"{settings.overdue_gap_factor:g}"
+    ex_gap = 40
+    held_n = 0 if show_all else sum(1 for r in risk_list(s, tuple(segment), bid, 100000, include_ineligible=True) if r["ineligible_reasons"] and r["ineligible_reasons"] != ["no_phone"])
+    rules = {"min": settings.overdue_min_days, "factor": factor, "lapsed": settings.lapsed_after_days, "ex_gap": ex_gap,
+             "ex_line": round(max(settings.overdue_min_days, settings.overdue_gap_factor * ex_gap))}
     return page(request, s, "risk.html", "risk", title="nav.risk", rows=rows, segments=SEGMENTS, chosen=segment, barber=barber,
-                show_all=show_all, proposed=proposed, seg=seg, bnames=names(s), asof=asof, offers=active_offers(s))
+                show_all=show_all, proposed=proposed, seg=seg, bnames=names(s), asof=asof, offers=active_offers(s), rules=rules, releasable=outreach.RELEASABLE, held_n=held_n,
+                here=request.url.path + (f"?{request.url.query}" if request.url.query else ""), flag_reasons=contact.REASONS, today=dt.date.today())
 
 
 @app.post("/risk/rebuild")
@@ -423,6 +431,25 @@ async def risk_propose(request: Request, s: Session = Depends(db)):
     rows = [r for r in risk_list(s, SEGMENTS, None, 100000, include_ineligible=False) if r["client_id"] in ids]
     cases = outreach.propose(s, rows, arms or None)
     return back(request, "/risk", "proposed", n=len(cases))
+
+
+def risk_next(form) -> str:
+    n = str(form.get("next_url") or "/risk")
+    return n if (n.startswith("/risk") or n.startswith("/client/")) and not n.startswith("//") else "/risk"
+
+
+@app.post("/risk/handle")
+async def risk_handle(request: Request, s: Session = Depends(db)):
+    form = await request.form()
+    n = outreach.mark_handled(s, {int(x) for x in form.getlist("client_id")}, (form.get("note") or "").strip() or None)
+    return back(request, risk_next(form), "handled", n=n, days=settings.hold_handled_days)
+
+
+@app.post("/risk/release")
+async def risk_release(request: Request, s: Session = Depends(db)):
+    form = await request.form()
+    n = outreach.release(s, {int(form["release"])})
+    return back(request, risk_next(form), "released", n=n)
 
 
 @app.post("/cases/decide")
@@ -446,8 +473,41 @@ def client_page(request: Request, cid: int, s: Session = Depends(db)):
         raise HTTPException(404)
     cases = list(s.scalars(select(OutreachCase).where(OutreachCase.client_id == cid).order_by(OutreachCase.created.desc())))
     per_barber = C.Counter(v.barber_id for v in visits if v.status == "arrived")
+    flag = contact.active_flags(s, [cid]).get(cid)
     return page(request, s, "client.html", "risk", title=c.name if c and c.name else tr("client.fallback", lang_of(request), id=cid), cid=cid, c=c, p=p, visits=visits,
-                cases=cases, per_barber=per_barber, bnames=names(s))
+                cases=cases, per_barber=per_barber, bnames=names(s), flag=flag, flag_history=contact.history(s, cid), flag_reasons=contact.REASONS,
+                phone=contact.contact_phone(c), here=f"/client/{cid}", today=dt.date.today(), hold=outreach.holds(s, {cid}).get(cid), won=outreach.won_back_history(s, {cid}).get(cid), releasable=outreach.RELEASABLE)
+
+
+def _next(url: str, cid: int) -> str:
+    return url if url.startswith("/") and not url.startswith("//") else f"/client/{cid}"
+
+
+@app.post("/client/{cid}/flag")
+def client_flag(request: Request, cid: int, reason: str = Form(...), comment: str = Form(""), until: str = Form(""), by: str = Form(""),
+                next_url: str = Form(""), s: Session = Depends(db)):
+    """Someone who knows the client says why not to call them (abroad, mobilised, ...), optionally until a date."""
+    try:
+        contact.add_flag(s, cid, reason, comment, dt.date.fromisoformat(until) if until else None, by)
+    except ValueError as e:
+        return back(request, _next(next_url, cid), "flag_bad", "warn", why=str(e))
+    return back(request, _next(next_url, cid), "flag_saved")
+
+
+@app.post("/client/{cid}/flag/lift")
+def client_flag_lift(request: Request, cid: int, next_url: str = Form(""), s: Session = Depends(db)):
+    contact.lift_flag(s, cid)
+    return back(request, _next(next_url, cid), "flag_lifted")
+
+
+@app.post("/client/{cid}/phone")
+def client_phone(request: Request, cid: int, phone: str = Form(...), by: str = Form(""), next_url: str = Form(""), s: Session = Depends(db)):
+    """A number a barber knows. Kept apart from Altegio's, so an import never overwrites it."""
+    try:
+        contact.set_phone(s, cid, phone, by)
+    except ValueError:
+        return back(request, _next(next_url, cid), "phone_bad", "warn")
+    return back(request, _next(next_url, cid), "phone_saved")
 
 
 @app.post("/client/{cid}/dnc")

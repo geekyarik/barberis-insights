@@ -4,7 +4,9 @@ from conftest import client, visit
 
 from barberis_insights.clients.profile import rebuild_profiles
 from barberis_insights.clients.risk import risk_list
-from barberis_insights.db.models import Client, ClientProfile, OutreachCase
+from sqlalchemy import select
+
+from barberis_insights.db.models import Client, ClientProfile, OutreachCase, now
 from barberis_insights.metrics import Dataset
 from barberis_insights.outreach import service
 from barberis_insights.outreach.attribution import attribute
@@ -54,7 +56,7 @@ def test_eligibility_excludes_consent_and_dnc(s):
 def _one_case(s, cid=30):
     regular(s, cid, "2026-07-20"); client(s, cid)
     build(s)
-    [case] = service.propose(s, risk_list(s, ("overdue",)))
+    [case] = service.propose(s, [r for r in risk_list(s, ("overdue",)) if r["client_id"] == cid])
     return case
 
 
@@ -174,3 +176,137 @@ def test_seeding_retires_the_first_guess_offers(s):
     s.add(Offer(code="pct10", label="old", kind="percent", value=10, valid_days=30, active=True)); s.flush()
     seed_offers(s)
     assert s.get(Offer, "pct10").active is False and s.get(Offer, "book_now").active is True and s.get(Offer, "book_now").value == 15
+
+
+# ---- holds: a client already worked is not offered twice
+def _listed(s, cid):
+    return cid in [r["client_id"] for r in risk_list(s, ("overdue",))]
+
+
+def _hold_reason(s, cid):
+    return {r["client_id"]: r["ineligible_reasons"] for r in risk_list(s, ("overdue",), include_ineligible=True)}[cid]
+
+
+def _age(case, days):
+    case.closed = now() - dt.timedelta(days=days)
+
+
+def test_open_case_holds_until_closed(s):
+    case = _one_case(s)
+    assert not _listed(s, 30) and _hold_reason(s, 30) == ["in_progress"]
+    assert service.propose(s, risk_list(s, ("overdue",), include_ineligible=True)) == []  # not twice, even if the caller ignores eligibility
+    service.set_status(s, case, "skipped"); _age(case, 11)
+    assert _listed(s, 30)                                   # skipped: back after 10 days
+
+
+def test_hold_windows(s):
+    for outcome, window in (("skipped", 10), ("not_returned", 120)):
+        case = _one_case(s, 30 if outcome == "skipped" else 31)
+        service.set_status(s, case, outcome)
+        _age(case, window - 1); assert not _listed(s, case.client_id) and _hold_reason(s, case.client_id) == [outcome]
+        assert [r for r in risk_list(s, ("overdue",), include_ineligible=True) if r["client_id"] == case.client_id][0]["hold_until"] is not None
+        _age(case, window + 1); assert _listed(s, case.client_id)
+
+
+def test_declined_is_permanent_and_wrong_number_lasts_until_the_phone_changes(s):
+    declined = _one_case(s, 32); service.set_status(s, declined, "declined"); _age(declined, 2000)
+    assert not _listed(s, 32) and _hold_reason(s, 32) == ["declined"]
+    wrong = _one_case(s, 33); service.set_status(s, wrong, "wrong_number"); _age(wrong, 2000)
+    assert not _listed(s, 33)
+    s.get(Client, 33).phone = "+380991112233"; s.flush()
+    assert _listed(s, 33)
+
+
+def test_handled_by_hand_then_released(s):
+    regular(s, 34, "2026-07-20"); client(s, 34); build(s)
+    assert service.mark_handled(s, [34], "called from the shop phone") == 1
+    assert not _listed(s, 34) and _hold_reason(s, 34) == ["handled"]
+    case = s.scalars(select(OutreachCase).where(OutreachCase.client_id == 34)).one()
+    assert service.release(s, [34]) == 1 and _listed(s, 34)
+    assert [e.outcome for e in case.events] == ["handled", "released"] and case.events[0].note == "called from the shop phone"
+
+
+def test_handled_expires_after_its_window(s):
+    regular(s, 35, "2026-07-20"); client(s, 35); build(s)
+    service.mark_handled(s, [35])
+    case = s.scalars(select(OutreachCase).where(OutreachCase.client_id == 35)).one()
+    _age(case, 61)
+    assert _listed(s, 35)
+
+
+def test_won_back_client_is_not_held_but_is_recognised(s):
+    case = _one_case(s, 36)
+    service.set_status(s, case, "called", on=D("2026-08-01"))
+    visit(s, 36, "2026-08-20", cost=850); s.flush()
+    attribute(s, today=D("2026-09-01"))
+    assert case.status == "won_back"
+    # lapses again: a later scan lists them, and the row says we won them back before
+    visit(s, 36, "2026-08-21"); s.flush()
+    rebuild_profiles(s, Dataset.load(s), D("2026-11-20"))
+    [row] = [r for r in risk_list(s, ("overdue", "lapsed")) if r["client_id"] == 36]
+    assert row["eligible"] and row["won_back"]["n"] == 1 and row["won_back"]["last"] == D("2026-08-20")
+
+
+# ------------------------------------------------------------------ why not to call, and phones people know
+def _ids(s, **kw):
+    return {r["client_id"]: r for r in risk_list(s, ("overdue",), **kw)}
+
+
+def test_a_flag_takes_the_client_off_the_list_and_says_why(s):
+    from barberis_insights.clients import contact
+    for cid in (30, 31):
+        regular(s, cid, "2026-07-20"); client(s, cid)
+    build(s)
+    contact.add_flag(s, 30, "mobilised", "serves since the spring", by="Оля")
+    assert list(_ids(s)) == [31]
+    row = _ids(s, include_ineligible=True)[30]
+    assert row["ineligible_reasons"] == ["flag_mobilised"] and row["flag"]["comment"] == "serves since the spring" and row["flag"]["by"] == "Оля"
+
+
+def test_a_flag_with_a_recheck_date_ends_by_itself_and_can_be_lifted(s):
+    from barberis_insights.clients import contact
+    regular(s, 32, "2026-07-20"); client(s, 32); regular(s, 33, "2026-07-20"); client(s, 33)
+    build(s)
+    contact.add_flag(s, 32, "abroad", until=dt.date.today() + dt.timedelta(days=30)); contact.add_flag(s, 33, "moved")
+    assert not _ids(s)
+    f = contact.active_flags(s, today=dt.date.today() + dt.timedelta(days=31))
+    assert 32 not in f and 33 in f                                           # the dated one has run out
+    contact.lift_flag(s, 33)
+    assert 33 in _ids(s)
+
+
+def test_a_newer_flag_replaces_the_older_one_and_the_old_one_stays_as_history(s):
+    from barberis_insights.clients import contact
+    contact.add_flag(s, 34, "abroad", "first"); contact.add_flag(s, 34, "moved", "second")
+    assert contact.active_flags(s)[34].comment == "second" and len(contact.history(s, 34)) == 2
+
+
+def test_an_unknown_reason_or_a_past_date_is_refused(s):
+    import pytest
+    from barberis_insights.clients import contact
+    with pytest.raises(ValueError):
+        contact.add_flag(s, 35, "vacation")
+    with pytest.raises(ValueError):
+        contact.add_flag(s, 35, "abroad", until=dt.date.today() - dt.timedelta(days=1))
+
+
+def test_a_phone_a_barber_knows_makes_the_client_callable_and_survives_an_import(s):
+    from barberis_insights.clients import contact
+    from barberis_insights.ingest.clients import upsert_clients
+    regular(s, 36, "2026-07-20"); client(s, 36, phone=None)
+    build(s)
+    assert 36 not in _ids(s) and "no_phone" in _ids(s, include_ineligible=True)[36]["ineligible_reasons"]
+    assert contact.set_phone(s, 36, "050 111 22 33", by="Тіна") == "+380501112233"
+    row = _ids(s)[36]
+    assert row["phone"] == "+380501112233" and row["phone_manual"] is True
+    upsert_clients(s, [{"id": 36, "name": "X"}])                          # an import without a phone changes nothing
+    assert _ids(s)[36]["phone"] == "+380501112233"
+    upsert_clients(s, [{"id": 36, "phone": "+380991234567"}])             # Altegio's own number wins once it has one
+    assert _ids(s)[36]["phone"] == "+380991234567" and _ids(s)[36]["phone_manual"] is False
+
+
+def test_a_bad_phone_is_refused(s):
+    import pytest
+    from barberis_insights.clients import contact
+    with pytest.raises(ValueError):
+        contact.set_phone(s, 37, "12")

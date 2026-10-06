@@ -3,9 +3,12 @@ from __future__ import annotations
 
 import datetime as dt
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..analyses import service as analyses
+from ..clients.contact import active_flags
+from ..db.models import Client
 from ..goals import service as goals
 from ..ingest.status import data_status
 
@@ -28,7 +31,8 @@ def weekly_content(s: Session, f: dt.date, t: dt.date, created_by: str = "schedu
     counts: dict[str, int] = {}
     for g in board:
         counts[g["label_key"].rsplit(".", 1)[1]] = counts.get(g["label_key"].rsplit(".", 1)[1], 0) + 1
-    top, seen = [], set()
+    skip = set(active_flags(s, None)) | set(s.scalars(select(Client.altegio_id).where(Client.do_not_contact.is_(True))))     # told not to call: never suggested
+    top, seen = [], set(skip)
     for r in sorted(overdue.result["tables"]["overdue"], key=lambda r: -r["priority"]):       # one line per client, even if overdue with two barbers
         if r["client_id"] not in seen:
             seen.add(r["client_id"]); top.append(r)

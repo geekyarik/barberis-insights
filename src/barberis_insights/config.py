@@ -38,7 +38,10 @@ class Settings(BaseSettings):
     overdue_min_days: int = 45
     overdue_gap_factor: float = 1.5
     lapsed_after_days: int = 180
-    case_cooldown_days: int = 60
+    # how long a client stays out of the risk list after a case ends; declined and do-not-contact are permanent, a wrong number lasts until the phone changes
+    hold_skipped_days: int = 10
+    hold_handled_days: int = 60
+    hold_not_returned_days: int = 120
     winback_window_days: int = 60
     # win-back offer (docs/OFFERS.md): the discount a client gets for booking during the call, and who is worth one
     book_now_pct: int = 15

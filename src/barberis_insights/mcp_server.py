@@ -227,7 +227,7 @@ def client_card(client_id: int) -> dict:
         names = {b.altegio_id: b.name for b in s.scalars(select(Barber))}
         visits = s.scalars(select(Appointment).where(Appointment.client_id == client_id).order_by(Appointment.date.desc()).limit(15))
         cases = s.scalars(select(OutreachCase).where(OutreachCase.client_id == client_id))
-        return {"client": {"name": c.name, "phone": c.phone, "do_not_contact": c.do_not_contact} if c else None,
+        return {"client": {"name": c.name, "phone": (c.phone or c.phone_manual), "do_not_contact": c.do_not_contact} if c else None,
                 "profile": {"segment": p.segment, "visits": p.visits, "spent": p.lifetime_spend, "last_visit": str(p.last_visit),
                             "days_since": p.days_since_last, "usual_gap": p.median_gap_days, "usual_barber": names.get(p.usual_barber)} if p else None,
                 "visits": [{"date": str(v.date), "barber": names.get(v.barber_id), "status": v.status, "cost": v.total_cost,

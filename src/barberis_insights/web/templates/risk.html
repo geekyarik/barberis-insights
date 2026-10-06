@@ -12,7 +12,26 @@
   <label class="check"><input type="checkbox" name="show_all" value="true" {{ 'checked' if show_all }}> {{ t("risk.show_all") }}</label>
   <noscript><button>{{ t("common.filter") }}</button></noscript>
 </form>
-<details class="how"><summary>{{ t("risk.how") }}</summary><p class="sub">{{ t("risk.sub") }}</p></details>
+{% if held_n %}<p class="holdnote" role="status"><span class="chip hold"><i></i>{{ t("risk.held_n", n=held_n) }}</span> <a href="{{ here }}{{ '&' if '?' in here else '?' }}show_all=true">{{ t("risk.held_show") }}</a></p>{% endif %}
+{% set how = {"active": t("risk.how_active", **rules), "slipping": t("risk.how_slipping", **rules), "overdue": t("risk.how_overdue", **rules),
+  "lapsed": t("risk.how_lapsed", **rules), "one_time": t("risk.how_one_time", **rules), "switched": t("risk.how_switched", **rules)} %}
+<details class="how"><summary>{{ t("risk.how") }}</summary>
+  <p class="sub">{{ t("risk.how_lead") }}</p>
+  <ol class="ladder" role="list">
+    {% for sg, call in [("active", false), ("slipping", false), ("overdue", true), ("lapsed", true)] %}<li>
+      <span class="pill {{ sg }}">{{ label('segment.', sg) }}</span>
+      <span class="rule">{{ how[sg] }}</span>
+      <span class="tag{{ ' call' if call }}">{{ t("risk.how_call") if call else t("risk.how_watch") }}</span></li>{% endfor %}
+  </ol>
+  <h3 class="eyebrow">{{ t("risk.how_aside") }}</h3>
+  <ul class="ladder" role="list">
+    {% for sg, call in [("one_time", true), ("switched", false)] %}<li>
+      <span class="pill {{ sg }}">{{ label('segment.', sg) }}</span>
+      <span class="rule">{{ how[sg] }}</span>
+      <span class="tag{{ ' call' if call }}">{{ t("risk.how_call") if call else t("risk.how_watch") }}</span></li>{% endfor %}
+  </ul>
+  <p class="sub how-ex">{{ t("risk.how_example", **rules) }}</p>
+</details>
 {% endcall %}
 
 {% if proposed %}
@@ -33,6 +52,7 @@
 {% set pmax = (rows|map(attribute="priority")|max) if rows else 0 %}{% set pmax = pmax if pmax > 0 else 1 %}
 {% call panel(t("risk.candidates", n=rows|length), t("risk.candidates_sub"), "nopad") %}
 <form method="post" action="/risk/propose" id="propose">
+  <input type="hidden" name="next_url" value="{{ request.url.path }}{{ '?' ~ request.url.query if request.url.query }}">
   <div class="tablebox risk-box"><table class="cards risk">
     <thead><tr>
       <th scope="col" class="l sel"><input type="checkbox" onclick="document.querySelectorAll('#propose input[name=client_id]').forEach(c=>c.checked=this.checked);riskCount()" aria-label="{{ t('common.select_all') }}"></th>
@@ -46,21 +66,52 @@
       <td class="l sel">{% if r.eligible %}<input type="checkbox" name="client_id" value="{{ r.client_id }}" onchange="riskCount()" aria-label="{{ t('risk.select_client', id=r.client_id) }}">{% endif %}</td>
       <td class="l"><a href="/client/{{ r.client_id }}">{{ r.name or t('client.fallback', id=r.client_id) }}</a>
         <span class="muted sm">#{{ r.client_id }}{% if bnames.get(r.usual_barber) %} · {{ bnames.get(r.usual_barber) }}{% endif %}</span>
-        {% if not r.eligible %}<span class="chip warn sm"><i></i>{{ reasons(r.ineligible_reasons) }}</span>{% endif %}</td>
+        <span class="sm">{% if r.phone %}<a href="tel:{{ r.phone }}">{{ r.phone }}</a>{% if r.phone_manual %} <span class="muted">({{ t("risk.phone_manual") }})</span>{% endif %}{% else %}<span class="muted">{{ t("risk.no_phone") }}</span>{% endif %}</span>
+        {% if r.flag and (r.flag.comment or r.flag.by or r.flag.until) %}<span class="sm flagline">{% if r.flag.comment %}«{{ r.flag.comment }}»{% endif %}<span class="muted"> {{ r.flag.by or "" }}{% if r.flag.until %} · {{ t("flag.until", date=r.flag.until) }}{% endif %}</span></span>{% endif %}
+        <button type="button" class="linkbtn sm" data-id="{{ r.client_id }}" data-name="{{ r.name or t('client.fallback', id=r.client_id) }}" data-phone="{{ r.phone if r.phone_manual else '' }}" data-flag="{{ '1' if r.flag else '' }}" onclick="riskNote(this)">{{ t("flag.edit") }}</button>
+        {% if r.won_back %}<span class="chip won_back sm"><i></i>{{ t("risk.won_back_n", n=r.won_back.n, date=r.won_back.last) if r.won_back.last else t("risk.won_back_n_nodate", n=r.won_back.n) }}</span>{% endif %}
+        {% if not r.eligible %}<span class="chip {{ 'hold' if (r.ineligible_reasons|reject('in', releasable)|reject('eq', 'in_progress')|list)|length == 0 else 'warn' }} sm"><i></i>{{ reasons(r.ineligible_reasons) }}{% if r.hold_until %} · {{ t("risk.until_n", date=r.hold_until) }}{% endif %}</span>
+          {% if r.ineligible_reasons|select('in', releasable)|list %}<button name="release" value="{{ r.client_id }}" formaction="/risk/release" class="linkbtn">{{ t("risk.release") }}</button>{% endif %}{% endif %}</td>
       <td class="l" data-label="{{ t('col.segment') }}"><span class="pill {{ r.segment }}">{{ label('segment.', r.segment) }}</span></td>
       <td data-label="{{ t('risk.col_silent') }}"><b>{{ t("risk.days_n", n=r.days_since) }}</b>
         <span class="muted sm">{% if r.median_gap %}{{ t("risk.usually_n", n=r.median_gap|round|int) }} · {% endif %}{{ r.last_visit }}</span></td>
       <td data-label="{{ t('risk.col_value') }}"><b>₴{{ '{:,.0f}'.format(r.lifetime_spend).replace(',', ' ') }}</b><span class="muted sm">{{ t("risk.visits_n", n=r.visits) }}</span></td>
       <td data-label="{{ t('col.priority') }}"><span class="cell-bar" title="{{ r.priority }}"><span class="rank-track" aria-hidden="true"><b class="s1" style="width:{{ (100 * r.priority / pmax)|round|int }}%"></b></span><span class="num">{{ r.priority|round|int }}</span></span></td>
-      <td class="l offer" data-label="{{ t('col.offer') }}">{{ label('offer.', r.suggested_offer) if r.suggested_offer else '—' }}</td></tr>
+      <td class="l offer" data-label="{{ t('col.offer') }}">{% if r.suggested_offer %}<span title="{{ label('offer.', r.suggested_offer) }}">{{ label('offer_short.', r.suggested_offer, label('offer.', r.suggested_offer)) }}</span>{% else %}—{% endif %}</td></tr>
     {% else %}<tr><td class="l muted" colspan="7">{{ t("risk.empty") }}</td></tr>{% endfor %}</tbody></table></div>
   <div class="actionbar">
     <button id="propose-btn" disabled>{{ t("risk.propose") }}</button>
+    <button id="handle-btn" class="ghost" formaction="/risk/handle" disabled>{{ t("risk.handled") }}</button>
+    <input name="note" class="notefield" placeholder="{{ t('risk.handled_note') }}" aria-label="{{ t('risk.handled_note') }}">
     <span id="risk-count" class="muted" data-tpl="{{ t('risk.selected_n', n='%n') }}">{{ t("risk.selected_n", n=0) }}</span>
     <details class="ab"><summary>{{ t("risk.ab_title") }}</summary><div class="muted sm">{{ t("risk.ab") }}</div>
       <div class="abopts">{% for o in offers %}<label class="check"><input type="checkbox" name="arms" value="{{ o.code }}"> {{ label('offer.', o.code, o.label) }}</label>{% endfor %}</div></details>
   </div>
 </form>
 {% endcall %}
-<script>function riskCount(){var n=document.querySelectorAll('#propose input[name=client_id]:checked').length,e=document.getElementById('risk-count');e.textContent=e.dataset.tpl.replace('%n',n);document.getElementById('propose-btn').disabled=!n}</script>
+<dialog id="note" class="note">
+  <form method="dialog" class="note-h"><h2 id="note-name"></h2><button class="ghost" aria-label="{{ t('common.close') }}">×</button></form>
+  <form method="post" id="flag-form" class="note-f">
+    <input type="hidden" name="next_url" value="{{ here }}">
+    <h3>{{ t("flag.title") }}</h3><p class="muted sm">{{ t("flag.help") }}</p>
+    <label>{{ t("flag.reason") }}<select name="reason" required>{% for k in flag_reasons %}<option value="{{ k }}">{{ label("flag.", k) }}</option>{% endfor %}</select></label>
+    <label>{{ t("flag.comment") }}<input name="comment" maxlength="500" placeholder="{{ t('flag.comment_ph') }}"></label>
+    <label>{{ t("flag.until_label") }}<input name="until" type="date" min="{{ today }}"></label>
+    <label>{{ t("flag.by") }}<input name="by" maxlength="80" placeholder="{{ t('flag.by_ph') }}" required></label>
+    <div><button>{{ t("flag.save") }}</button></div>
+  </form>
+  <form method="post" id="lift-form" class="note-f" hidden><input type="hidden" name="next_url" value="{{ here }}"><div><button class="ghost">{{ t("flag.lift") }}</button></div></form>
+  <form method="post" id="phone-form" class="note-f">
+    <input type="hidden" name="next_url" value="{{ here }}">
+    <h3>{{ t("phone.title") }}</h3><p class="muted sm">{{ t("phone.help") }}</p>
+    <label>{{ t("phone.number") }}<input name="phone" inputmode="tel" required placeholder="+380…"></label>
+    <label>{{ t("flag.by") }}<input name="by" maxlength="80" placeholder="{{ t('flag.by_ph') }}"></label>
+    <div><button>{{ t("phone.save") }}</button></div>
+  </form>
+</dialog>
+<script>function riskNote(b){var d=document.getElementById('note'),id=b.dataset.id;document.getElementById('note-name').textContent=b.dataset.name+' · #'+id;
+document.getElementById('flag-form').action='/client/'+id+'/flag';document.getElementById('phone-form').action='/client/'+id+'/phone';
+var l=document.getElementById('lift-form');l.action='/client/'+id+'/flag/lift';l.hidden=!b.dataset.flag;
+document.querySelector('#phone-form input[name=phone]').value=b.dataset.phone||'';d.showModal()}</script>
+<script>function riskCount(){var n=document.querySelectorAll('#propose input[name=client_id]:checked').length,e=document.getElementById('risk-count');e.textContent=e.dataset.tpl.replace('%n',n);document.getElementById('propose-btn').disabled=!n;document.getElementById('handle-btn').disabled=!n}</script>
 {% endblock %}

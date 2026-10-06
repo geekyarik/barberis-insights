@@ -16,7 +16,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import settings
-from ..db.models import Client, ClientProfile, OutreachCase
+from ..db.models import Client, ClientProfile
+from ..outreach.service import holds, won_back_history
+from .contact import active_flags, contact_phone
 from .profile import Facts
 
 CALLABLE = ("overdue", "lapsed", "one_time")
@@ -70,16 +72,18 @@ def classify(f: Facts) -> tuple[str, float, str | None]:
 
 def risk_list(s: Session, segments: tuple[str, ...] = ("overdue", "lapsed"), barber: int | None = None, limit: int = 200,
               include_ineligible: bool = False, min_visits: int = 2) -> list[dict]:
-    """Ranked call candidates with eligibility flags. Eligible = consent not refused, not do-not-contact, no case in the cool-down.
-    `ineligible_reasons` are codes (dnc, no_consent, recent_case, no_phone); interfaces translate them (i18n "reason.*")."""
-    import datetime as dt
+    """Ranked call candidates with eligibility flags. Eligible = consent not refused, not do-not-contact, not held by an earlier case (outreach.service.holds).
+    `ineligible_reasons` are codes (dnc, no_consent, no_phone, or a hold: in_progress, handled, skipped, not_returned, declined, wrong_number);
+    interfaces translate them (i18n "reason.*"). `hold_until` is the date a hold ends (None = until a person lifts it).
+    `won_back` is how often we already won this client back ({n, last}), so a returning client is recognised.
+    """
     q = select(ClientProfile).where(ClientProfile.segment.in_(segments)).order_by(ClientProfile.priority.desc())
     if barber:
         q = q.where(ClientProfile.usual_barber == barber)
     profiles = [p for p in s.scalars(q) if p.visits >= min_visits or p.segment == "one_time"]
     clients = {c.altegio_id: c for c in s.scalars(select(Client).where(Client.altegio_id.in_([p.client_id for p in profiles])))}
-    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=settings.case_cooldown_days)
-    recent = {c for (c,) in s.execute(select(OutreachCase.client_id).where(OutreachCase.created >= cutoff))}
+    held, won = holds(s), won_back_history(s)
+    flags = active_flags(s, [p.client_id for p in profiles])
     out = []
     for p in profiles:
         c = clients.get(p.client_id)
@@ -88,16 +92,21 @@ def risk_list(s: Session, segments: tuple[str, ...] = ("overdue", "lapsed"), bar
             reasons.append("dnc")
         if c and c.data_processing_allowed is False:
             reasons.append("no_consent")
-        if p.client_id in recent:
-            reasons.append("recent_case")
-        if not c or not c.phone:
+        hold = held.get(p.client_id)
+        if hold:
+            reasons.append(hold["reason"])
+        flag = flags.get(p.client_id)
+        if flag:
+            reasons.append(f"flag_{flag.reason}")
+        if not contact_phone(c):
             reasons.append("no_phone")
         if reasons and not include_ineligible:
             continue
-        out.append({"client_id": p.client_id, "name": c.name if c else "", "phone": c.phone if c else None, "segment": p.segment,
+        out.append({"client_id": p.client_id, "name": c.name if c else "", "phone": contact_phone(c), "phone_manual": bool(c and not c.phone and c.phone_manual), "flag": ({"reason": flag.reason, "comment": flag.comment, "by": flag.by, "until": flag.until, "since": flag.created.date()} if flag else None), "segment": p.segment,
                     "visits": p.visits, "lifetime_spend": p.lifetime_spend, "last_visit": str(p.last_visit), "days_since": p.days_since_last,
                     "median_gap": p.median_gap_days, "usual_barber": p.usual_barber, "priority": p.priority,
-                    "suggested_offer": p.suggested_offer, "eligible": not reasons, "ineligible_reasons": reasons})
+                    "suggested_offer": p.suggested_offer, "eligible": not reasons, "ineligible_reasons": reasons,
+                    "hold_until": hold["until"] if hold else None, "won_back": won.get(p.client_id)})
         if len(out) >= limit:
             break
     return out

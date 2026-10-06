@@ -21,6 +21,7 @@ from typing import Protocol
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ..clients.contact import contact_phone
 from ..config import settings
 from ..db.models import Barber, Client, ClientProfile, OutreachCase
 from ..i18n import LANGUAGES, all_labels, normalize, t
@@ -209,7 +210,7 @@ def push(s: Session, sheet: SheetBackend, tab: Tab, lang: str) -> int:
         cl, p = clients.get(c.client_id), profiles.get(c.client_id)
         rows.append(tab.row({
             "case_id": c.id, "client": cl.name if cl and cl.name else t("client.fallback", lang, id=c.client_id),
-            "phone": cl.phone if cl else "", "usual_barber": barbers.get(p.usual_barber, "") if p else "",
+            "phone": contact_phone(cl) or "", "usual_barber": barbers.get(p.usual_barber, "") if p else "",
             "last_visit": str(p.last_visit) if p else "", "days_since": p.days_since_last if p else "", "visits": p.visits if p else "",
             "spent": round(p.lifetime_spend) if p else "", "suggested_offer": offer_label(c.suggested_offer, lang), "priority": c.priority}))
         set_status(s, c, "in_sheet", source="auto")
