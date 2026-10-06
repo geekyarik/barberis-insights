@@ -37,7 +37,7 @@ A client has at most one active case, and never a second case for the same line 
 
 ## When a case opens
 
-- **The first run** opens only the **highest-priority tenth** of the clients who qualify (at least 20): nobody can work hundreds of old cases. About 44 of 433 on 2026-10-06.
+- **The first run** (or a backfill) opens everyone who qualifies, highest priority first, up to what the administrators can work in a case term (50 a day × 14 days). 433 on 2026-10-06.
 - **After that** a case opens only for a client who crossed their line within the last 14 days, the term of a case. About 4 new cases a day (the last 120 days: 1.8 overdue, 1.1 lapsed, 0.8 first-timers).
 
 ## Priority: chance to return × a year's value
@@ -48,11 +48,14 @@ A client has at most one active case, and never a second case for the same line 
 - **Yearly value:** the client's average check × their own visits a year (365 ÷ usual gap, at most 15). A first-timer is assumed to make 5 visits a year, which is what those who return do.
 - It includes returns that would happen without a call, so it ranks who is likely to come after a call, not who a call changes most. The results page counts "came on their own" separately to show the size of that effect.
 
-## The opening floor
+## The opening floor and capacity
 
-A case opens only when its priority is at least **`case_min_priority`** (₴, expected yearly revenue). It is provisional. On 2026-10-06, of the 433 clients who qualify (priority median ₴722, 90th percentile ₴2 170): a floor of ₴300 keeps 85%, ₴500 keeps 67%, ₴800 keeps 45%, ₴1 000 keeps 36%, ₴2 000 keeps 11%.
+**There is no floor** (`case_min_priority` = 0, decided 2026-10-06): a call costs nothing extra, because the administrator is paid per day, so any client with a chance of coming back is worth a call; only the discount costs money. The administrators can make up to **50 calls a day** (`case_daily_capacity`), so a case term of 14 days holds up to 700 cases, far more than the 433 clients who qualify on 2026-10-06 and the 4 or so who cross a line each day.
 
-**How it gets recalculated:** the results page ("Повернення клієнтів") compares, for every case an administrator processed at least 90 days ago, whether the client visited within 90 days of the call with what the return model expected with no call. Observed minus expected is the effect of calling. Effect × the client's yearly value × the shop's margin (`case_margin_ratio`, 30%) less the cost of a call (`case_call_cost`) tells whether a band of priorities pays. Raise the floor if the lower bands do not pay, lower it if they do. Bands: under ₴500, 500 to 1 000, 1 000 to 2 000, over 2 000; a band is judged only from 30 calls. The first reading is possible 90 days after the first call.
+- **The first run, or `insights cases --backfill`,** opens everyone who qualifies, highest priority first, but no more than capacity × term (700). Priority only decides the order they are worked in.
+- The floor stays as a knob. If the queue ever outgrows what can be worked, raise it.
+
+**How to judge the calls:** the results page ("Повернення клієнтів") compares, for every case an administrator processed at least 90 days ago, whether the client visited within 90 days of the call with what the return model expected with no call. Observed minus expected is the effect of calling. Effect × the client's yearly value × the shop's margin (`case_margin_ratio`, 30%) is the gain per call, which is judged against the cost of a call (`case_call_cost`, ₴0) and, for the 15% offer, against the discount (docs/OFFERS.md). Bands: under ₴500, 500 to 1 000, 1 000 to 2 000, over 2 000; a band is judged only from 30 calls. The first reading is possible 90 days after the first call.
 
 ## What happens to a case
 

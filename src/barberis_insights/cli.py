@@ -59,13 +59,14 @@ def ingest(files: list[Path] = typer.Argument(..., help="Saved Altegio Pro conne
 
 
 @app.command()
-def fetch(through: Optional[str] = typer.Option(None, help="YYYY-MM-DD, default: last Sunday")) -> None:
+def fetch(through: Optional[str] = typer.Option(None, help="YYYY-MM-DD, default: last Sunday"), ahead: int = typer.Option(0, help="Days into the future to fetch bookings for"),
+          schedules: bool = typer.Option(True, help="Also fetch the barbers' shifts (the weekly job does; the daily cases job does not)")) -> None:
     """Pull fresh data from Altegio through a headless Claude and import it (the weekly job's first step), without sending anything."""
     from .db.session import session_scope
     from .jobs import fetch as fetching
     day = _date(through) if through else dt.date.today() - dt.timedelta(days=dt.date.today().weekday() + 1)
     with session_scope() as s:
-        typer.echo(json.dumps(fetching.fetch_fresh(s, day), ensure_ascii=False, indent=1, default=str))
+        typer.echo(json.dumps(fetching.fetch_fresh(s, day, ahead_days=ahead, schedules=schedules), ensure_ascii=False, indent=1, default=str))
 
 
 @app.command()
@@ -416,7 +417,8 @@ def seed() -> None:
 
 
 @app.command()
-def cases(today: Optional[str] = typer.Option(None, help="YYYY-MM-DD, default today"), dry_run: bool = typer.Option(False, "--dry-run", help="Roll back")) -> None:
+def cases(today: Optional[str] = typer.Option(None, help="YYYY-MM-DD, default today"), dry_run: bool = typer.Option(False, "--dry-run", help="Roll back"),
+          backfill: bool = typer.Option(False, "--backfill", help="Also open the clients who crossed a line long ago (the highest priority first, up to what the administrators can work)")) -> None:
     """Open new win-back cases and follow the active ones up (what the daily job does after the fresh data is in)."""
     from .cases import service
     from .clients.profile import rebuild_profiles
@@ -425,7 +427,7 @@ def cases(today: Optional[str] = typer.Option(None, help="YYYY-MM-DD, default to
     day = _date(today) if today else dt.date.today()
     with session_scope() as s:
         rebuild_profiles(s, Dataset.load(s))
-        out = {"detect": service.detect(s, day), "refresh": service.refresh(s, day)}
+        out = {"detect": service.detect(s, day, backfill=backfill), "refresh": service.refresh(s, day)}
         out["detect"].pop("ids")
         if dry_run:
             s.rollback()

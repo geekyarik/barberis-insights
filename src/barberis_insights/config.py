@@ -45,11 +45,10 @@ class Settings(BaseSettings):
     lapsed_max_days: int = 365  # ...and a case opens for a lapsed client only up to this many days of silence
     # win-back cases (docs/CASES.md)
     case_expire_days: int = 14  # an open case nobody processed closes as expired after this many days
-    case_min_priority: float = 500.0  # a case opens only when chance x yearly value is at least this many hryvnias; recalibrated from call results (docs/CASES.md)
-    case_call_cost: float = 25.0  # what one call costs in the administrator's time, for the calibration
+    case_min_priority: float = 0.0  # a case opens only when chance x yearly value is at least this many hryvnias; 0 = no floor, because calls are free (docs/CASES.md)
+    case_call_cost: float = 0.0  # the extra cost of one call: none, the administrator is paid per day; only the discount costs money
+    case_daily_capacity: int = 50  # the most calls an administrator can make in a day
     case_margin_ratio: float = 0.30  # the share of a visit's price the shop keeps as extra margin (docs/OFFERS.md: 253 of 854)
-    case_first_run_share: float = 0.10  # the first run opens only this share of the clients who qualify, the highest priority first
-    case_first_run_min: int = 20  # ...but at least this many
     case_booking_grace_days: int = 3  # a booking an administrator reported must show up in the CRM within this many days
     # win-back offer (docs/OFFERS.md): the discount a client gets for booking during the call, and who is worth one
     book_now_pct: int = 15

@@ -16,7 +16,6 @@ return that nobody caused can be told from a win-back.
 from __future__ import annotations
 
 import datetime as dt
-import math
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -68,15 +67,21 @@ def suggest_barber(s: Session, left: Barber | None, recent_days: int = 90, today
     return min(same, key=lambda b: busy[b.altegio_id]).altegio_id if same else None
 
 
-def detect(s: Session, today: dt.date | None = None) -> dict:
+def backlog_limit() -> int:
+    """The most old cases worth opening at once: what the administrators can work before they expire."""
+    return settings.case_daily_capacity * settings.case_expire_days
+
+
+def detect(s: Session, today: dt.date | None = None, backfill: bool = False) -> dict:
     """Open a case for every client past a line who has none for it. Returns what was opened and what was left out, and why.
-    The very first run opens only the highest-priority tenth of those who qualify (nobody can work hundreds of old cases); after that a case
-    opens only for a client who crossed the line within the case term, so the list stays about what is new."""
+    The first run (or `backfill`) opens the clients who qualify whatever their crossing date, the highest priority first, but no more than the
+    administrators can work before the cases expire (daily capacity x case term); after that a case opens only for a client who crossed the
+    line within the case term, so the list stays about what is new."""
     today = today or dt.date.today()
     profiles = {p.client_id: p for p in s.scalars(select(ClientProfile))}
     rows = risk_list(s, tuple(TRIGGER_OF), None, 10 ** 6, include_ineligible=True)
     have = {(c.client_id, c.trigger, c.last_visit) for c in s.scalars(select(RiskCase))}
-    first_run = s.scalar(select(RiskCase.id).limit(1)) is None
+    first_run = backfill or s.scalar(select(RiskCase.id).limit(1)) is None
     active = active_cases(s)
     barbers = {b.altegio_id: b for b in s.scalars(select(Barber))}
     left_out = {"no_offer": 0, "blocked": 0, "no_phone": 0, "has_case": 0, "crossed_long_ago": 0, "below_floor": 0, "first_run_cap": 0}
@@ -101,7 +106,7 @@ def detect(s: Session, today: dt.date | None = None) -> dict:
         cands.append((p, r, trigger, line, crossed))
     if first_run and cands:
         cands.sort(key=lambda c: -c[0].priority)
-        keep = max(settings.case_first_run_min, math.ceil(settings.case_first_run_share * len(cands)))
+        keep = backlog_limit()
         left_out["first_run_cap"] = max(0, len(cands) - keep)
         cands = cands[:keep]
     opened = []

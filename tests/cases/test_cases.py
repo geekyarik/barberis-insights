@@ -159,9 +159,9 @@ def test_an_early_overdue_regular_gets_a_call_not_a_discount(s):
 
 
 # ------------------------------------------------------------------ the first run, the crossing window, and clients of a barber who left
-def test_the_first_run_opens_only_the_highest_priority_tenth(s, monkeypatch):
+def test_the_first_run_opens_what_the_administrators_can_work_highest_priority_first(s, monkeypatch):
     from barberis_insights.config import settings
-    monkeypatch.setattr(settings, "case_first_run_min", 2)
+    monkeypatch.setattr(settings, "case_daily_capacity", 1); monkeypatch.setattr(settings, "case_expire_days", 2)           # room for two cases
     for cid in range(100, 120):                                   # 20 overdue regulars, the later ones richer
         regular(s, cid, "2026-06-20", cost=400 + 100 * (cid - 100)); client(s, cid)
     build(s)
@@ -170,9 +170,22 @@ def test_the_first_run_opens_only_the_highest_priority_tenth(s, monkeypatch):
     assert {c.client_id for c in s.query(RiskCase)} == {119, 118}
 
 
+def test_a_backfill_opens_old_crossings_without_touching_existing_cases(s, monkeypatch):
+    from barberis_insights.config import settings
+    monkeypatch.setattr(settings, "case_daily_capacity", 1); monkeypatch.setattr(settings, "case_expire_days", 2)
+    for cid in (10, 11, 12):
+        regular(s, cid, "2026-06-20", cost=500 + 100 * cid); client(s, cid)
+    build(s)
+    cases.detect(s, TODAY)                                         # first run: two of three
+    assert cases.detect(s, TODAY)["first_run"] is False and s.query(RiskCase).count() == 2
+    monkeypatch.setattr(settings, "case_expire_days", 14)
+    out = cases.detect(s, TODAY, backfill=True)
+    assert out["opened"] == 1 and s.query(RiskCase).count() == 3 and out["left_out"]["has_case"] == 2
+
+
 def test_after_the_first_run_only_clients_who_just_crossed_a_line_get_a_case(s, monkeypatch):
     from barberis_insights.config import settings
-    monkeypatch.setattr(settings, "case_first_run_min", 1)
+    monkeypatch.setattr(settings, "case_daily_capacity", 1); monkeypatch.setattr(settings, "case_expire_days", 14)
     regular(s, 10, "2026-06-20"); client(s, 10)                    # crossed the 45 day line in early August
     build(s); cases.detect(s, TODAY)                               # the first run takes it (the only one)
     regular(s, 11, "2026-06-20"); client(s, 11)                    # an old crossing: does not open
