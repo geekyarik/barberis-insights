@@ -814,5 +814,19 @@
   "case.barber_left_help": "Suggest booking with {name}, a barber of the same level.",
   "case.chance": "Chance to return",
   "case.chance_note": "exp. ₴{value} a year",
-  "case.chance_help": "Chance to come within 90 days with no call, from this shop's own history."
+  "case.chance_help": "Chance to come within 90 days with no call, from this shop's own history.",
+  "calib.title": "Is the case opening floor right",
+  "calib.sub": "A case opens now when chance × yearly value is at least ₴{floor}. A call costs ₴{cost}. Checked {days} days after the call.",
+  "calib.none": "No data yet: {contacted} processed, and a result is known 90 days after the call (the first on {date}).",
+  "calib.band": "Priority",
+  "calib.n": "Calls",
+  "calib.expected": "Chance without a call",
+  "calib.observed": "Came after the call",
+  "calib.uplift": "Effect of the call",
+  "calib.gain": "Gain per call",
+  "calib.verdict": "Verdict",
+  "calib.few": "too few ({n} needed)",
+  "calib.worth": "worth calling",
+  "calib.not_worth": "does not pay",
+  "calib.how": "Effect = how many came after the call minus how many the history says would have come anyway. Gain = effect × the client's yearly value × {margin}% margin. Raise the floor in the settings if the lower bands do not pay, lower it if they do."
 }

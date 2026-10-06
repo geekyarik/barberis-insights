@@ -15,6 +15,7 @@ def _no_live_fetch(monkeypatch):
     """Tests never start a headless Claude; the ones about the fetch step turn it on with a fake runner."""
     from barberis_insights.config import settings
     monkeypatch.setattr(settings, "weekly_fetch", False)
+    monkeypatch.setattr(settings, "case_min_priority", 0.0)           # the opening floor is its own test; the others use tiny made-up shops
 
 
 @pytest.fixture

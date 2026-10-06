@@ -22,4 +22,14 @@
   {% endcall %}
 </div>
 {% endif %}
+{% call panel(t("calib.title"), t("calib.sub", floor='{:,.0f}'.format(calib.floor).replace(',', ' '), cost=calib.call_cost|round|int, days=90)) %}
+  {% if not calib.ripe %}{{ empty(t("calib.none", contacted=calib.contacted, date=calib.first_ripe_on if calib.first_ripe_on else '—')) }}
+  {% else %}<div class="tablebox" style="border:0"><table><thead><tr><th scope="col" class="l">{{ t("calib.band") }}</th><th scope="col">{{ t("calib.n") }}</th><th scope="col">{{ t("calib.expected") }}</th><th scope="col">{{ t("calib.observed") }}</th><th scope="col">{{ t("calib.uplift") }}</th><th scope="col">{{ t("calib.gain") }}</th><th scope="col">{{ t("calib.verdict") }}</th></tr></thead>
+    <tbody>{% for b in calib.bands %}<tr><td class="l">₴{{ b.lo }}{{ "–" ~ b.hi if b.hi else "+" }}</td><td>{{ b.n }}</td>
+      <td>{{ ((100 * b.expected)|round|int ~ "%") if b.expected is not none else "—" }}</td><td>{{ ((100 * b.observed)|round|int ~ "%") if b.observed is not none else "—" }}</td>
+      <td>{{ ((100 * b.uplift)|round(1) ~ " " ~ t("msg.pp")) if b.uplift is not none else t("calib.few", n=calib.min_n) }}</td>
+      <td>{{ ("₴" ~ b.gain_per_call|round|int) if b.gain_per_call is not none else "—" }}</td>
+      <td>{% if b.worth is none %}—{% elif b.worth %}<b>{{ t("calib.worth") }}</b>{% else %}{{ t("calib.not_worth") }}{% endif %}</td></tr>{% endfor %}</tbody></table></div>
+  <p class="muted sm" style="margin-top:8px">{{ t("calib.how", margin=(100 * calib.margin)|round|int) }}</p>{% endif %}
+{% endcall %}
 {% endblock %}

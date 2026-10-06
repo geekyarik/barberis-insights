@@ -79,7 +79,7 @@ def detect(s: Session, today: dt.date | None = None) -> dict:
     first_run = s.scalar(select(RiskCase.id).limit(1)) is None
     active = active_cases(s)
     barbers = {b.altegio_id: b for b in s.scalars(select(Barber))}
-    left_out = {"no_offer": 0, "blocked": 0, "no_phone": 0, "has_case": 0, "crossed_long_ago": 0, "first_run_cap": 0}
+    left_out = {"no_offer": 0, "blocked": 0, "no_phone": 0, "has_case": 0, "crossed_long_ago": 0, "below_floor": 0, "first_run_cap": 0}
     cands = []
     for r in rows:
         if not r["suggested_offer"]:
@@ -92,6 +92,8 @@ def detect(s: Session, today: dt.date | None = None) -> dict:
         trigger = TRIGGER_OF[r["segment"]]
         if r["client_id"] in active or (r["client_id"], trigger, p.last_visit) in have:
             left_out["has_case"] += 1; continue
+        if p.priority < settings.case_min_priority:
+            left_out["below_floor"] += 1; continue
         line = _line(p, trigger)
         crossed = p.last_visit + dt.timedelta(days=line)
         if not first_run and crossed < today - dt.timedelta(days=settings.case_expire_days):

@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from ..analyses import effects, service as analyses
 from ..clients.profile import data_asof, rebuild_profiles
 from ..clients import contact
-from ..cases import service as cases
+from ..cases import calibration, service as cases
 from ..clients.risk import CALLABLE, risk_list
 from ..config import settings
 from ..clients.names import names_for
@@ -683,7 +683,7 @@ def outreach_page(request: Request, s: Session = Depends(db)):
     return page(request, s, "outreach.html", "outreach", title="nav.outreach", total=len(allc), counts=cases.counts(s), outcomes=C.Counter(c.outcome for c in closed),
                 worked=len(worked), won=len(won), won_revenue=sum(c.visit_revenue or 0 for c in won), on_own=sum(1 for c in closed if c.outcome == "visited" and not c.contacted),
                 by_offer=group(lambda c: c.offer or "—", [c for c in worked if c.outcome != "expired"]), by_trigger=group(lambda c: c.trigger, closed),
-                by_admin=group(lambda c: c.processed_by or "—", worked), by_reason=C.Counter(c.reason for c in closed if c.outcome == "rejected").most_common())
+                by_admin=group(lambda c: c.processed_by or "—", worked), calib=calibration.calibration(s), by_reason=C.Counter(c.reason for c in closed if c.outcome == "rejected").most_common())
 
 
 # ---------------------------------------------------------------- context

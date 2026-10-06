@@ -48,6 +48,12 @@ A client has at most one active case, and never a second case for the same line 
 - **Yearly value:** the client's average check × their own visits a year (365 ÷ usual gap, at most 15). A first-timer is assumed to make 5 visits a year, which is what those who return do.
 - It includes returns that would happen without a call, so it ranks who is likely to come after a call, not who a call changes most. The results page counts "came on their own" separately to show the size of that effect.
 
+## The opening floor
+
+A case opens only when its priority is at least **`case_min_priority`** (₴, expected yearly revenue). It is provisional. On 2026-10-06, of the 433 clients who qualify (priority median ₴722, 90th percentile ₴2 170): a floor of ₴300 keeps 85%, ₴500 keeps 67%, ₴800 keeps 45%, ₴1 000 keeps 36%, ₴2 000 keeps 11%.
+
+**How it gets recalculated:** the results page ("Повернення клієнтів") compares, for every case an administrator processed at least 90 days ago, whether the client visited within 90 days of the call with what the return model expected with no call. Observed minus expected is the effect of calling. Effect × the client's yearly value × the shop's margin (`case_margin_ratio`, 30%) less the cost of a call (`case_call_cost`) tells whether a band of priorities pays. Raise the floor if the lower bands do not pay, lower it if they do. Bands: under ₴500, 500 to 1 000, 1 000 to 2 000, over 2 000; a band is judged only from 30 calls. The first reading is possible 90 days after the first call.
+
 ## What happens to a case
 
 An administrator processes it once: *booked*, *rejected with a reason*, or *no answer*. A visit closes it as **visited**; a future booking only marks it "booking exists". Unprocessed for 14 days, it expires. Details in `ARCHITECTURE.md` §6.7 and ADR-0012.

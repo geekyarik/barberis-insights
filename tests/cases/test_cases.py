@@ -202,3 +202,26 @@ def test_a_case_stores_the_chance_of_returning_and_a_priority_that_follows_it(s)
     regular(s, 10, "2026-06-20"); client(s, 10); build(s); cases.detect(s, TODAY)
     c = one_case(s, 10)
     assert c.snapshot["return_chance"] is not None and c.priority > 0
+
+
+def test_a_case_opens_only_above_the_priority_floor(s, monkeypatch):
+    from barberis_insights.config import settings
+    regular(s, 10, "2026-06-20", cost=500); client(s, 10); regular(s, 11, "2026-06-20", cost=1500); client(s, 11); build(s)
+    rich = s.query(__import__("barberis_insights.db.models", fromlist=["ClientProfile"]).ClientProfile).filter_by(client_id=11).one().priority
+    poor = s.query(__import__("barberis_insights.db.models", fromlist=["ClientProfile"]).ClientProfile).filter_by(client_id=10).one().priority
+    monkeypatch.setattr(settings, "case_min_priority", (rich + poor) / 2)
+    out = cases.detect(s, TODAY)
+    assert out["opened"] == 1 and out["left_out"]["below_floor"] == 1
+    assert s.query(RiskCase).one().client_id == 11
+
+
+def test_calibration_waits_for_ninety_days_then_compares_what_happened_with_what_was_expected(s):
+    from barberis_insights.cases import calibration
+    regular(s, 10, "2026-06-20"); client(s, 10); build(s); cases.detect(s, TODAY)
+    c = one_case(s, 10)
+    cases.no_answer(s, c, "anna")
+    assert calibration.calibration(s, TODAY)["ripe"] == 0 and calibration.calibration(s, TODAY)["first_ripe_on"] is not None
+    later = c.closed.date() + dt.timedelta(days=91)
+    out = calibration.calibration(s, later)
+    assert out["ripe"] == 1 and sum(b["n"] for b in out["bands"]) == 1
+    assert all(b["uplift"] is None for b in out["bands"])                       # one call is far too few to judge
