@@ -16,7 +16,7 @@
 
 <div class="grid">
   {% for key, prefix, rows in [('outreach.by_offer', 'offer.', by_offer), ('outreach.by_admin', '', by_admin), ('outreach.by_segment', 'segment.', by_segment)] %}
-  <section class="card"><h3>{{ t(key) }}</h3><table><thead><tr><th class="l"></th><th>{{ t("outreach.won") }}</th><th>{{ t("outreach.closed") }}</th><th>{{ t("outreach.rate_col") }}</th><th>₴</th></tr></thead>
+  <section class="card"><h3>{{ t(key) }}</h3><table><thead><tr><th scope="col" class="l"></th><th scope="col">{{ t("outreach.won") }}</th><th scope="col">{{ t("outreach.closed") }}</th><th scope="col">{{ t("outreach.rate_col") }}</th><th scope="col">₴</th></tr></thead>
     <tbody>{% for k, w, n, rev in rows %}<tr><td class="l">{{ label(prefix, k) if prefix else k }}</td><td>{{ w }}</td><td>{{ n }}</td><td>{{ (100*w/n)|round|int }}%</td><td>{{ '{:,.0f}'.format(rev).replace(',', ' ') }}</td></tr>{% else %}<tr><td class="l muted" colspan="5">{{ t("outreach.no_closed") }}</td></tr>{% endfor %}</tbody></table></section>
   {% endfor %}
 </div>
@@ -24,7 +24,7 @@
 <section>
   <h2>{{ t("outreach.cases") }}</h2>
   <form method="get" class="inline"><label>{{ t("col.status") }}<select name="status" onchange="this.form.submit()"><option value="">{{ t("common.all") }}</option>{% for st in statuses %}<option value="{{ st }}" {{ 'selected' if status==st }}>{{ label('status.', st) }}</option>{% endfor %}</select></label></form>
-  <div class="tablebox" style="max-height:620px"><table><thead><tr><th class="l">{{ t("col.case") }}</th><th class="l">{{ t("col.client") }}</th><th class="l">{{ t("col.status") }}</th><th class="l">{{ t("col.admin") }}</th><th class="l">{{ t("col.offer") }}</th><th>{{ t("col.contacted") }}</th><th>{{ t("col.returned") }}</th><th>₴</th><th class="l">{{ t("col.usual_barber") }}</th></tr></thead>
+  <div class="tablebox" style="max-height:620px"><table><thead><tr><th scope="col" class="l">{{ t("col.case") }}</th><th scope="col" class="l">{{ t("col.client") }}</th><th scope="col" class="l">{{ t("col.status") }}</th><th scope="col" class="l">{{ t("col.admin") }}</th><th scope="col" class="l">{{ t("col.offer") }}</th><th scope="col">{{ t("col.contacted") }}</th><th scope="col">{{ t("col.returned") }}</th><th scope="col">₴</th><th scope="col" class="l">{{ t("col.usual_barber") }}</th></tr></thead>
   <tbody>{% for r in rows %}{% set offer = r.offer_given or r.suggested_offer %}<tr><td class="l">{{ r.case_id }}</td><td class="l"><a href="/client/{{ r.client_id }}">{{ r.name or t('client.fallback', id=r.client_id) }}</a></td><td class="l"><span class="pill {{ r.status }}">{{ label('status.', r.status) }}</span></td><td class="l">{{ r.assigned_to or '' }}</td><td class="l">{{ label('offer.', offer) if offer else '' }}</td><td>{{ r.contacted_on or '' }}</td><td>{{ r.returned_on or '' }}</td><td>{{ r.revenue_recovered|round|int if r.revenue_recovered else '' }}</td><td class="l">{{ bnames.get(r.usual_barber, '') }}</td></tr>{% else %}<tr><td class="l muted" colspan="9">{{ t("outreach.empty") }} <a href="/risk">{{ t("nav.risk") }}</a>.</td></tr>{% endfor %}</tbody></table></div>
 </section>
 {% endblock %}

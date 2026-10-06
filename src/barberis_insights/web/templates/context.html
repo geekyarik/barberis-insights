@@ -11,7 +11,7 @@
   <button class="ghost">{{ t("common.search") }}</button>
 </form>
 <details class="card"><summary>{{ t("context.add") }}</summary>
-  <form method="post" action="/context" style="display:grid;gap:8px;margin-top:8px">
+  <form method="post" action="/context" id="factor-form" style="display:grid;gap:8px;margin-top:8px" novalidate>
     <label>{{ t("common.title") }}<input name="title" required maxlength="200"></label>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">
       <label>{{ t("common.from") }}<input name="date_from" type="date" required value="{{ today }}"></label>
@@ -20,8 +20,8 @@
       <label>{{ t("context.category") }}<select name="category">{% for c in categories %}<option value="{{ c }}" {{ 'selected' if c == 'other' }}>{{ label('category.', c) }}</option>{% endfor %}</select></label>
       <label>{{ t("context.recurrence") }}<select name="recurrence"><option value="none">{{ label('recurrence.', 'none') }}</option><option value="yearly">{{ label('recurrence.', 'yearly') }}</option></select></label>
       <label>{{ t("context.lead_days") }}<input name="lead_days" type="number" min="0" value="0"></label>
-      <label>{{ t("context.treatment") }}<select name="treatment">{% for x in treatments %}<option value="{{ x }}">{{ label('treatment.', x) }}</option>{% endfor %}</select></label>
-      <label>{{ t("context.adjust") }}<input name="adjust_factor" type="number" step="0.05" min="0" max="1"></label>
+      <label>{{ t("context.treatment") }}<select name="treatment">{% for x in treatments if x != 'suppress_overdue' %}<option value="{{ x }}">{{ label('treatment.', x) }}</option>{% endfor %}</select></label>
+      <label>{{ t("context.adjust") }}<input name="adjust_factor" id="adjust_factor" type="number" step="0.05" min="0" max="1" aria-describedby="adjust_help adjust_err"><span class="muted" id="adjust_help" style="font-size:13px">{{ t("context.adjust_help") }}</span><span class="field-error" id="adjust_err" role="alert"></span></label>
     </div>
     <fieldset style="border:1px solid var(--rule);border-radius:6px"><legend class="eyebrow">{{ t("context.effect") }}</legend>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px">
@@ -33,9 +33,19 @@
     <label>{{ t("context.about") }}<select name="scopes" multiple size="4"><option value="shop" selected>{{ t("common.shop") }}</option><option value="team">{{ t("common.team") }}</option>{% for b in all_barbers %}<option value="{{ b.key }}">{{ b.name }}</option>{% endfor %}</select></label>
     <label>{{ t("context.tags") }}<input name="tags" placeholder="{{ t('context.tags_ph') }}"></label>
     <label>{{ t("context.details") }}<textarea name="body"></textarea></label>
-    <div><button>{{ t("context.add_btn") }}</button></div>
+    <div><button>{{ t("context.add_btn") }}</button> <span class="muted" style="font-size:13px">{{ t("common.required_note") }}</span></div>
   </form>
 </details>
+<script>
+  const form = document.getElementById("factor-form");
+  const fail = (input, errId, text) => { document.getElementById(errId).textContent = text; input.setAttribute("aria-invalid", text ? "true" : "false"); return !text; };
+  form.addEventListener("submit", e => {
+    const f = form.elements, ok = [];
+    ok.push(fail(f.adjust_factor, "adjust_err", f.treatment.value === "adjust" && (f.adjust_factor.value === "" || +f.adjust_factor.value < 0 || +f.adjust_factor.value > 1) ? "{{ t('context.adjust_error') }}" : ""));
+    if (ok.includes(false)) { e.preventDefault(); form.querySelector("[aria-invalid=true]").focus(); }
+  });
+  form.elements.treatment.addEventListener("change", () => fail(form.elements.adjust_factor, "adjust_err", ""));
+</script>
 <section>
   {% for n in notes %}
   {% set st = statuses.get(n.id, 'belief') %}
@@ -62,12 +72,12 @@
 <section class="card">
   <h2>{{ t("lens.title") }}</h2>
   <p class="sub">{{ t("lens.sub") }}</p>
-  <table><thead><tr><th class="l">{{ t("lens.label") }}</th><th class="l">{{ t("lens.honour") }}</th></tr></thead>
+  <table><thead><tr><th scope="col" class="l">{{ t("lens.label") }}</th><th scope="col" class="l">{{ t("lens.honour") }}</th></tr></thead>
     <tbody>{% for l in lenses %}<tr><td class="l">{{ l.label }} <span class="muted">({{ l.key }})</span></td><td class="l">{% if l.rule.honour %}{% for x in l.rule.honour %}{{ label('treatment.', x) }}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}{{ t("lens.raw") }}{% endif %}</td></tr>{% endfor %}</tbody></table>
   <form method="post" action="/lenses" class="inline" style="margin-top:10px">
     <label>{{ t("lens.key") }}<input name="key" required pattern="[A-Za-z_][A-Za-z0-9_]*"></label>
     <label>{{ t("lens.label") }}<input name="label" required></label>
-    <fieldset style="border:0;display:flex;gap:10px;flex-wrap:wrap"><legend class="eyebrow">{{ t("lens.honour") }}</legend>{% for x in treatments %}<label style="display:inline-flex;gap:4px"><input type="checkbox" name="honour" value="{{ x }}"> {{ label('treatment.', x) }}</label>{% endfor %}</fieldset>
+    <fieldset style="border:0;display:flex;gap:10px;flex-wrap:wrap"><legend class="eyebrow">{{ t("lens.honour") }}</legend>{% for x in treatments if x != 'suppress_overdue' %}<label style="display:inline-flex;gap:4px"><input type="checkbox" name="honour" value="{{ x }}"> {{ label('treatment.', x) }}</label>{% endfor %}</fieldset>
     <button>{{ t("lens.save") }}</button>
   </form>
 </section>

@@ -5,7 +5,7 @@
 
 <section><h2>{{ t("report.sec.scorecard") }}</h2>
   <div class="tablebox"><table>
-    <thead><tr><th class="l">{{ t("report.c.metric") }}</th><th>{{ t("report.c.value") }}</th><th>{{ t("report.c.team") }}</th><th>{{ t("report.c.vs_team") }}</th><th>{{ t("report.c.last_year") }}</th><th>{{ t("report.c.vs_last_year") }}</th></tr></thead>
+    <thead><tr><th scope="col" class="l">{{ t("report.c.metric") }}</th><th scope="col">{{ t("report.c.value") }}</th><th scope="col">{{ t("report.c.team") }}</th><th scope="col">{{ t("report.c.vs_team") }}</th><th scope="col">{{ t("report.c.last_year") }}</th><th scope="col">{{ t("report.c.vs_last_year") }}</th></tr></thead>
     <tbody>{% for row in vm.score_rows %}<tr><td class="l">{{ mlabel(row.metric) }}</td><td><b>{{ fmt(row.metric, row.value) }}</b></td><td>{{ fmt(row.metric, row.team) }}</td>
       <td class="{{ delta_class(row.metric, row.value, row.team) }}">{{ row.d_team }}</td><td>{{ fmt(row.metric, row.ly) }}</td><td class="{{ delta_class(row.metric, row.value, row.ly) }}">{{ row.d_ly }}</td></tr>{% endfor %}</tbody>
   </table></div>
@@ -13,17 +13,17 @@
 
 <section><h2>{{ t("report.sec.weekly") }}</h2>
   <div class="tablebox"><table>
-    <thead><tr>{% for k in vm.week_cols %}<th class="{{ 'l' if k == 'week' }}">{{ t("col." ~ k) }}</th>{% endfor %}</tr></thead>
+    <thead><tr>{% for k in vm.week_cols %}<th scope="col" class="{{ 'l' if k == 'week' }}">{{ t("col." ~ k) }}</th>{% endfor %}</tr></thead>
     <tbody>{% for w in S.weekly.tables.weeks %}<tr>{% for k in vm.week_cols %}<td class="{{ 'l' if k == 'week' }}">{{ w[k] if k == 'week' else kfmt(k, w[k]) }}</td>{% endfor %}</tr>{% endfor %}</tbody>
   </table></div>
 </section>
 
 <div class="grid">
   <section class="card"><h3>{{ t("report.sec.weekday") }}</h3>
-    <table><thead><tr><th class="l">{{ t("report.c.weekday") }}</th><th>{{ t("col.days_worked") }}</th><th>{{ t("col.util") }}</th><th></th><th>{{ t("col.revenue") }}</th></tr></thead>
+    <table><thead><tr><th scope="col" class="l">{{ t("report.c.weekday") }}</th><th scope="col">{{ t("col.days_worked") }}</th><th scope="col">{{ t("col.util") }}</th><th scope="col"></th><th scope="col">{{ t("col.revenue") }}</th></tr></thead>
     <tbody>{% for d in S.weekday.tables.weekday %}<tr><td class="l">{{ t("report.day." ~ d.weekday) }}</td><td>{{ d.days_worked }}</td><td>{{ kfmt("util_pct", d.util) }}</td><td>{{ bar(d.util) }}</td><td>{{ kfmt("revenue", d.revenue) }}</td></tr>{% endfor %}</tbody></table></section>
   <section class="card"><h3>{{ t("report.sec.hours") }}</h3>
-    <table><thead><tr><th class="l">{{ t("report.c.hour") }}</th><th>{{ t("col.util") }}</th><th></th></tr></thead>
+    <table><thead><tr><th scope="col" class="l">{{ t("report.c.hour") }}</th><th scope="col">{{ t("col.util") }}</th><th scope="col"></th></tr></thead>
     <tbody>{% for h in S.weekday.tables.hour %}<tr><td class="l">{{ h.hour }}:00</td><td>{{ kfmt("util_pct", h.util) }}</td><td>{{ bar(h.util) }}</td></tr>{% endfor %}</tbody></table></section>
 </div>
 
@@ -41,14 +41,14 @@
 <section><h2>{{ t("report.sec.overdue") }}</h2>
   {{ kpi_table(["overdue","value_at_stake","avg_days_silent"], S.overdue.kpis, S.overdue.team) }}
   {% if S.overdue.tables.overdue %}<div class="tablebox"><table>
-    <thead><tr><th class="l">{{ t("report.c.client") }}</th><th>{{ t("col.shop_visits") }}</th><th>{{ t("col.usual_gap") }}</th><th>{{ t("col.silent") }}</th><th>{{ t("col.spend") }}</th></tr></thead>
+    <thead><tr><th scope="col" class="l">{{ t("report.c.client") }}</th><th scope="col">{{ t("col.shop_visits") }}</th><th scope="col">{{ t("col.usual_gap") }}</th><th scope="col">{{ t("col.silent") }}</th><th scope="col">{{ t("col.spend") }}</th></tr></thead>
     <tbody>{% for o in S.overdue.tables.overdue %}<tr><td class="l"><a href="/client/{{ o.client_id }}">{{ o.client_id }}</a></td><td>{{ o.shop_visits }}</td><td>{{ kfmt("gap", o.median_gap_days) }}</td><td>{{ o.days_silent }}</td><td>{{ kfmt("spend", o.lifetime_spend) }}</td></tr>{% endfor %}</tbody>
   </table></div>{% endif %}
 </section>
 
 <section><h2>{{ t("report.sec.services") }}</h2>
   {{ kpi_table(["addon_revenue_pct","services_per_visit","top_service_pct"], S.services.kpis, S.services.team) }}
-  <div class="tablebox"><table><thead><tr><th class="l">{{ t("col.services") }}</th><th>{{ t("col.visits") }}</th><th>{{ t("col.revenue") }}</th><th>{{ t("col.share") }}</th><th>{{ t("col.avg_price") }}</th></tr></thead>
+  <div class="tablebox"><table><thead><tr><th scope="col" class="l">{{ t("col.services") }}</th><th scope="col">{{ t("col.visits") }}</th><th scope="col">{{ t("col.revenue") }}</th><th scope="col">{{ t("col.share") }}</th><th scope="col">{{ t("col.avg_price") }}</th></tr></thead>
     <tbody>{% for x in S.services.tables.services %}<tr><td class="l">{{ x.service }}</td><td>{{ x.visits }}</td><td>{{ kfmt("revenue", x.revenue) }}</td><td>{{ kfmt("share_pct", x.share_pct) }}</td><td>{{ kfmt("avg_price", x.avg_price) }}</td></tr>{% endfor %}</tbody></table></div>
 </section>
 

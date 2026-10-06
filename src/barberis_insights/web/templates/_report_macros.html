@@ -3,7 +3,7 @@
 
 {% macro kpi_table(keys, kpis, team=none) %}
 <div class="tablebox"><table>
-  <thead><tr><th class="l">{{ t("report.c.metric") }}</th><th>{{ t("report.c.value") }}</th>{% if team is not none %}<th>{{ t("report.c.team") }}</th>{% endif %}</tr></thead>
+  <thead><tr><th scope="col" class="l">{{ t("report.c.metric") }}</th><th scope="col">{{ t("report.c.value") }}</th>{% if team is not none %}<th scope="col">{{ t("report.c.team") }}</th>{% endif %}</tr></thead>
   <tbody>{% for k in keys %}{% if k in kpis %}<tr>
     <td class="l">{{ label("kpi.", k, mlabel(k)) }}</td>
     <td>{{ kfmt(k, kpis[k]) }}</td>{% if team is not none %}<td>{{ kfmt(k, team.get(k)) }}</td>{% endif %}
@@ -21,14 +21,14 @@
 {% endmacro %}
 
 {% macro goals_list(items) %}
-{% if items %}<div class="tablebox"><table><thead><tr><th class="l">{{ t("report.sec.goals") }}</th><th>{{ t("goal.start") }}</th><th>{{ t("goal.now") }}</th><th>{{ t("goal.target") }}</th><th class="l">{{ t("col.status") }}</th></tr></thead>
+{% if items %}<div class="tablebox"><table><thead><tr><th scope="col" class="l">{{ t("report.sec.goals") }}</th><th scope="col">{{ t("goal.start") }}</th><th scope="col">{{ t("goal.now") }}</th><th scope="col">{{ t("goal.target") }}</th><th scope="col" class="l">{{ t("col.status") }}</th></tr></thead>
   <tbody>{% for g in items %}<tr><td class="l wrap">{{ g.title }}</td><td>{{ fmt(g.metric, g.baseline) }}</td><td>{{ fmt(g.metric, g.current) }}</td><td>{{ fmt(g.metric, g.target) }}</td>
     <td class="l"><span class="pill {{ g.state }}">{{ t(g.label_key) }}</span></td></tr>{% endfor %}</tbody></table></div>{% endif %}
 {% endmacro %}
 
 {% macro factor_list(items) %}
 {% if items %}<section><h2>{{ t("report.sec.factors") }}</h2><div class="tablebox"><table>
-  <thead><tr><th class="l">{{ t("common.title") }}</th><th class="l">{{ t("context.category") }}</th><th class="l">{{ t("context.treatment") }}</th><th class="l">{{ t("data.window") }}</th></tr></thead>
+  <thead><tr><th scope="col" class="l">{{ t("common.title") }}</th><th scope="col" class="l">{{ t("context.category") }}</th><th scope="col" class="l">{{ t("context.treatment") }}</th><th scope="col" class="l">{{ t("data.window") }}</th></tr></thead>
   <tbody>{% for x in items %}<tr><td class="l wrap">{{ x.title }}</td><td class="l">{{ label('category.', x.category) }}</td><td class="l">{{ label('treatment.', x.treatment) }}</td>
     <td class="l">{% for p in x.periods %}{{ p[0] }}{% if p[1] != p[0] %} – {{ p[1] }}{% endif %}{% if not loop.last %}; {% endif %}{% endfor %}</td></tr>{% endfor %}</tbody></table></div></section>{% endif %}
 {% endmacro %}

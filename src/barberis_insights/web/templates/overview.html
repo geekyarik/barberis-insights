@@ -30,18 +30,18 @@
 
 <section>
   <h2>{{ t("nav.barbers") }}</h2>
-  <div class="tablebox"><table>
-    <thead><tr><th class="l">{{ t("common.barber") }}</th>{% for m in key_metrics %}<th class="{{ 'hide-sm' if m in hide_sm }}">{{ mlabel(m) }}</th>{% endfor %}</tr></thead>
+  <div class="tablebox"><table class="stack">
+    <thead><tr><th scope="col" class="l">{{ t("common.barber") }}</th>{% for m in key_metrics %}<th scope="col" class="{{ 'hide-sm' if m in hide_sm }}">{{ mlabel(m) }}</th>{% endfor %}</tr></thead>
     <tbody>{% for b in all_barbers %}<tr><td class="l"><a href="/barber/{{ b.key }}">{{ b.name }}</a> <span class="muted">{{ b.tier }}</span></td>
       {% for m in key_metrics %}{% set v = cur.get(b.key, {}).get(m) %}{% set p = before.get(b.key, {}).get(m) %}
-      <td class="{{ 'hide-sm' if m in hide_sm }}"><span class="{{ delta_class(m, v, p) if p is not none else '' }}">{{ fmt(m, v) }}</span></td>{% endfor %}</tr>{% endfor %}</tbody>
+      <td data-label="{{ mlabel(m) }}" class="{{ 'hide-sm' if m in hide_sm }}"><span class="{{ delta_class(m, v, p) if p is not none else '' }}">{{ fmt(m, v) }}</span></td>{% endfor %}</tr>{% endfor %}</tbody>
   </table></div>
 </section>
 
 <section>
   <h2>{{ t("overview.weekday_heat") }}</h2>
   <div class="tablebox"><table class="heat">
-    <thead><tr><th class="l"></th>{% for i in range(7) %}<th>{{ t('day.short.' ~ i) }}</th>{% endfor %}</tr></thead>
+    <thead><tr><th scope="col" class="l"></th>{% for i in range(7) %}<th scope="col">{{ t('day.short.' ~ i) }}</th>{% endfor %}</tr></thead>
     <tbody>{% for b in all_barbers %}<tr><td class="l">{{ b.name }}</td>{% for i in range(7) %}{% set u = cur.get(b.key, {}).get('util_d' ~ i) %}
       {% if u is none %}<td class="muted">·</td>{% else %}{% set lvl = 1 if u < 40 else 2 if u < 50 else 3 if u < 60 else 4 if u < 75 else 5 %}
       <td style="background:var(--h{{ lvl }});color:var({{ '--hd' if lvl >= 5 else '--h4t' if lvl == 4 else '--hl' }})">{{ u|round|int }}%</td>{% endif %}{% endfor %}</tr>{% endfor %}</tbody>

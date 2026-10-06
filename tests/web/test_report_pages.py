@@ -39,7 +39,7 @@ def test_a_team_comparison_page_renders(client):
     r = client.post("/reports/build", data={**BUILD, "kind": "team_comparison"}, follow_redirects=False)
     page = client.get(r.headers["location"])
     assert page.status_code == 200 and "Порівняння команди" in page.text
-    assert "<th>A</th>" in page.text and "<th>B</th>" in page.text
+    assert 'scope="col">A</th>' in page.text and 'scope="col">B</th>' in page.text
 
 
 def test_the_export_is_one_file_without_navigation_or_scripts(client):

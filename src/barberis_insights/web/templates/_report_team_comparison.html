@@ -8,7 +8,7 @@
 <section><h2>{{ title }}</h2>
   {% if incomplete and not section.complete %}<p class="sub">{{ t("report.incomplete") }}</p>{% endif %}
   <div class="tablebox"><table>
-    <thead><tr><th class="l">{{ t("report.c.metric") }}</th>{% for p in people %}<th>{{ names.get(p, t("report.c.team")) }}</th>{% endfor %}</tr></thead>
+    <thead><tr><th scope="col" class="l">{{ t("report.c.metric") }}</th>{% for p in people %}<th scope="col">{{ names.get(p, t("report.c.team")) }}</th>{% endfor %}</tr></thead>
     <tbody>{% for k in keys %}<tr><td class="l">{{ label("kpi.", k, mlabel(k)) }}</td>
       {% for p in people %}{% set v = section.kpis.get(p, {}).get(k) %}<td class="{{ delta_class(k, v, section.kpis.get('team', {}).get(k)) if (p != 'team' and k in REGISTRY) else '' }}">{{ fmt(k, v) if k in REGISTRY else kfmt(k, v) }}</td>{% endfor %}</tr>{% endfor %}</tbody>
   </table></div>

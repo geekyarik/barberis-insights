@@ -40,7 +40,7 @@
 </div>
 <section>
   <h2>{{ t("client.recent_visits") }}</h2>
-  <div class="tablebox"><table><thead><tr><th class="l">{{ t("col.date") }}</th><th class="l">{{ t("col.time") }}</th><th class="l">{{ t("common.barber") }}</th><th class="l">{{ t("col.status") }}</th><th class="l">{{ t("col.services") }}</th><th>{{ t("col.cost") }}</th><th class="l">{{ t("col.booked") }}</th></tr></thead>
+  <div class="tablebox"><table><thead><tr><th scope="col" class="l">{{ t("col.date") }}</th><th scope="col" class="l">{{ t("col.time") }}</th><th scope="col" class="l">{{ t("common.barber") }}</th><th scope="col" class="l">{{ t("col.status") }}</th><th scope="col" class="l">{{ t("col.services") }}</th><th scope="col">{{ t("col.cost") }}</th><th scope="col" class="l">{{ t("col.booked") }}</th></tr></thead>
   <tbody>{% for v in visits %}<tr><td class="l">{{ v.date }}</td><td class="l">{{ v.start }}</td><td class="l">{{ bnames.get(v.barber_id, v.barber_name) }}</td><td class="l">{{ label('visit.', v.status) }}</td><td class="wrap">{{ v.services|map(attribute='title')|join(', ') }}</td><td>₴{{ v.total_cost|round|int }}</td><td class="l">{{ t('client.online') if v.online else t('client.front_desk') }}</td></tr>{% endfor %}</tbody></table></div>
 </section>
 {% endblock %}

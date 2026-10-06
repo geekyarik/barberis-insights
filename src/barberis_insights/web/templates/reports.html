@@ -13,7 +13,7 @@
 </section>
 <section><h2>{{ t("report.stored") }}</h2>
   <div class="tablebox"><table>
-    <thead><tr><th class="l">№</th><th class="l">{{ t("report.c.kind") }}</th><th class="l">{{ t("report.c.barber") }}</th><th class="l">{{ t("data.window") }}</th><th class="l">{{ t("report.c.created") }}</th><th></th></tr></thead>
+    <thead><tr><th scope="col" class="l">№</th><th scope="col" class="l">{{ t("report.c.kind") }}</th><th scope="col" class="l">{{ t("report.c.barber") }}</th><th scope="col" class="l">{{ t("data.window") }}</th><th scope="col" class="l">{{ t("report.c.created") }}</th><th scope="col"></th></tr></thead>
     <tbody>{% for r in reports %}<tr><td class="l">{{ r.id }}</td><td class="l">{{ t("report.kind." ~ r.report_key) if r.report_key in kinds else r.report_key }}</td><td class="l">{{ r.content.get("name", "—") }}</td>
       <td class="l">{{ r.window_from }} – {{ r.window_to }}</td><td class="l">{{ r.created.strftime('%Y-%m-%d %H:%M') }}</td>
       <td class="l"><a href="/reports/{{ r.id }}">{{ t("report.open") }}</a> · <a href="/reports/{{ r.id }}/export">{{ t("report.export") }}</a></td></tr>{% endfor %}</tbody>
