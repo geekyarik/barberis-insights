@@ -6,7 +6,7 @@ import datetime as dt
 from pathlib import Path
 from urllib.parse import quote, urlparse
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -397,7 +397,7 @@ def goal_delete(request: Request, goal_id: str, confirm: str = Form(""), next_ur
 
 # ---------------------------------------------------------------- clients at risk
 @app.get("/risk", response_class=HTMLResponse)
-def risk_page(request: Request, segment: list[str] | None = None, barber: str = "", show_all: bool = False, limit: int = 100,
+def risk_page(request: Request, segment: list[str] = Query(default=[]), barber: str = "", show_all: bool = False, limit: int = 100,
               s: Session = Depends(db)):
     segment = segment or ["overdue"]
     bid = s.scalar(select(Barber.altegio_id).where(Barber.key == barber)) if barber else None

@@ -45,7 +45,7 @@
     {% if sub %}<p class="sub">{{ sub }}</p>{% endif %}
   </div>
   <div class="page-chips">
-    {{ chip(t("ui.data_age", days=fresh.age_days) if fresh.age_days is not none else t("ui.data_unknown"), 'stale' if fresh.stale else 'ok') }}
+    {{ chip(t("ui.data_current") if fresh.age_days is not none and fresh.age_days <= 1 else t("ui.data_age", days=fresh.age_days) if fresh.age_days is not none else t("ui.data_unknown"), 'stale' if fresh.stale else 'ok') }}
   </div>
 </header>
 {% endmacro %}

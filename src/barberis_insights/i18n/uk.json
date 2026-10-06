@@ -691,5 +691,7 @@
   "risk.usually_n": "зазвичай {n} дн.",
   "risk.visits_n": "{n} візитів",
   "risk.selected_n": "Обрано: {n}",
-  "risk.ab_title": "A/B-тест пропозицій"
+  "risk.ab_title": "A/B-тест пропозицій",
+
+  "ui.data_current": "Дані: актуальні"
 }
