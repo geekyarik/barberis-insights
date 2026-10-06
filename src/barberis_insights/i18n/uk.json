@@ -637,5 +637,8 @@
   "context.all": "Усі",
   "job.data_watch": "Перевірка свіжості даних",
   "job.sheet_sync": "Синхронізація списку дзвінків",
-  "job.weekly_review": "Тижневий огляд"
+  "job.weekly_review": "Тижневий огляд",
+  "nav.skip": "Перейти до змісту",
+  "nav.main": "Головне меню",
+  "overview.heat_legend": "Завантаженість"
 }

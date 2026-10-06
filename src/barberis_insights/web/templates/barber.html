@@ -17,11 +17,11 @@
 
 <section>
   <h2>{{ t("barber.revenue_week") }}</h2>
-  <div class="card chart"><canvas id="rev"></canvas></div>
+  <div class="card chart"><canvas id="rev" role="img" aria-label="{{ t('barber.revenue_week') }}"></canvas></div>
   <h2>{{ t("barber.busy_share") }}</h2>
-  <div class="card chart"><canvas id="util"></canvas></div>
+  <div class="card chart"><canvas id="util" role="img" aria-label="{{ t('barber.busy_share') }}"></canvas></div>
   <h2>{{ t("barber.clients_week") }}</h2>
-  <div class="card chart"><canvas id="cli"></canvas></div>
+  <div class="card chart"><canvas id="cli" role="img" aria-label="{{ t('barber.clients_week') }}"></canvas></div>
 </section>
 
 {% if tips %}<section><h2>{{ t("barber.playbook_for", name=b.name) }}</h2><div class="grid">{% for tip in tips %}<article class="card"><div class="eyebrow">{{ tip.tag }}</div><h3>{{ tip.title }}</h3><p class="sub" style="margin:0">{{ tip.body }}</p></article>{% endfor %}</div></section>{% endif %}

@@ -637,5 +637,8 @@
   "context.all": "All",
   "job.data_watch": "Data freshness check",
   "job.sheet_sync": "Call sheet sync",
-  "job.weekly_review": "Weekly review"
+  "job.weekly_review": "Weekly review",
+  "nav.skip": "Skip to content",
+  "nav.main": "Main menu",
+  "overview.heat_legend": "Busy share"
 }

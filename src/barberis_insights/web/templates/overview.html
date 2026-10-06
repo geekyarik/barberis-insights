@@ -44,8 +44,10 @@
     <thead><tr><th class="l"></th>{% for i in range(7) %}<th>{{ t('day.short.' ~ i) }}</th>{% endfor %}</tr></thead>
     <tbody>{% for b in all_barbers %}<tr><td class="l">{{ b.name }}</td>{% for i in range(7) %}{% set u = cur.get(b.key, {}).get('util_d' ~ i) %}
       {% if u is none %}<td class="muted">·</td>{% else %}{% set lvl = 1 if u < 40 else 2 if u < 50 else 3 if u < 60 else 4 if u < 75 else 5 %}
-      <td style="background:var(--h{{ lvl }});color:var({{ '--hd' if lvl >= 4 else '--hl' }})">{{ u|round|int }}%</td>{% endif %}{% endfor %}</tr>{% endfor %}</tbody>
+      <td style="background:var(--h{{ lvl }});color:var({{ '--hd' if lvl >= 5 else '--h4t' if lvl == 4 else '--hl' }})">{{ u|round|int }}%</td>{% endif %}{% endfor %}</tr>{% endfor %}</tbody>
   </table></div>
+  <div class="legend" aria-label="{{ t('overview.heat_legend') }}"><span>{{ t('overview.heat_legend') }}:</span>
+    {% for lvl, txt in [(1, '< 40%'), (2, '40–50%'), (3, '50–60%'), (4, '60–75%'), (5, '≥ 75%')] %}<span><i style="background:var(--h{{ lvl }})"></i>{{ txt }}</span>{% endfor %}</div>
 </section>
 
 <div class="grid">
