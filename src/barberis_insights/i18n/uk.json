@@ -23,6 +23,8 @@
   "common.none": "Немає.",
   "common.all": "Усі",
   "common.filter": "Фільтрувати",
+  "common.cancel": "Скасувати",
+  "flag.until_hint": "Після цієї дати клієнт знову з’явиться в списку.",
   "common.save": "Зберегти",
   "common.edit": "Редагувати",
   "common.confirm": "підтверджую",
@@ -234,8 +236,6 @@
   "client.note": "Нотатка",
   "client.no_cases": "Звернень ще немає.",
   "client.contact": "Зв’язок",
-  "client.allow_contact": "Дозволити дзвінки знову",
-  "client.mark_dnc": "Позначити «не турбувати»",
   "client.recent_visits": "Останні візити",
   "client.online": "онлайн",
   "client.front_desk": "адміністратор",
@@ -731,6 +731,7 @@
   "flag.reason": "Причина",
   "flag.comment": "Коментар",
   "flag.comment_ph": "Що відомо, наприклад: у Польщі, повернеться влітку",
+  "flag.comment_required": "Для причини «інша» коментар обов’язковий.",
   "flag.until_label": "Перевірити знову (необов’язково)",
   "flag.save": "Не телефонувати",
   "flag.lift": "Зняти позначку",
@@ -751,5 +752,6 @@
   "flash.flag_bad": "Не вдалося зберегти позначку: {why}",
 
   "offer_short.book_now": "−15% при записі під час дзвінка",
-  "offer_short.call_only": "Дзвінок без знижки"
+  "offer_short.call_only": "Дзвінок без знижки",
+  "flag.dnc_old": "Раніше позначено «не турбувати» (без причини)."
 }

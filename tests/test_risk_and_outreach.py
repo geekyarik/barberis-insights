@@ -294,3 +294,23 @@ def test_a_client_without_a_phone_cannot_be_called(s):
     regular(s, 36, "2026-07-20"); client(s, 36, phone=None)
     build(s)
     assert 36 not in _ids(s) and "no_phone" in _ids(s, include_ineligible=True)[36]["ineligible_reasons"]
+
+
+def test_reason_other_needs_a_comment(s):
+    import pytest
+    from barberis_insights.clients import contact
+    for blank in ("", "   "):
+        with pytest.raises(contact.CommentRequired):
+            contact.add_flag(s, 36, "other", blank)
+    assert contact.add_flag(s, 36, "other", "waiting for a visa").reason == "other"
+    assert contact.add_flag(s, 37, "abroad").comment == ""      # other reasons stay optional
+
+
+def test_lifting_a_flag_also_clears_the_older_do_not_contact_mark(s):
+    from barberis_insights.clients import contact
+    regular(s, 38, "2026-07-20"); client(s, 38, do_not_contact=True)
+    build(s)
+    assert 38 not in _ids(s) and "dnc" in _ids(s, include_ineligible=True)[38]["ineligible_reasons"]
+    from barberis_insights.db.models import Client
+    contact.lift_flag(s, 38); s.get(Client, 38).do_not_contact = False       # what the single "lift" button does
+    assert 38 in _ids(s)

@@ -33,18 +33,16 @@
   </section>
   <section class="card">
     <h2>{{ t("client.contact") }}</h2>
-    <form method="post" action="/client/{{ cid }}/dnc" class="inline">
-      <input type="hidden" name="value" value="{{ 'off' if c and c.do_not_contact else 'on' }}">
-      <button class="{{ 'ghost' if c and c.do_not_contact else 'danger' }}">{{ t('client.allow_contact') if c and c.do_not_contact else t('client.mark_dnc') }}</button>
-    </form>
     <h3 style="margin-top:12px">{{ t("flag.title") }}</h3>
     {% if flag %}<p style="margin:4px 0"><b>{{ label("flag.", flag.reason) }}</b>{% if flag.comment %}: {{ flag.comment }}{% endif %}<span class="muted"> · {{ flag.created.date() }}{% if flag.until %} · {{ t("flag.until", date=flag.until) }}{% endif %}</span></p>
       <form method="post" action="/client/{{ cid }}/flag/lift"><input type="hidden" name="next_url" value="{{ here }}"><button class="ghost">{{ t("flag.lift") }}</button></form>
+    {% elif c and c.do_not_contact %}<p style="margin:4px 0"><b>{{ t("flag.dnc_old") }}</b></p>
+      <form method="post" action="/client/{{ cid }}/flag/lift"><input type="hidden" name="next_url" value="{{ here }}"><button class="ghost">{{ t("flag.lift") }}</button></form>
     {% else %}<p class="muted sm">{{ t("flag.none") }}</p>{% endif %}
-    <form method="post" action="/client/{{ cid }}/flag" class="note-f" style="padding:8px 0;border:0">
+    <form method="post" action="/client/{{ cid }}/flag" class="note-f" style="padding:8px 0;border:0" data-flagform>
       <input type="hidden" name="next_url" value="{{ here }}"><p class="muted sm">{{ t("flag.help") }}</p>
       <label>{{ t("flag.reason") }}<select name="reason" required>{% for k in flag_reasons %}<option value="{{ k }}">{{ label("flag.", k) }}</option>{% endfor %}</select></label>
-      <label>{{ t("flag.comment") }}<input name="comment" maxlength="500" placeholder="{{ t('flag.comment_ph') }}"></label>
+      <label>{{ t("flag.comment") }}<span class="req" aria-hidden="true" hidden> *</span><input name="comment" maxlength="500" placeholder="{{ t('flag.comment_ph') }}"></label>
       <label>{{ t("flag.until_label") }}<input name="until" type="date" min="{{ today }}"></label>
       <div><button>{{ t("flag.save") }}</button></div></form>
     <h3 style="margin-top:12px">{{ t("nav.barbers") }}</h3>

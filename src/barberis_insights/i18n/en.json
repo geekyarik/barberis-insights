@@ -23,6 +23,8 @@
   "common.none": "None.",
   "common.all": "All",
   "common.filter": "Filter",
+  "common.cancel": "Cancel",
+  "flag.until_hint": "After this date the client shows up in the list again.",
   "common.save": "Save",
   "common.edit": "Edit",
   "common.confirm": "confirm",
@@ -234,8 +236,6 @@
   "client.note": "Note",
   "client.no_cases": "No cases yet.",
   "client.contact": "Contact",
-  "client.allow_contact": "Allow contact again",
-  "client.mark_dnc": "Mark do not contact",
   "client.recent_visits": "Recent visits",
   "client.online": "online",
   "client.front_desk": "front desk",
@@ -731,6 +731,7 @@
   "flag.reason": "Reason",
   "flag.comment": "Comment",
   "flag.comment_ph": "What is known, e.g. in Poland, back in the summer",
+  "flag.comment_required": "A comment is required when the reason is “other”.",
   "flag.until_label": "Check again on (optional)",
   "flag.save": "Do not call",
   "flag.lift": "Lift the flag",
@@ -751,5 +752,6 @@
   "flash.flag_bad": "Could not save the flag: {why}",
 
   "offer_short.book_now": "−15% if booked on the call",
-  "offer_short.call_only": "Call, no discount"
+  "offer_short.call_only": "Call, no discount",
+  "flag.dnc_old": "Marked “do not contact” earlier (no reason given)."
 }

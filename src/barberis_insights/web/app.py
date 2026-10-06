@@ -489,6 +489,8 @@ def client_flag(request: Request, cid: int, reason: str = Form(...), comment: st
     """Someone who knows the client says why not to call them (abroad, mobilised, ...), optionally until a date."""
     try:
         contact.add_flag(s, cid, reason, comment, dt.date.fromisoformat(until) if until else None)
+    except contact.CommentRequired:
+        return back(request, _next(next_url, cid), "flag_bad", "warn", why=tr("flag.comment_required", lang_of(request)))
     except ValueError as e:
         return back(request, _next(next_url, cid), "flag_bad", "warn", why=str(e))
     return back(request, _next(next_url, cid), "flag_saved")
@@ -496,15 +498,11 @@ def client_flag(request: Request, cid: int, reason: str = Form(...), comment: st
 
 @app.post("/client/{cid}/flag/lift")
 def client_flag_lift(request: Request, cid: int, next_url: str = Form(""), s: Session = Depends(db)):
+    """Lifts whatever keeps the client off the call list: a flag, or the older permanent do-not-contact mark."""
     contact.lift_flag(s, cid)
+    if (c := s.get(Client, cid)) is not None:
+        c.do_not_contact = False
     return back(request, _next(next_url, cid), "flag_lifted")
-
-
-@app.post("/client/{cid}/dnc")
-def client_dnc(request: Request, cid: int, value: str = Form("on"), s: Session = Depends(db)):
-    c = s.get(Client, cid) or Client(altegio_id=cid)
-    c.do_not_contact = value == "on"; s.add(c)
-    return back(request, f"/client/{cid}", "dnc_updated")
 
 
 # ---------------------------------------------------------------- win-back

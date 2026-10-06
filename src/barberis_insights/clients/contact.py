@@ -20,10 +20,16 @@ def active_flags(s: Session, client_ids=None, today: dt.date | None = None) -> d
     return {f.client_id: f for f in s.scalars(q) if f.until is None or f.until >= today}
 
 
+class CommentRequired(ValueError):
+    """The reason "other" explains nothing by itself, so it needs the comment."""
+
+
 def add_flag(s: Session, client_id: int, reason: str, comment: str = "", until: dt.date | None = None) -> ClientFlag:
     """Replaces the client's earlier flag: the newest word wins, the old one stays as history."""
     if reason not in REASONS:
         raise ValueError(f"unknown reason {reason!r}; use one of {', '.join(REASONS)}")
+    if reason == "other" and not comment.strip():
+        raise CommentRequired("a comment is required when the reason is 'other'")
     if until and until < dt.date.today():
         raise ValueError("the recheck date is in the past")
     lift_flag(s, client_id)

@@ -104,8 +104,19 @@ table.risk td:not(.l),table.risk th:not(.l){text-align:left}.actionbar{position:
 table.risk td,table.cards td.offer{white-space:normal}table.risk td[data-label] b{white-space:nowrap}table.risk td.offer{min-width:140px;max-width:240px;font-size:13px}table.risk .cell-bar .rank-track{width:44px}.num{display:inline-block;min-width:3ch;text-align:right}
 table.risk td:first-child+td{min-width:150px}
 .flagline{color:var(--ink)}
-dialog.note{border:1px solid var(--rule);border-radius:var(--r);background:var(--panel);color:var(--ink);padding:0;width:min(440px,92vw)}dialog.note::backdrop{background:rgba(15,23,42,.45)}
-.note-h{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--rule)}.note-h h2{font-size:15px}.note-f{display:grid;gap:10px;padding:14px 16px;border-bottom:1px solid var(--rule)}.note-f:last-child{border-bottom:0}.note-f[hidden]{display:none}.note-f label{display:flex;flex-wrap:wrap;gap:4px 6px}.note-f label>input,.note-f label>select{flex:1 1 100%}.note-f h3{font-size:14px}
+td.client{min-width:240px;max-width:340px}.cl-top{display:flex;align-items:center;gap:4px}.cl-name{font-weight:650;font-size:15px;min-width:0;overflow-wrap:anywhere}
+.cl-sub{display:flex;flex-wrap:wrap;gap:0 10px;font-size:12px;line-height:1.5;color:var(--ink-3)}.cl-sub a{color:var(--ink-2)}
+.cl-flag{font-size:12px;line-height:1.4;color:var(--ink);border-left:2px solid var(--rule);padding-left:8px;margin-top:4px}
+.cl-chips{display:flex;flex-wrap:wrap;align-items:center;gap:2px 8px;margin-top:6px}.cl-chips .chip{white-space:normal;font-size:12px;padding:1px 9px;border-radius:12px;line-height:1.35}
+button.iconbtn{display:inline-grid;place-items:center;width:32px;height:32px;margin:-4px 0;padding:0;border:0;border-radius:var(--r);background:none;color:var(--ink-3);cursor:pointer}button.iconbtn:hover{background:var(--soft);color:var(--ink)}button.iconbtn.on{color:var(--warn)}button.iconbtn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+dialog.note{border:1px solid var(--rule);border-radius:10px;background:var(--panel);color:var(--ink);padding:0;width:min(480px,calc(100vw - 32px));max-height:calc(100dvh - 32px);overflow:auto;box-shadow:0 20px 50px rgba(15,23,42,.25)}dialog.note::backdrop{background:rgba(15,23,42,.5)}
+.note-h{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;padding:16px 16px 12px}.note-h h2{font-size:17px;margin:0}.note-who{margin:2px 0 0;font-size:13px;color:var(--ink-3)}
+.note-f{display:grid;gap:16px;padding:0 16px 16px}.note-help{margin:0;font-size:13px;color:var(--ink-2);line-height:1.45}
+.note-reasons{border:0;padding:0;margin:0;display:flex;flex-wrap:wrap;gap:8px}.note-reasons legend{padding:0;float:left;width:100%;margin-bottom:8px;font:600 13px var(--f);color:var(--ink-2)}
+.note-field{display:grid;gap:6px;font:600 13px var(--f);color:var(--ink-2)}.note-field input{width:100%;min-height:40px;box-sizing:border-box;font:400 14px var(--f)}.note-field small{font:400 12px var(--f);color:var(--ink-3)}
+.note-actions{display:flex;justify-content:flex-end;gap:8px}.note-actions button{min-height:40px;padding:0 18px}
+.note-lift{padding:12px 16px;border-top:1px solid var(--rule);background:var(--soft);border-radius:0 0 10px 10px}.note-lift[hidden]{display:none}.note-lift .linkbtn{color:var(--bad);font-size:13px}
+@media (max-width:640px){.note-actions button{flex:1}}
 .actionbar details.ab{margin-left:auto}.actionbar .abopts{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px}.actionbar button:disabled{opacity:.5;cursor:not-allowed}
 h2.group-h{font:650 16px var(--f);margin:20px 0 10px}
 .multiples{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}.multiple{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border:1px solid var(--rule);border-radius:var(--r);text-decoration:none;color:var(--ink)}.multiple:hover{background:var(--soft)}
@@ -239,7 +250,8 @@ fieldset{border:1px solid var(--rule);border-radius:var(--r);padding:8px 12px}le
   table.cards thead{display:none}table.cards tr{display:block;padding:8px 12px;border-bottom:1px solid var(--rule)}
   table.cards td{display:flex;justify-content:space-between;gap:12px;border:0;padding:2px 0;white-space:normal}
   table.cards td::before{content:attr(data-label);color:var(--ink-3);font:600 12px var(--f)}
-  table.cards td.l{font-weight:650;font-size:15px}table.cards td.l::before{content:none}table.cards td.hide-sm,.hide-sm{display:none}
+  table.cards td.l{font-weight:650;font-size:15px}table.cards td.l::before{content:none}table.cards td.client,table.cards td.offer{display:block;max-width:none;min-width:0}table.cards td.client{padding-bottom:6px}table.cards td.sel{padding:0;justify-content:flex-start}
+  table.cards .v{display:flex;flex-direction:column;align-items:flex-end;text-align:right}table.cards td[data-label]{align-items:baseline}table.cards td.hide-sm,.hide-sm{display:none}
   th,td{padding:6px 8px}
 }
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
@@ -278,13 +290,19 @@ fieldset{border:1px solid var(--rule);border-radius:var(--r);padding:8px 12px}le
 </main>
 </div>
 {% if not export %}<script>
-document.querySelectorAll('input[required],select[required],textarea[required]').forEach(el => {
+document.querySelectorAll('input[required]:not([type=radio]),select[required],textarea[required]').forEach(el => {
   const label = el.closest('label'); if (!label || label.querySelector('.req')) return;
   const mark = document.createElement('span'); mark.className = 'req'; mark.textContent = ' *'; mark.setAttribute('aria-hidden', 'true');
   const text = [...label.childNodes].find(n => n.nodeType === 3 && n.textContent.trim());
   if (text) text.after(mark); else label.prepend(mark);
 });
 </script>{% endif %}
+<script>
+/* the reason "other" explains nothing by itself, so its comment is mandatory (the server enforces it too) */
+function flagSync(f){var r=f.querySelector('[name=reason]:checked')||f.querySelector('select[name=reason]'),need=!!r&&r.value==='other',c=f.elements.comment,m=c.parentNode.querySelector('.req');
+c.required=need;if(m)m.hidden=!need}
+document.querySelectorAll('form[data-flagform]').forEach(function(f){f.addEventListener('change',function(e){if(e.target.name==='reason')flagSync(f)});flagSync(f)});
+</script>
 {% block scripts %}{% endblock %}
 </body>
 </html>
