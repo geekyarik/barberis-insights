@@ -30,7 +30,7 @@
 {% endcall %}
 {% endif %}
 
-{% set pmax = (rows|map(attribute="priority")|max) if rows else 1 %}
+{% set pmax = (rows|map(attribute="priority")|max) if rows else 0 %}{% set pmax = pmax if pmax > 0 else 1 %}
 {% call panel(t("risk.candidates", n=rows|length), t("risk.candidates_sub"), "nopad") %}
 <form method="post" action="/risk/propose" id="propose">
   <div class="tablebox risk-box"><table class="cards risk">

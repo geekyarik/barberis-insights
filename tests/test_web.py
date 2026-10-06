@@ -16,6 +16,7 @@ def client():
 
 
 @pytest.mark.parametrize("path", ["/", "/barber/olia", "/barber/kseniia?weeks=52", "/goals", "/risk", "/risk?segment=lapsed&segment=one_time&show_all=true",
+                                  "/risk?segment=active&segment=slipping&segment=switched&show_all=true", "/risk?segment=one_time&barber=olia", "/team", "/team?weeks=26",
                                   "/outreach", "/context", "/context?q=price", "/hypotheses", "/playbook", "/data", "/api/metrics",
                                   "/api/goals?scope=team", "/api/weekly/tina", "/api/risk?limit=3", "/api/notes?q=price", "/api/measurements?scope=team&metric=util"])
 def test_pages_render(client, path):
