@@ -1,65 +1,83 @@
 {% extends "base.html" %}
-{% from "_macros.html" import goal_card, goal_form, spark_script with context %}
+{% from "_ui.html" import stat, panel, chip, page_head, empty with context %}
 {% block content %}
-<header>
-  <div class="eyebrow">{{ b.tier }} · {{ t("barber.last_weeks", n=weeks) }} · <a href="?weeks=13">13</a> · <a href="?weeks=26">26</a> · <a href="?weeks=52">52</a></div>
-  <h1>{{ b.name }}</h1>
-</header>
-<div class="kpis">
-  {% for m in key_metrics %}<div class="kpi"><span class="l">{{ mlabel(m) }}</span><span class="v">{{ fmt(m, cur.get(m)) }}</span><span class="d muted">{{ latest or '' }}</span></div>{% endfor %}
+{{ page_head(b.name, t("barber.sub", tier=b.tier, week=week_label)) }}
+
+<div class="toolbar">
+  <span class="eyebrow">{{ t("barber.range") }}</span>
+  <nav class="segmented" aria-label="{{ t('barber.range') }}">{% for n in (13, 26, 52) %}<a href="/barber/{{ b.key }}?weeks={{ n }}"{% if weeks == n %} aria-current="true"{% endif %}>{{ t("barber.weeks_n", n=n) }}</a>{% endfor %}</nav>
 </div>
 
-<section>
-  <h2>{{ t("nav.goals") }}</h2>
-  <div class="grid">{% for g in goals %}{{ goal_card(g, catalog, {b.key: b.name, 'team': t('common.team')}, '/barber/' ~ b.key) }}{% else %}<p class="muted">{{ t("goal.none") }}</p>{% endfor %}</div>
-  <details class="card"><summary>{{ t("barber.add_goal", name=b.name) }}</summary>{{ goal_form(none, catalog, {b.key: b.name}, '/barber/' ~ b.key) }}</details>
-</section>
+<div class="stats">{% for x in tiles %}{{ stat(x.label, x.value, x.delta, x.verdict, x.vs, x.trend, x.href, x.note) }}{% endfor %}</div>
 
-<section>
-  <h2>{{ t("barber.revenue_week") }}</h2>
-  <div class="card chart"><canvas id="rev" role="img" aria-label="{{ t('barber.revenue_week') }}"></canvas></div>
-  <h2>{{ t("barber.busy_share") }}</h2>
-  <div class="card chart"><canvas id="util" role="img" aria-label="{{ t('barber.busy_share') }}"></canvas></div>
-  <h2>{{ t("barber.clients_week") }}</h2>
-  <div class="card chart"><canvas id="cli" role="img" aria-label="{{ t('barber.clients_week') }}"></canvas></div>
-</section>
+{% call panel(t("barber.revenue_week"), t("barber.revenue_sub")) %}{{ rev_chart }}{% endcall %}
 
-{% if tips %}<section><h2>{{ t("barber.playbook_for", name=b.name) }}</h2><div class="grid">{% for tip in tips %}<article class="card"><div class="eyebrow">{{ tip.tag }}</div><h3>{{ tip.title }}</h3><p class="sub" style="margin:0">{{ tip.body }}</p></article>{% endfor %}</div></section>{% endif %}
+<div class="cols-2">
+  {% call panel(t("barber.busy_share"), t("barber.busy_sub")) %}{{ util_chart }}{% endcall %}
+  {% call panel(t("barber.clients_week"), t("barber.clients_sub")) %}{{ clients_chart }}{% endcall %}
+</div>
 
-<section>
-  <h2>{{ mlabel("risk_n") }}</h2>
-  <p class="sub">{{ t("barber.overdue_sub", name=b.name) }} <a href="/risk?barber={{ b.key }}">{{ t("barber.open_call_list") }} →</a></p>
-  <div class="tablebox"><table><thead><tr><th scope="col" class="l">{{ t("col.client") }}</th><th scope="col">{{ t("col.visits") }}</th><th scope="col">{{ t("col.spent") }}</th><th scope="col">{{ t("col.last_visit") }}</th><th scope="col">{{ t("col.days") }}</th><th scope="col" class="l">{{ t("col.offer") }}</th><th scope="col" class="l">{{ t("col.can_call") }}</th></tr></thead>
-  <tbody>{% for r in risk %}<tr><td class="l"><a href="/client/{{ r.client_id }}">{{ r.name or t('client.fallback', id=r.client_id) }}</a></td><td>{{ r.visits }}</td><td>₴{{ '{:,.0f}'.format(r.lifetime_spend).replace(',', ' ') }}</td><td>{{ r.last_visit }}</td><td>{{ r.days_since }}</td><td class="l">{{ label('offer.', r.suggested_offer) if r.suggested_offer else '' }}</td><td class="l">{{ t('common.yes') if r.eligible else reasons(r.ineligible_reasons) }}</td></tr>{% else %}<tr><td class="l muted" colspan="7">{{ t("common.none") }}</td></tr>{% endfor %}</tbody></table></div>
-</section>
+<div class="cols-2">
+  {% call panel(t("barber.retention_title"), t("barber.retention_sub", start=runs.client_retention.run.window_from, end=runs.client_retention.run.window_to) if runs.client_retention else none) %}
+    {% if viz.retention %}{% set k = runs.client_retention.kpis %}{{ viz.retention }}
+      <div class="stats compact" style="margin-top:14px">
+        {{ stat(t("barber.r_new"), kfmt("new_stayed_pct", k.new_stayed_pct), none, none, t("barber.of_n", n=k.new_clients)) }}
+        {{ stat(t("barber.r_returning"), kfmt("returning_stayed_pct", k.returning_stayed_pct), none, none, t("barber.of_n", n=k.returning_clients)) }}
+      </div>
+    {% else %}{{ empty(t("barber.no_run")) }}{% endif %}
+  {% endcall %}
+  {% call panel(t("barber.sources_title"), t("barber.sources_sub")) %}
+    {% if viz.sources %}{{ viz.sources }}
+      {% if runs.exclusive_clients and runs.exclusive_clients.kpis.get("regulars") %}{% set e = runs.exclusive_clients.kpis %}
+      <p style="margin:14px 0 0">{{ t("barber.exclusive", n=e.exclusive_regulars, total=e.regulars, pct=kfmt("exclusive_pct", e.exclusive_pct), share=kfmt("revenue_share_pct", e.revenue_share_pct)) }}</p>{% endif %}
+    {% else %}{{ empty(t("barber.no_run")) }}{% endif %}
+  {% endcall %}
+</div>
 
-<section>
-  <h2>{{ t("barber.ledger") }}</h2>
-  <div class="tablebox" style="max-height:480px"><table>
-    <thead><tr><th scope="col" class="l">{{ t("ledger.week") }}</th><th scope="col" class="l">{{ t("ledger.from") }}</th><th scope="col">{{ t("ledger.days") }}</th><th scope="col">{{ t("ledger.sched_h") }}</th><th scope="col">{{ t("ledger.busy") }}</th><th scope="col">{{ t("col.visits") }}</th><th scope="col">{{ t("ledger.revenue") }}</th><th scope="col">{{ t("ledger.check") }}</th><th scope="col">{{ t("ledger.rph") }}</th><th scope="col">{{ t("ledger.clients") }}</th><th scope="col">{{ t("ledger.new") }}</th><th scope="col">{{ t("ledger.online") }}</th><th scope="col">{{ t("ledger.visits_ly") }}</th><th scope="col">{{ t("ledger.rev_ly") }}</th></tr></thead>
-    <tbody>{% for r in rows|reverse %}<tr class="{{ 'muted' if not r.days }}"><td class="l">{{ r.week }}</td><td class="l">{{ r.start }}</td><td>{{ r.days or t('ledger.off') }}</td><td>{{ r.sched_h }}</td><td>{{ r.util ~ '%' if r.util is not none else '—' }}</td><td>{{ r.visits }}</td><td>{{ '{:,}'.format(r.revenue).replace(',', ' ') }}</td><td>{{ r.avg_check or '—' }}</td><td>{{ r.rev_per_sched_h or '—' }}</td><td>{{ r.clients }}</td><td>{{ r.new_to_shop }}</td><td>{{ r.online_pct ~ '%' if r.online_pct is not none else '—' }}</td><td>{{ r.visits_ly }}</td><td>{{ '{:,}'.format(r.revenue_ly).replace(',', ' ') }}</td></tr>{% endfor %}</tbody>
-  </table></div>
-</section>
-{% endblock %}
-{% block scripts %}
-{{ spark_script() }}
-<script>
-const rows = {{ rows|tojson }};
-const L = {{ {"this_year": t("chart.this_year"), "last_year": t("chart.last_year"), "busy": t("chart.busy"), "returning": t("chart.returning"), "from_other": t("chart.from_other"), "new": t("chart.new"), "k": t("chart.thousands")}|tojson }};
-const labels = rows.map(r => r.week);
-const nz = v => v ? v : null;
-const base = { animation: false, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { position: 'top', align: 'start' } } };
-new Chart(document.getElementById('rev'), { type: 'line', data: { labels, datasets: [
-  { label: L.this_year, data: rows.map(r => nz(r.revenue)), borderColor: css('--s1'), backgroundColor: css('--s1'), borderWidth: 2, pointRadius: 2, spanGaps: false },
-  { label: L.last_year, data: rows.map(r => nz(r.revenue_ly)), borderColor: css('--base'), borderDash: [5, 4], borderWidth: 2, pointRadius: 0 }] },
-  options: { ...base, scales: { y: { beginAtZero: true, ticks: { callback: v => '₴' + v / 1000 + L.k } } } } });
-new Chart(document.getElementById('util'), { type: 'bar', data: { labels, datasets: [
-  { label: L.busy, data: rows.map(r => r.util), backgroundColor: rows.map(r => (r.util || 0) >= 85 ? css('--s2') : css('--s1')), borderRadius: 4 }] },
-  options: { ...base, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' } } } } });
-new Chart(document.getElementById('cli'), { type: 'bar', data: { labels, datasets: [
-  { label: L.returning, data: rows.map(r => r.returning), backgroundColor: css('--s1'), borderRadius: 2 },
-  { label: L.from_other, data: rows.map(r => r.from_other), backgroundColor: css('--s2'), borderRadius: 2 },
-  { label: L.new, data: rows.map(r => r.new_to_shop), backgroundColor: css('--s3'), borderRadius: 2 }] },
-  options: { ...base, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } } } });
-</script>
+<div class="cols-2">
+  {% call panel(t("report.sec.cohorts"), t("barber.cohorts_sub"), "nopad") %}
+    {% if runs.return_cohorts and runs.return_cohorts.tables.get("cohorts") %}
+    <div class="tablebox" style="border:0"><table class="heat">
+      <thead><tr><th scope="col" class="l">{{ t("report.c.month") }}</th><th scope="col">{{ t("kpi.new_clients") }}</th><th scope="col">30 {{ t("barber.days") }}</th><th scope="col">60 {{ t("barber.days") }}</th><th scope="col">90 {{ t("barber.days") }}</th></tr></thead>
+      <tbody>{% for c in runs.return_cohorts.tables.cohorts %}<tr><td class="l">{{ c.month }}</td><td>{{ c.new_clients }}</td>
+        {% for v in (c.back_30_pct, c.back_60_pct, c.back_90_pct) %}{% if v is none %}<td class="muted">·</td>{% else %}{% set lvl = 1 if v < 10 else 2 if v < 20 else 3 if v < 30 else 4 if v < 45 else 5 %}
+        <td style="background:var(--h{{ lvl }});color:var({{ '--hd' if lvl >= 5 else '--h4t' if lvl == 4 else '--hl' }})">{{ v|round|int }}%</td>{% endif %}{% endfor %}</tr>{% endfor %}</tbody></table></div>
+    <div class="legend" style="padding:0 16px 14px"><span>{{ t('barber.cohort_legend') }}:</span>{% for lvl, txt in [(1, '< 10%'), (2, '10–20%'), (3, '20–30%'), (4, '30–45%'), (5, '≥ 45%')] %}<span><i style="background:var(--h{{ lvl }})"></i>{{ txt }}</span>{% endfor %}</div>
+    {% else %}<div style="padding:0 16px 16px">{{ empty(t("barber.no_run")) }}</div>{% endif %}
+  {% endcall %}
+  {% call panel(t("report.sec.services"), t("barber.services_sub")) %}
+    {% if viz.services %}{{ viz.services }}{% else %}{{ empty(t("barber.no_run")) }}{% endif %}
+  {% endcall %}
+</div>
+
+{% call panel(t("report.sec.weekday"), t("barber.weekday_sub"), "nopad") %}
+  {% if runs.weekday_pattern and runs.weekday_pattern.tables.get("weekday") %}
+  <div class="tablebox" style="border:0"><table class="cards">
+    <thead><tr><th scope="col" class="l">{{ t("report.c.weekday") }}</th><th scope="col">{{ t("col.days_worked") }}</th><th scope="col">{{ t("col.util") }}</th><th scope="col">{{ t("col.visits") }}</th><th scope="col">{{ t("col.revenue") }}</th></tr></thead>
+    <tbody>{% for d in runs.weekday_pattern.tables.weekday %}<tr><td class="l">{{ t("report.day." ~ d.weekday) }}</td><td data-label="{{ t('col.days_worked') }}">{{ d.days_worked }}</td>
+      <td data-label="{{ t('col.util') }}">{% if d.util is not none %}<span class="cell-bar"><span class="rank-track" aria-hidden="true"><b class="s3" style="width:{{ [d.util, 100]|min }}%"></b></span>{{ d.util|round|int }}%</span>{% else %}—{% endif %}</td>
+      <td data-label="{{ t('col.visits') }}">{{ d.visits }}</td><td data-label="{{ t('col.revenue') }}">{{ kfmt("revenue", d.revenue) }}</td></tr>{% endfor %}</tbody></table></div>
+  {% else %}<div style="padding:0 16px 16px">{{ empty(t("barber.no_run")) }}</div>{% endif %}
+{% endcall %}
+
+<div class="cols-2">
+  {% call panel(t("report.sec.goals"), none) %}
+    {% for g in goals %}<div class="goal"><div class="goal-top"><b>{{ g.title }}</b>{{ chip(t(g.label_key), {'ok': 'ok', 'behind': 'behind', 'done': 'ok'}.get(g.state, '')) }}</div>
+      <div class="muted">{{ mlabel(g.metric) if g.metric in REGISTRY else t("goal.custom") }}</div>{{ goal_bullet(g) }}
+      <div class="goal-nums"><span>{{ t("goal.start") }} <b>{{ fmt(g.metric, g.baseline) }}</b></span><span>{{ t("goal.now") }} <b>{{ fmt(g.metric, g.current) }}</b></span><span>{{ t("goal.target") }} <b>{{ fmt(g.metric, g.target) }}</b></span></div></div>
+    {% else %}{{ empty(t("goals.empty")) }}{% endfor %}
+  {% endcall %}
+  {% call panel(t("report.sec.overdue"), t("barber.overdue_sub"), "nopad") %}
+    {% if risk %}<div class="tablebox" style="border:0"><table class="cards"><thead><tr><th scope="col" class="l">{{ t("col.client") }}</th><th scope="col">{{ t("col.days") }}</th><th scope="col">{{ t("col.spent") }}</th></tr></thead>
+      <tbody>{% for r in risk %}<tr><td class="l"><a href="/client/{{ r.client_id }}">{{ r.name or t('client.fallback', id=r.client_id) }}</a> <span class="muted">#{{ r.client_id }}</span></td>
+        <td data-label="{{ t('col.days') }}">{{ r.days_since }}</td><td data-label="{{ t('col.spent') }}">{{ kfmt('spend', r.lifetime_spend) }}</td></tr>{% endfor %}</tbody></table></div>
+    {% else %}<div style="padding:0 16px 16px">{{ empty(t("barber.no_overdue")) }}</div>{% endif %}
+  {% endcall %}
+</div>
+
+{% if flist %}{% call panel(t("report.sec.factors"), none) %}<ul style="margin:0;padding-left:18px">{% for f in flist %}<li><b>{{ f.title }}</b> <span class="muted">· {{ label('category.', f.category) }} · {{ f.date_from }}</span></li>{% endfor %}</ul>{% endcall %}{% endif %}
+
+{% if tips %}{% call panel(t("nav.playbook"), none) %}{% for tp in tips %}<div class="goal"><b>{{ tp.title }}</b><span class="muted">{{ tp.body }}</span></div>{% endfor %}{% endcall %}{% endif %}
+
+<form method="post" action="/barber/{{ b.key }}/analyses"><button class="ghost">{{ t("barber.refresh") }}</button> <span class="muted">{{ t("barber.refresh_sub") }}</span></form>
 {% endblock %}

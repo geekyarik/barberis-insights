@@ -1,72 +1,78 @@
 {% extends "base.html" %}
+{% from "_ui.html" import stat, panel, chip, page_head, empty with context %}
 {% block content %}
-<header>
-  <div class="eyebrow">BARBERIS · {{ t("overview.address") }} · {{ t("overview.data_upto", date=data_asof) }}</div>
-  <h1>{{ t("nav.overview") }}</h1>
-  <p class="sub">{{ t("overview.latest", date=latest or "—") }}{% if prev %}{{ t("overview.compared", date=prev) }}{% endif %}. {{ t("overview.arrows") }}</p>
-</header>
+{{ page_head(t("nav.overview"), t("overview.week_sub", week=week_label), "BARBERIS · " ~ t("overview.address")) }}
 
-<section class="card fresh {{ 'stale' if fresh.stale }}" style="gap:6px;flex-direction:column;align-items:flex-start">
-  <h2 style="margin:0">{{ t("overview.attention") }}</h2>
-  <div class="flash {{ 'warn' if fresh.stale }}" style="width:100%">{% if fresh.last_visit %}{{ t("overview.data_stale" if fresh.stale else "overview.data_fresh", date=fresh.last_visit, days=fresh.age_days) }}{% else %}{{ t("overview.data_stale", date="—", days="—") }}{% endif %}</div>
-  <div class="flash {{ 'warn' if review_job and review_job.status in ('blocked', 'failed') }}" style="width:100%">
-    {% if review_job and review_job.status in ('blocked', 'failed') %}{{ t("overview.review_blocked") }}{% elif review %}{{ t("overview.review_last", week=review.content.week) }} · <a href="/reports/{{ review.id }}">{{ t("report.open") }}</a>{% else %}{{ t("overview.review_none") }}{% endif %}
-  </div>
-</section>
-
-{% if with_phone == 0 %}
-<div class="flash warn">{{ t("overview.no_phones") }} <code>insights import-clients FILE</code>.</div>
+{% if fresh.stale or review_job and review_job.status in ('blocked', 'failed') %}
+<div class="banner warn" role="status">
+  {% if fresh.stale %}{{ t("overview.data_stale", date=fresh.last_visit or "—", days=fresh.age_days if fresh.age_days is not none else "—") }}{% endif %}
+  {% if review_job and review_job.status in ('blocked', 'failed') %}<div>{{ t("overview.review_blocked") }}</div>{% endif %}
+</div>
+{% elif review %}
+<div class="banner">{{ t("overview.review_last", week=review.content.week) }} · <a href="/reports/{{ review.id }}">{{ t("report.open") }}</a></div>
 {% endif %}
 
-<section>
-  <h2>{{ t("common.team") }}</h2>
-  <div class="kpis">
-    {% for m in key_metrics %}{% set v = cur.get('team', {}).get(m) %}{% set p = before.get('team', {}).get(m) %}
-    <div class="kpi"><span class="l">{{ mlabel(m) }}</span><span class="v">{{ fmt(m, v) }}</span>
-      <span class="d {{ delta_class(m, v, p) }}">{% if p is not none and v is not none %}{{ t("overview.before", value=fmt(m, p)) }}{% else %}&nbsp;{% endif %}</span></div>
-    {% endfor %}
-  </div>
-</section>
+<div class="stats" aria-label="{{ t('overview.week_sub', week=week_label) }}">
+  {% for x in tiles %}{{ stat(x.label, x.value, x.delta, x.verdict, x.vs, x.trend, x.href, x.note) }}{% endfor %}
+</div>
 
-<section>
-  <h2>{{ t("nav.barbers") }}</h2>
-  <div class="tablebox"><table class="stack">
-    <thead><tr><th scope="col" class="l">{{ t("common.barber") }}</th>{% for m in key_metrics %}<th scope="col" class="{{ 'hide-sm' if m in hide_sm }}">{{ mlabel(m) }}</th>{% endfor %}</tr></thead>
-    <tbody>{% for b in all_barbers %}<tr><td class="l"><a href="/barber/{{ b.key }}">{{ b.name }}</a> <span class="muted">{{ b.tier }}</span></td>
-      {% for m in key_metrics %}{% set v = cur.get(b.key, {}).get(m) %}{% set p = before.get(b.key, {}).get(m) %}
-      <td data-label="{{ mlabel(m) }}" class="{{ 'hide-sm' if m in hide_sm }}"><span class="{{ delta_class(m, v, p) if p is not none else '' }}">{{ fmt(m, v) }}</span></td>{% endfor %}</tr>{% endfor %}</tbody>
+{% call panel(t("overview.trend_title"), t("overview.trend_sub", n=factors_n)) %}
+  {{ revenue_chart }}
+{% endcall %}
+
+<div class="split">
+  {% call panel(t("overview.barbers_title"), t("overview.barbers_sub"), "nopad") %}
+  <div class="tablebox" style="border:0"><table class="cards">
+    <thead><tr><th scope="col" class="l">{{ t("common.barber") }}</th><th scope="col">{{ mlabel("util") }}</th><th scope="col">{{ mlabel("rph") }}</th><th scope="col">{{ mlabel("visits") }}</th><th scope="col" class="hide-sm">{{ mlabel("check") }}</th><th scope="col">{{ t("overview.revenue_26") }}</th></tr></thead>
+    <tbody>{% for r in rows %}<tr>
+      <td class="l"><a href="/barber/{{ r.key }}">{{ r.name }}</a> <span class="muted">{{ r.tier }}</span></td>
+      <td data-label="{{ mlabel('util') }}"><span class="cell-bar"><span class="rank-track" aria-hidden="true"><b style="width:{{ [r.util or 0, 100]|min }}%"></b></span>{{ fmt('util', r.util) }}</span></td>
+      <td data-label="{{ mlabel('rph') }}">{{ fmt('rph', r.rph) }}</td>
+      <td data-label="{{ mlabel('visits') }}">{{ r.visits }} {% if r.visits_d[0] %}<span class="delta {{ {'better': 'good', 'worse': 'bad'}.get(r.visits_d[1], 'same') }}">{{ r.visits_d[0] }}</span>{% endif %}</td>
+      <td data-label="{{ mlabel('check') }}" class="hide-sm">{{ fmt('check', r.check) }}</td>
+      <td data-label="{{ t('overview.revenue_26') }}">{{ r.trend }}</td></tr>{% endfor %}</tbody>
   </table></div>
-</section>
+  {% endcall %}
 
-<section>
-  <h2>{{ t("overview.weekday_heat") }}</h2>
-  <div class="tablebox"><table class="heat">
+  {% call panel(t("overview.client_health"), t("overview.client_health_sub", date=seg_asof or "—")) %}
+    {{ health }}
+    {% if overdue_run %}{% set k = overdue_run.result.kpis.team %}
+    <p style="margin:12px 0 0">{{ t("overview.overdue_summary", n=k.overdue, value=kfmt("value_at_stake", k.value_at_stake), window=overdue_run.window_to) }}</p>{% endif %}
+    <p style="margin:8px 0 0"><a href="/risk">{{ t("overview.review_calls") }} →</a></p>
+  {% endcall %}
+</div>
+
+<div class="split">
+  {% call panel(t("overview.weekday_heat"), t("overview.heat_window", date=latest or "—"), "nopad") %}
+  <div class="tablebox" style="border:0"><table class="heat">
     <thead><tr><th scope="col" class="l"></th>{% for i in range(7) %}<th scope="col">{{ t('day.short.' ~ i) }}</th>{% endfor %}</tr></thead>
     <tbody>{% for b in all_barbers %}<tr><td class="l">{{ b.name }}</td>{% for i in range(7) %}{% set u = cur.get(b.key, {}).get('util_d' ~ i) %}
       {% if u is none %}<td class="muted">·</td>{% else %}{% set lvl = 1 if u < 40 else 2 if u < 50 else 3 if u < 60 else 4 if u < 75 else 5 %}
       <td style="background:var(--h{{ lvl }});color:var({{ '--hd' if lvl >= 5 else '--h4t' if lvl == 4 else '--hl' }})">{{ u|round|int }}%</td>{% endif %}{% endfor %}</tr>{% endfor %}</tbody>
   </table></div>
-  <div class="legend" aria-label="{{ t('overview.heat_legend') }}"><span>{{ t('overview.heat_legend') }}:</span>
+  <div class="legend" style="padding:0 16px 14px"><span>{{ t('overview.heat_legend') }}:</span>
     {% for lvl, txt in [(1, '< 40%'), (2, '40–50%'), (3, '50–60%'), (4, '60–75%'), (5, '≥ 75%')] %}<span><i style="background:var(--h{{ lvl }})"></i>{{ txt }}</span>{% endfor %}</div>
-</section>
+  {% endcall %}
 
-<div class="grid">
-  <section class="card">
-    <h2>{{ t("nav.goals") }}</h2>
-    <p class="sub" style="margin:0">{{ t("overview.goal_counts", ok=states.get('ok', 0), behind=states.get('behind', 0), new=states.get('new', 0), done=states.get('done', 0)) }}</p>
-    {% if states.get('new', 0) == board|length %}<p class="muted" style="margin:6px 0 0">{{ t("overview.goals_waiting") }}</p>
-    {% else %}<ul style="margin:6px 0 0;padding-left:18px">{% for g in board if g.state == 'behind' %}<li>{{ g.scope }}: {{ g.title }}</li>{% else %}<li class="muted">{{ t("overview.nothing_behind") }}</li>{% endfor %}</ul>{% endif %}
+  {% call panel(t("overview.goals_title"), t("overview.goals_sub")) %}
+    {% for g in top_goals %}
+    <div class="goal">
+      <div class="goal-top"><b>{{ g.title }}</b>{{ chip(t(g.label_key), {'ok': 'ok', 'behind': 'behind', 'done': 'ok'}.get(g.state, '')) }}</div>
+      <div class="muted">{{ scope_names.get(g.scope, g.scope) }} · {{ mlabel(g.metric) if g.metric in REGISTRY else t("goal.custom") }}</div>
+      {{ goal_bullet(g) }}
+      <div class="goal-nums"><span>{{ t("goal.start") }} <b>{{ fmt(g.metric, g.baseline) }}</b></span><span>{{ t("goal.now") }} <b>{{ fmt(g.metric, g.current) }}</b></span><span>{{ t("goal.target") }} <b>{{ fmt(g.metric, g.target) }}</b></span></div>
+    </div>
+    {% else %}{{ empty(t("goals.empty")) }}{% endfor %}
     <a href="/goals">{{ t("overview.all_goals") }} →</a>
-  </section>
-  <section class="card">
-    <h2>{{ t("overview.clients") }}</h2>
-    <p class="sub" style="margin:0">{{ t("overview.client_counts", overdue=seg.get('overdue', 0), lapsed=seg.get('lapsed', 0), one_time=seg.get('one_time', 0), slipping=seg.get('slipping', 0)) }}</p>
-    <a href="/risk">{{ t("overview.review_calls") }} →</a>
-  </section>
-  <section class="card">
-    <h2>{{ t("nav.outreach") }}</h2>
-    <p class="sub" style="margin:0">{{ t("overview.case_counts", proposed=cases.get('proposed', 0), in_sheet=cases.get('in_sheet', 0), booked=cases.get('booked', 0), won=cases.get('won_back', 0)) }}</p>
-    <a href="/outreach">{{ t("overview.results") }} →</a>
-  </section>
+  {% endcall %}
 </div>
+
+{% call panel(t("overview.todo"), t("overview.todo_sub")) %}
+  {% if calls %}<div class="tablebox" style="margin:0 -16px -16px;border:0"><table class="cards">
+    <thead><tr><th scope="col" class="l">{{ t("col.client") }}</th><th scope="col" class="l">{{ t("col.usual_barber") }}</th><th scope="col">{{ t("col.days") }}</th><th scope="col">{{ t("col.spent") }}</th><th scope="col" class="l">{{ t("col.offer") }}</th></tr></thead>
+    <tbody>{% for r in calls %}<tr><td class="l"><a href="/client/{{ r.client_id }}">{{ r.name or t('client.fallback', id=r.client_id) }}</a> <span class="muted">#{{ r.client_id }}</span></td>
+      <td class="l" data-label="{{ t('col.usual_barber') }}">{{ bnames.get(r.usual_barber, '') }}</td><td data-label="{{ t('col.days') }}">{{ r.days_since }}</td>
+      <td data-label="{{ t('col.spent') }}">{{ kfmt('spend', r.lifetime_spend) }}</td><td class="l" data-label="{{ t('col.offer') }}">{{ label('offer.', r.suggested_offer) if r.suggested_offer else '' }}</td></tr>{% endfor %}</tbody></table></div>
+  {% else %}{{ empty(t("overview.todo_none")) }}{% endif %}
+{% endcall %}
 {% endblock %}

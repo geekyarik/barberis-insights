@@ -1,0 +1,54 @@
+{# Shared building blocks (docs/DESIGN.md). Import with context: {% from "_ui.html" import stat, panel, chip, page_head with context %} #}
+
+{% macro icon(name) %}<svg class="ico" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+{%- if name == 'home' %}<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>
+{%- elif name == 'user' %}<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>
+{%- elif name == 'team' %}<circle cx="9" cy="8" r="3.5"/><circle cx="17" cy="9" r="2.5"/><path d="M2 20c0-3.5 3-5.5 7-5.5s7 2 7 5.5"/><path d="M17 14c3 0 5 1.5 5 4"/>
+{%- elif name == 'explore' %}<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.5-4.5"/><path d="M8 13l2-3 2 2 2-4"/>
+{%- elif name == 'report' %}<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/>
+{%- elif name == 'alert' %}<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>
+{%- elif name == 'phone' %}<path d="M5 4h4l2 5-2.5 1.5a11 11 0 005 5L15 13l5 2v4a2 2 0 01-2 2A16 16 0 013 6a2 2 0 012-2z"/>
+{%- elif name == 'target' %}<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>
+{%- elif name == 'layers' %}<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>
+{%- elif name == 'flask' %}<path d="M9 3h6M10 3v6l-6 10a2 2 0 002 3h12a2 2 0 002-3l-6-10V3"/>
+{%- elif name == 'book' %}<path d="M4 4h7a3 3 0 013 3v13a2 2 0 00-2-2H4z"/><path d="M20 4h-6"/><path d="M20 4v14h-6"/>
+{%- elif name == 'db' %}<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/>
+{%- elif name == 'check' %}<path d="M4 12l5 5L20 6"/>
+{%- elif name == 'clock' %}<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+{%- endif %}</svg>{% endmacro %}
+
+{# A headline number with its change, its comparison in words and a trend. `delta` is already formatted (+1.5); `verdict` better|worse|same. #}
+{% macro stat(label, value, delta=none, verdict=none, vs=none, trend=none, href=none, note=none) %}
+<div class="stat">
+  <span class="stat-l">{% if href %}<a href="{{ href }}">{{ label }}</a>{% else %}{{ label }}{% endif %}</span>
+  <span class="stat-v">{{ value }}</span>
+  <span class="stat-d">{% if delta %}{{ delta_chip(delta, verdict) }}{% if vs %} <span class="muted">{{ vs }}</span>{% endif %}{% elif vs %}<span class="muted">{{ vs }}</span>{% else %}&nbsp;{% endif %}</span>
+  {% if note %}<span class="stat-n muted">{{ note }}</span>{% endif %}
+  {% if trend %}<span class="stat-t">{{ trend }}</span>{% endif %}
+</div>
+{% endmacro %}
+
+{% macro chip(text, kind='') %}<span class="chip {{ kind }}"><i></i>{{ text }}</span>{% endmacro %}
+
+{# A titled block. Use {% call panel(title, sub) %}…{% endcall %}. #}
+{% macro panel(title, sub=none, cls='', action=none) %}
+<section class="panel {{ cls }}">
+  <header class="panel-h"><div><h2>{{ title }}</h2>{% if sub %}<p class="sub">{{ sub }}</p>{% endif %}</div>{% if action %}<div class="panel-a">{{ action }}</div>{% endif %}</header>
+  <div class="panel-b">{{ caller() }}</div>
+</section>
+{% endmacro %}
+
+{% macro page_head(title, sub=none, eyebrow=none) %}
+<header class="page-h">
+  <div>
+    {% if eyebrow %}<div class="eyebrow">{{ eyebrow }}</div>{% endif %}
+    <h1>{{ title }}</h1>
+    {% if sub %}<p class="sub">{{ sub }}</p>{% endif %}
+  </div>
+  <div class="page-chips">
+    {{ chip(t("ui.data_age", days=fresh.age_days) if fresh.age_days is not none else t("ui.data_unknown"), 'stale' if fresh.stale else 'ok') }}
+  </div>
+</header>
+{% endmacro %}
+
+{% macro empty(text) %}<p class="empty">{{ text }}</p>{% endmacro %}

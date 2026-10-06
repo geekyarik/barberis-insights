@@ -6,7 +6,7 @@ import datetime as dt
 from pathlib import Path
 from urllib.parse import quote, urlparse
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -35,14 +35,25 @@ from ..outreach import service as outreach
 from ..outreach.offers import active_offers
 from ..playbook import service as playbook
 from ..reports import service as reports
-from . import data as vm
+from . import charts, data as vm
 from .report_views import VIEWS
 
 HERE = Path(__file__).parent
 app = FastAPI(title="BARBERIS insights", docs_url="/api/docs", openapi_url="/api/openapi.json")
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 templates = Jinja2Templates(directory=HERE / "templates")
-templates.env.globals.update(fmt=vm.fmt, kfmt=vm.kfmt, signed=vm.signed, delta_class=vm.delta_class, REGISTRY=REGISTRY)
+templates.env.globals.update(fmt=vm.fmt, kfmt=vm.kfmt, signed=vm.signed, delta_class=vm.delta_class, REGISTRY=REGISTRY, spark=charts.spark, line_chart=charts.line_chart,
+                             rank_bars=charts.rank_bars, diverging=charts.diverging, stack100=charts.stack100, stacked_columns=charts.stacked_columns,
+                             bullet=charts.bullet, delta_chip=charts.delta_chip)
+
+
+def goal_bullet(g: dict):
+    """A goal's progress bar, formatted for its metric (start, now, target)."""
+    cur = g["current"] if g["current"] is not None else g["baseline"]
+    return charts.bullet(start=g["baseline"], current=cur, target=g["target"], fmt=lambda v: vm.fmt(g["metric"], v), lower_is_better=g["target"] < g["baseline"])
+
+
+templates.env.globals["goal_bullet"] = goal_bullet
 SEGMENTS = ("overdue", "lapsed", "one_time", "slipping", "switched", "active")
 
 
@@ -107,7 +118,7 @@ def helpers(lang: str) -> dict:
 
 def page(request: Request, s: Session, name: str, nav: str, title: str = "", **ctx):
     h = helpers(lang_of(request))
-    return templates.TemplateResponse(request, name, {"nav": nav, "all_barbers": vm.barbers(s), "flash": request.query_params.get("msg"),
+    return templates.TemplateResponse(request, name, {"nav": nav, "all_barbers": vm.barbers(s), "fresh": freshness(s), "flash": request.query_params.get("msg"),
                                                       "flash_kind": request.query_params.get("kind"), "title": h["t"](title), **h, **ctx})
 
 
@@ -133,6 +144,10 @@ def freshness(s: Session) -> dict:
     return {"last_visit": last, "age_days": age, "stale": age is None or age > settings.data_stale_days}
 
 
+def names_by_key(s: Session) -> dict[str, str]:
+    return {b.key: b.name for b in s.scalars(select(Barber))}
+
+
 def names(s: Session) -> dict[int, str]:
     return {b.altegio_id: b.name for b in s.scalars(select(Barber))}
 
@@ -143,37 +158,247 @@ KEY_METRICS = ["util", "rph", "visits_wk", "check", "online", "addon", "conv_new
 
 @app.get("/", response_class=HTMLResponse)
 def overview(request: Request, s: Session = Depends(db)):
-    dates = vm.measurement_dates(s)
-    latest = dates[-1] if dates else None
-    prev = dates[-2] if len(dates) > 1 else None
-    cur, before = vm.values_at(s, latest), vm.values_at(s, prev)
-    board = goals.board(s)
-    states = C.Counter(g["state"] for g in board)
-    cases = C.Counter(st for (st,) in s.execute(select(OutreachCase.status)))
+    h = helpers(lang_of(request)); t = h["t"]
+    m = vm.weekly_matrix(s)
+    team, labels, shop = m["team"], m["labels"], m["shop"]
+    last, prev = team[-1], team[-2]
+    slast, sprev = shop[-1], shop[-2]
+    col = lambda key, rows=team: [r[key] for r in rows]
+    tr26 = lambda key, rows=team: col(key, rows)[-26:]
+
+    def tile(metric, value, rel_pp, trend_key, ly=None, href=None, rows=None):
+        d, v = rel_pp
+        rows = rows or team
+        note = t("overview.team_scope") if rows is team else None
+        if ly is not None and ly[0]:
+            lyd, _ = vm.rel_change(*ly)
+            note = t("overview.vs_ly", delta=lyd) if lyd else note
+        return {"label": h["mlabel"](metric), "value": value, "delta": d, "verdict": v, "vs": t("report.wr.vs_prev") if d else None, "note": note, "href": href,
+                "trend": charts.spark(tr26(trend_key, rows), label=h["mlabel"](metric), fmt=lambda x: f"{x:,.0f}".replace(",", " "))}
+    tiles = [
+        tile("revenue", vm.money(slast["revenue"]), vm.rel_change(slast["revenue"], sprev["revenue"]), "revenue", (slast["revenue"], slast["revenue_ly"]), rows=shop),
+        tile("visits", f"{slast['visits']}", vm.rel_change(slast["visits"], sprev["visits"]), "visits", (slast["visits"], slast["visits_ly"]), rows=shop),
+        tile("util", vm.pct1(last["util"]), vm.pp_change(last["util"], prev["util"]), "util"),
+        tile("rph", vm.money(last["rph"]), vm.rel_change(last["rph"], prev["rph"]), "rph"),
+        tile("check", vm.money(slast["avg_check"]), vm.rel_change(slast["avg_check"], sprev["avg_check"]), "avg_check", rows=shop),
+        tile("new_share", f"{slast['new_clients']}", (f"{slast['new_clients'] - sprev['new_clients']:+d}".replace("-", "−") if slast["new_clients"] != sprev["new_clients"] else None,
+                                                     "better" if slast["new_clients"] > sprev["new_clients"] else "worse"), "new_clients",
+             (slast["new_clients"], slast["new_ly"]), rows=shop),
+    ]
+    tiles[5]["label"] = t("overview.new_clients")
+
+    # revenue against last year, with the context that explains the dips and jumps
+    first, lastd = m["starts"][0], m["end"]
+    dated = [x for x in s.scalars(select(factors.Factor).where(factors.Factor.active.is_(True), factors.Factor.recurrence == "none",
+                                                               factors.Factor.date_from >= dt.date.fromisoformat(first), factors.Factor.date_from <= lastd)
+                                  .order_by(factors.Factor.date_from)) if x.category not in ("observation",)]
+    markers = [{"i": (x.date_from - dt.date.fromisoformat(first)).days // 7, "label": f"{x.title} ({x.date_from.strftime('%d.%m.%Y')})"} for x in dated][:8]
+    k = lambda v: f"{v / 1000:.0f}k"
+    revenue_chart = charts.line_chart(labels, [{"name": t("ui.this_year"), "values": col("revenue", shop), "cls": "s1"},
+                                               {"name": t("ui.last_year"), "values": col("revenue_ly", shop), "cls": "ly", "style": "dash"}],
+                                      title=t("overview.trend_title"), y_fmt=lambda v: vm.money(v) if v >= 1000 else f"{v:.0f}", markers=markers, table_label=t("ui.table"))
+
+    # barbers: one row each, with the week's figures and a 26-week revenue trend
+    rows = []
+    for b in vm.barbers(s):
+        r, p = m["barbers"][b.key][-1], m["barbers"][b.key][-2]
+        rows.append({"key": b.key, "name": b.name, "tier": b.tier, "util": r["util"], "rph": r["rev_per_sched_h"], "visits": r["visits"], "check": r["avg_check"],
+                     "visits_d": vm.rel_change(r["visits"], p["visits"]), "trend": charts.spark([x["revenue"] for x in m["barbers"][b.key][-26:]], cls="s1", label=b.name,
+                                                                                        fmt=lambda x: f"{x:,.0f}".replace(",", " "))})
+    # client health
     seg = C.Counter(st for (st,) in s.execute(select(ClientProfile.segment)))
-    no_phone = s.scalar(select(func.count(ClientProfile.client_id)).where(ClientProfile.segment.in_(CALLABLE))) or 0
-    with_phone = s.scalar(select(func.count(Client.altegio_id)).where(Client.phone.is_not(None))) or 0
+    parts = [("active", "s3"), ("slipping", "warn-seg"), ("overdue", "s2"), ("lapsed", "muted-seg"), ("one_time", "s5"), ("switched", "s4")]
+    health = charts.stack100([{"label": h["label"]("segment.", k_), "value": seg.get(k_, 0), "cls": c_} for k_, c_ in parts], title=t("overview.client_health"))
+    overdue_run = analyses.latest(s, "overdue_regulars")
+    # goals and calls
+    board = goals.board(s)
+    order = {"behind": 0, "ok": 1, "new": 2, "done": 3, "dropped": 4}
+    top_goals = sorted(board, key=lambda g: (order.get(g["state"], 5), g["scope"]))[:6]
+    calls = risk_list(s, ("overdue",), None, 5, include_ineligible=False)
+    dates = vm.measurement_dates(s)
+    cur = vm.values_at(s, dates[-1] if dates else None)
     review = next(iter(reports.list_reports(s, "weekly_review", 1)), None)
     review_job = next((j["last"] for j in jobs_service.list_jobs(s) if j["job"] == "weekly_review"), None)
-    return page(request, s, "overview.html", "overview", title="nav.overview", latest=latest, prev=prev, cur=cur, before=before,
-                key_metrics=KEY_METRICS, board=board, states=states, cases=cases, seg=seg, callable_n=no_phone, with_phone=with_phone,
-                data_asof=data_asof(s), fresh=freshness(s), review=review, review_job=review_job, hide_sm=("visits_wk", "online", "addon", "conv_new90", "risk_n"))
+    return page(request, s, "overview.html", "overview", title="nav.overview", tiles=tiles, week_label=f"{last['week']} · {last['start']}", revenue_chart=revenue_chart, rows=rows,
+                health=health, seg=seg, overdue_run=overdue_run, top_goals=top_goals, board=board, calls=calls, bnames=names(s), cur=cur, latest=dates[-1] if dates else None,
+                review=review, review_job=review_job, factors_n=len(dated), seg_asof=s.scalar(select(func.max(ClientProfile.asof))),
+                scope_names={"team": t("common.team")} | names_by_key(s))
 
 
 # ---------------------------------------------------------------- barber
+def barber_runs(s: Session, key: str) -> dict:
+    """For each analysis, the newest run that covers this barber (a barber-scoped run, or the team run), with their own figures cut out."""
+    out = {}
+    for name in ("weekday_pattern", "client_retention", "return_cohorts", "client_sources", "exclusive_clients", "service_mix"):
+        best = None
+        for sc in (key, "team"):
+            r = analyses.latest(s, name, sc)
+            if r and (best is None or (r.window_to, r.id) > (best.window_to, best.id)):
+                best = r
+        if best:
+            out[name] = {"run": best, "kpis": best.result["kpis"].get(key, {}), "team": best.result["kpis"].get("team", {}),
+                         "tables": {t_: [x for x in rows if x.get("scope", key) == key] for t_, rows in best.result["tables"].items()}}
+    return out
+
+
 @app.get("/barber/{key}", response_class=HTMLResponse)
 def barber_page(request: Request, key: str, weeks: int = 26, s: Session = Depends(db)):
-    b = s.scalar(select(Barber).where(Barber.key == key))
+    b = s.scalar(select(Barber).where(Barber.key == key, Barber.active.is_(True)))
     if not b:
         raise HTTPException(404)
-    ds = vm.dataset(s)
-    end = data_asof(s) - dt.timedelta(days=1)
-    rows = weekly_rows(ds, b.altegio_id, end - dt.timedelta(weeks=weeks - 1), end)
-    dates = vm.measurement_dates(s)
-    cur = vm.values_at(s, dates[-1] if dates else None).get(key, {})
-    risk = risk_list(s, ("overdue",), b.altegio_id, 15, include_ineligible=True)
-    return page(request, s, "barber.html", key, title=b.name, b=b, rows=rows, weeks=weeks, cur=cur, key_metrics=KEY_METRICS,
-                goals=goals.board(s, key), tips=playbook.listing(s, key), risk=risk, catalog=catalog(), latest=dates[-1] if dates else None)
+    weeks = weeks if weeks in (13, 26, 52) else 26
+    h = helpers(lang_of(request)); t = h["t"]
+    m = vm.weekly_matrix(s)
+    rows = m["barbers"][key]
+    sel = rows[-weeks:]
+    labels = [r["week"] for r in sel]
+    col = lambda k_: [r[k_] if r['days'] else None for r in sel]        # a week off is a gap, not a zero
+    last, prev = rows[-1], rows[-2]
+    sp = lambda k_: charts.spark([r[k_] for r in rows[-26:]], label=h["mlabel"]("revenue"), fmt=lambda x: f"{x:,.0f}".replace(",", " "))
+    def tile(label, value, change, key_, note=None):
+        d, v = change
+        return {"label": label, "value": value, "delta": d, "verdict": v, "vs": t("report.wr.vs_prev") if d else None, "note": note, "trend": sp(key_), "href": None}
+    ly = lambda a, b_: (t("overview.vs_ly", delta=vm.rel_change(a, b_)[0]) if b_ else None)
+    tiles = [tile(h["mlabel"]("revenue"), vm.money(last["revenue"]), vm.rel_change(last["revenue"], prev["revenue"]), "revenue", ly(last["revenue"], last["revenue_ly"])),
+             tile(h["mlabel"]("visits"), f"{last['visits']}", vm.rel_change(last["visits"], prev["visits"]), "visits", ly(last["visits"], last["visits_ly"])),
+             tile(h["mlabel"]("util"), vm.pct1(last["util"]), vm.pp_change(last["util"], prev["util"]), "util"),
+             tile(h["mlabel"]("rph"), vm.money(last["rev_per_sched_h"]), vm.rel_change(last["rev_per_sched_h"], prev["rev_per_sched_h"]), "rev_per_sched_h"),
+             tile(h["mlabel"]("check"), vm.money(last["avg_check"]), vm.rel_change(last["avg_check"], prev["avg_check"]), "avg_check"),
+             tile(t("overview.new_clients"), f"{last['new_to_shop']}", (f"{last['new_to_shop'] - prev['new_to_shop']:+d}".replace("-", "−") if last["new_to_shop"] != prev["new_to_shop"] else None,
+                                                                     "better" if last["new_to_shop"] > prev["new_to_shop"] else "worse"), "new_to_shop")]
+    # the goal for busy share, drawn as a line on its chart; context marks from this barber's and the shop's factors
+    board = goals.board(s, key)
+    util_goal = next((g for g in board if g["metric"] == "util" and g["status"] == "active"), None)
+    start = dt.date.fromisoformat(sel[0]["start"])
+    marks = [x for x in s.scalars(select(factors.Factor).where(factors.Factor.active.is_(True), factors.Factor.recurrence == "none", factors.Factor.date_from >= start)
+                                  .order_by(factors.Factor.date_from)) if factors.applies_to(x, key) and x.category != "observation"]
+    markers = [{"i": (x.date_from - start).days // 7, "label": f"{x.title} ({x.date_from.strftime('%d.%m.%Y')})"} for x in marks][:6]
+    money_k = lambda v: vm.money(v) if v >= 1000 else f"{v:.0f}"
+    rev_chart = charts.line_chart(labels, [{"name": t("ui.this_year"), "values": col("revenue"), "cls": "s1"}, {"name": t("ui.last_year"), "values": col("revenue_ly"), "cls": "ly", "style": "dash"}],
+                                  title=t("barber.revenue_week"), y_fmt=money_k, markers=markers, table_label=t("ui.table"))
+    util_chart = charts.line_chart(labels, [{"name": t("barber.busy_short"), "values": col("util"), "cls": "s3"}], title=t("barber.busy_share"), y_fmt=lambda v: f"{v:.0f}%",
+                                   goal=util_goal["target"] if util_goal else None, goal_label=t("goal.target") if util_goal else "", table_label=t("ui.table"))
+    clients_chart = charts.stacked_columns(labels, [{"name": t("barber.c_returning"), "values": col("returning"), "cls": "s1"}, {"name": t("barber.c_other"), "values": col("from_other"), "cls": "s5"},
+                                                    {"name": t("barber.c_new"), "values": col("new_to_shop"), "cls": "s2"}], title=t("barber.clients_week"))
+    runs = barber_runs(s, key)
+    pf = lambda v: f"{v:g}%"
+    viz = {}
+    if "client_retention" in runs and runs["client_retention"]["kpis"].get("clients"):
+        k_ = runs["client_retention"]["kpis"]
+        viz["retention"] = charts.stack100([{"label": t("barber.r_stayed"), "value": k_["stayed_pct"], "cls": "s3"}, {"label": t("barber.r_switched"), "value": k_["switched_pct"], "cls": "warn-seg"},
+                                            {"label": t("barber.r_lost"), "value": k_["lost_pct"], "cls": "s2"}], fmt=pf, title=t("barber.retention_title"), share=False)
+    if "client_sources" in runs and runs["client_sources"]["kpis"].get("clients"):
+        k_ = runs["client_sources"]["kpis"]
+        viz["sources"] = charts.stack100([{"label": t("barber.c_returning"), "value": k_["returning_pct"], "cls": "s1"}, {"label": t("barber.c_other"), "value": k_["from_other_pct"], "cls": "s5"},
+                                          {"label": t("barber.c_new"), "value": k_["new_pct"], "cls": "s2"}], fmt=pf, title=t("barber.sources_title"), share=False)
+    if "service_mix" in runs:
+        viz["services"] = charts.rank_bars([{"label": x["service"], "value": x["share_pct"]} for x in runs["service_mix"]["tables"].get("services", [])[:8]], fmt=pf)
+    risk = risk_list(s, ("overdue",), b.altegio_id, 10, include_ineligible=True)
+    flist = [x for x in factors.in_force(s, start, dt.date.fromisoformat(sel[-1]["start"]) + dt.timedelta(days=6), key) if x.category != "observation"][:8]
+    return page(request, s, "barber.html", key, title=b.name, b=b, weeks=weeks, tiles=tiles, viz=viz, rev_chart=rev_chart, util_chart=util_chart, clients_chart=clients_chart, runs=runs,
+                goals=board, risk=risk, flist=flist, tips=playbook.listing(s, key), week_label=f"{last['week']} · {last['start']}",
+                scope_names={"team": t("common.team")} | names_by_key(s))
+
+
+@app.post("/barber/{key}/analyses")
+def barber_refresh_analyses(request: Request, key: str, s: Session = Depends(db)):
+    """Re-run the client analyses for this barber over the latest twelve complete weeks (the follow-up window for retention)."""
+    m = vm.weekly_matrix(s)
+    end = m["end"]; f = end - dt.timedelta(weeks=12) + dt.timedelta(days=1)
+    rf, rt = reports.followup_window(s, f, end)
+    for name, (wf, wt) in {"weekday_pattern": (f, end), "client_sources": (f, end), "exclusive_clients": (f, end), "service_mix": (f, end),
+                           "client_retention": (rf, rt), "return_cohorts": (rf, rt)}.items():
+        analyses.run(s, name, wf, wt, scope=key, created_by="dashboard")
+    return back(request, f"/barber/{key}", "analyses_refreshed")
+
+
+BARBER_CLS = ("s1", "s2", "s3", "s4", "s5", "s6")
+
+
+def _agg(rows: list[dict]) -> dict:
+    """Totals and ratios over some weekly rows."""
+    tot = {k: sum((r.get(k) or 0) for r in rows) for k in ("revenue", "visits", "sched_h", "busy_h", "days")}
+    worked = sum(1 for r in rows if r.get("days"))
+    return tot | {"util": round(100 * tot["busy_h"] / tot["sched_h"], 1) if tot["sched_h"] else None,
+                  "rph": round(tot["revenue"] / tot["sched_h"]) if tot["sched_h"] else None,
+                  "check": round(tot["revenue"] / tot["visits"]) if tot["visits"] else None,
+                  "visits_pw": round(tot["visits"] / worked, 1) if worked else None}
+
+
+@app.get("/team", response_class=HTMLResponse)
+def team_page(request: Request, weeks: int = 8, s: Session = Depends(db)):
+    weeks = weeks if weeks in (4, 8, 13, 26) else 8
+    h = helpers(lang_of(request)); t = h["t"]
+    m = vm.weekly_matrix(s)
+    cls = {b.key: BARBER_CLS[i % 6] for i, b in enumerate(vm.barbers(s))}
+    per = {b.key: _agg(m["barbers"][b.key][-weeks:]) for b in vm.barbers(s)}
+    team = _agg(m["team"][-weeks:])
+    link = lambda b: f"/barber/{b.key}"
+    def ranks(field, fmtf):
+        return charts.rank_bars([{"label": b.name, "value": per[b.key][field], "href": link(b), "cls": cls[b.key]} for b in vm.barbers(s)], fmt=fmtf, ref=team[field],
+                                ref_label=t("report.c.team"))
+    money = lambda v: vm.money(v); pct = lambda v: f"{v:.0f}%"
+    diffs_util = charts.diverging([{"label": b.name, "value": round(per[b.key]["util"] - team["util"], 1) if per[b.key]["util"] is not None and team["util"] else None}
+                                   for b in vm.barbers(s)], fmt=lambda v: f"{v:+.1f} {t('msg.pp')}".replace("-", "−"))
+    diffs_rph = charts.diverging([{"label": b.name, "value": round(100 * (per[b.key]["rph"] / team["rph"] - 1), 1) if per[b.key]["rph"] and team["rph"] else None}
+                                  for b in vm.barbers(s)], fmt=lambda v: f"{v:+.1f}%".replace("-", "−"))
+    # small multiples: each barber's revenue over 26 weeks on its own scale
+    multiples = [{"name": b.name, "key": b.key, "cls": cls[b.key], "last": per[b.key]["revenue"],
+                  "spark": charts.spark([r["revenue"] if r["days"] else None for r in m["barbers"][b.key][-26:]], w=160, h=44, cls=cls[b.key], label=b.name,
+                                        fmt=lambda x: f"{x:,.0f}".replace(",", " "))} for b in vm.barbers(s)]
+    # client figures from the latest team analyses
+    def run_rank(name, field, fmtf, lower=False):
+        r = analyses.latest(s, name, "team")
+        if not r:
+            return None, None
+        return charts.rank_bars([{"label": b.name, "value": r.result["kpis"].get(b.key, {}).get(field), "href": link(b), "cls": cls[b.key]} for b in vm.barbers(s)], fmt=fmtf,
+                                ref=r.result["kpis"].get("team", {}).get(field), ref_label=t("report.c.team"), lower_is_better=lower), r
+    pf = lambda v: f"{v:g}%"
+    retention, r_run = run_rank("client_retention", "stayed_pct", pf)
+    lost, _ = run_rank("client_retention", "lost_pct", pf, lower=True)
+    exclusive, e_run = run_rank("exclusive_clients", "exclusive_pct", pf, lower=True)
+    overdue, o_run = run_rank("overdue_regulars", "value_at_stake", money, lower=True)
+    rows = [{"b": b, "cls": cls[b.key], **per[b.key]} for b in vm.barbers(s)]
+    return page(request, s, "team.html", "team", title="nav.team", weeks=weeks, rank_util=ranks("util", pct), rank_rph=ranks("rph", money), rank_check=ranks("check", money),
+                diffs_util=diffs_util, diffs_rph=diffs_rph, multiples=multiples, retention=retention, lost=lost, exclusive=exclusive, overdue=overdue, r_run=r_run, e_run=e_run,
+                o_run=o_run, rows=rows, team=team, window=f"{m['starts'][-weeks]} – {m['end']}")
+
+
+EXPLORE = {   # metric -> (field, where it comes from, label key, kind)
+    "revenue": ("revenue", "shop", "metric.revenue", "money"), "visits": ("visits", "shop", "metric.visits", "int"), "check": ("avg_check", "shop", "metric.check", "money"),
+    "new_clients": ("new_clients", "shop", "overview.new_clients", "int"), "util": ("util", "team", "metric.util", "pct"), "rph": ("rph", "team", "metric.rph", "money"),
+}
+
+
+@app.get("/explore", response_class=HTMLResponse)
+def explore_page(request: Request, metric: str = "revenue", who: list[str] = Query(default=[]), weeks: int = 26, ly: int = 1, s: Session = Depends(db)):
+    metric = metric if metric in EXPLORE else "revenue"
+    weeks = weeks if weeks in (13, 26, 52) else 26
+    h = helpers(lang_of(request)); t = h["t"]
+    m = vm.weekly_matrix(s)
+    field, src, label_key, kind = EXPLORE[metric]
+    bar = vm.barbers(s)
+    bfield = {"avg_check": "avg_check", "new_clients": "new_to_shop", "rph": "rev_per_sched_h"}.get(field, field)
+    sel = [k_ for k_ in who if k_ in {b.key for b in bar}] if who else []
+    labels = m["labels"][-weeks:]
+    series, table_cols = [], []
+    fmtf = {"money": lambda v: vm.money(v), "int": lambda v: f"{v:g}", "pct": lambda v: f"{v:.0f}%"}[kind]
+    if not sel or src == "shop" and not sel:
+        rows = m["shop"] if src == "shop" else m["team"]
+        series.append({"name": t("explore.shop") if src == "shop" else t("overview.team_scope"), "values": [r[field] for r in rows[-weeks:]], "cls": "s1"})
+        if ly and field in ("revenue", "visits", "new_clients") and src == "shop":
+            lyf = {"revenue": "revenue_ly", "visits": "visits_ly", "new_clients": "new_ly"}[field]
+            series.append({"name": t("ui.last_year"), "values": [r[lyf] for r in rows[-weeks:]], "cls": "ly", "style": "dash"})
+    for i, b in enumerate(bar):
+        if b.key in sel:
+            rws = m["barbers"][b.key][-weeks:]
+            series.append({"name": b.name, "values": [r[bfield] if r["days"] else None for r in rws], "cls": BARBER_CLS[i % 6]})
+    chart = charts.line_chart(labels, series, title=t(label_key), y_fmt=fmtf, table_label=t("ui.table"))
+    summary = [{"name": s_["name"], "last": next((v for v in reversed(s_["values"]) if v is not None), None),
+                "avg": (sum(v for v in s_["values"] if v is not None) / max(1, sum(1 for v in s_["values"] if v is not None))) if any(v is not None for v in s_["values"]) else None}
+               for s_ in series]
+    return page(request, s, "explore.html", "explore", title="nav.explore", metric=metric, metrics=list(EXPLORE), sel=sel, weeks=weeks, ly=ly, chart=chart, summary=summary,
+                fmtf=fmtf, label_key=label_key, src=src, EXPLORE=EXPLORE, all_barbers=bar)
 
 
 # ---------------------------------------------------------------- goals

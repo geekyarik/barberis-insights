@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "_ui.html" import stat, panel, chip, page_head, empty with context %}
+{% block content %}
+{{ page_head(t("nav.team"), t("team.sub", window=window)) }}
+<div class="toolbar"><span class="eyebrow">{{ t("barber.range") }}</span>
+  <nav class="segmented" aria-label="{{ t('barber.range') }}">{% for n in (4, 8, 13, 26) %}<a href="/team?weeks={{ n }}"{% if weeks == n %} aria-current="true"{% endif %}>{{ t("barber.weeks_n", n=n) }}</a>{% endfor %}</nav></div>
+
+<div class="cols-3">
+  {% call panel(mlabel("util"), t("team.util_sub")) %}{{ rank_util }}{% endcall %}
+  {% call panel(mlabel("rph"), t("team.rph_sub")) %}{{ rank_rph }}{% endcall %}
+  {% call panel(mlabel("check"), t("team.check_sub")) %}{{ rank_check }}{% endcall %}
+</div>
+
+<div class="cols-2">
+  {% call panel(t("team.vs_team_util"), t("team.vs_team_sub")) %}{{ diffs_util }}{% endcall %}
+  {% call panel(t("team.vs_team_rph"), t("team.vs_team_sub")) %}{{ diffs_rph }}{% endcall %}
+</div>
+
+{% call panel(t("team.multiples"), t("team.multiples_sub")) %}
+  <div class="multiples">{% for x in multiples %}<a class="multiple" href="/barber/{{ x.key }}"><span class="mname">{{ x.name }}</span><span class="mval">{{ fmt('revenue', x.last) }}</span>{{ x.spark }}</a>{% endfor %}</div>
+{% endcall %}
+
+<div class="cols-2">
+  {% call panel(t("report.sec.retention"), t("team.run_sub", start=r_run.window_from, end=r_run.window_to) if r_run else none) %}
+    {% if retention %}<h3 class="mini">{{ t("barber.r_stayed") }}</h3>{{ retention }}<h3 class="mini">{{ t("barber.r_lost") }}</h3>{{ lost }}{% else %}{{ empty(t("team.no_run")) }}{% endif %}
+  {% endcall %}
+  {% call panel(t("team.risk_title"), t("team.risk_sub")) %}
+    {% if exclusive %}<h3 class="mini">{{ t("kpi.exclusive_pct") }}</h3>{{ exclusive }}<h3 class="mini">{{ t("kpi.value_at_stake") }}</h3>{{ overdue }}{% else %}{{ empty(t("team.no_run")) }}{% endif %}
+  {% endcall %}
+</div>
+
+{% call panel(t("team.table"), none, "nopad") %}
+<div class="tablebox" style="border:0"><table class="cards">
+  <thead><tr><th scope="col" class="l">{{ t("common.barber") }}</th><th scope="col">{{ mlabel("revenue") }}</th><th scope="col">{{ mlabel("visits") }}</th><th scope="col">{{ mlabel("util") }}</th><th scope="col">{{ mlabel("rph") }}</th><th scope="col">{{ mlabel("check") }}</th><th scope="col">{{ t("team.visits_pw") }}</th></tr></thead>
+  <tbody>{% for r in rows %}<tr><td class="l"><a href="/barber/{{ r.b.key }}">{{ r.b.name }}</a> <span class="muted">{{ r.b.tier }}</span></td>
+    <td data-label="{{ mlabel('revenue') }}">{{ fmt('revenue', r.revenue) }}</td><td data-label="{{ mlabel('visits') }}">{{ r.visits }}</td><td data-label="{{ mlabel('util') }}">{{ fmt('util', r.util) }}</td>
+    <td data-label="{{ mlabel('rph') }}">{{ fmt('rph', r.rph) }}</td><td data-label="{{ mlabel('check') }}">{{ fmt('check', r.check) }}</td><td data-label="{{ t('team.visits_pw') }}">{{ r.visits_pw if r.visits_pw is not none else '—' }}</td></tr>{% endfor %}
+    <tr><td class="l"><b>{{ t("report.c.team") }}</b></td><td data-label="{{ mlabel('revenue') }}"><b>{{ fmt('revenue', team.revenue) }}</b></td><td data-label="{{ mlabel('visits') }}"><b>{{ team.visits }}</b></td><td data-label="{{ mlabel('util') }}"><b>{{ fmt('util', team.util) }}</b></td>
+    <td data-label="{{ mlabel('rph') }}"><b>{{ fmt('rph', team.rph) }}</b></td><td data-label="{{ mlabel('check') }}"><b>{{ fmt('check', team.check) }}</b></td><td data-label="{{ t('team.visits_pw') }}">—</td></tr></tbody>
+</table></div>
+{% endcall %}
+{% endblock %}
