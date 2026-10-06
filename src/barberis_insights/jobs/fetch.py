@@ -19,8 +19,9 @@ from ..config import ROOT, settings
 from ..db.models import Appointment, Barber, Client, SyncRun, now as utcnow
 from ..ingest.status import data_status
 
+INSIGHTS = str(ROOT / ".venv" / "bin" / "insights")      # an absolute path: the scheduler's environment has no `uv` on its PATH
 ALLOWED = ("mcp__claude_ai_Altegio_Pro__appointments_list,mcp__claude_ai_Altegio_Pro__schedules_get,"
-           "Write,Read,Bash(uv run insights ingest:*),Bash(ls:*)")
+           f"Write,Read,Bash({INSIGHTS} ingest:*),Bash(ls:*)")
 
 PROMPT = """You are the data-fetch step of a scheduled job. Fetch fresh data from Altegio through the connector and import it. Do exactly this and nothing else.
 
@@ -28,7 +29,7 @@ Location id: {location}. Window: {date_from} to {date_to} (inclusive). Save file
 
 1. Call appointments_list for the location with date_from={date_from}, date_to={date_to}, page_size=300, include_contacts=false. Follow pagination.next_page until it is null.
 {schedules}3. Every result must end up as a JSON file that holds the result object exactly as the tool returned it (no edits, no summary). When the tool saved a large result to a file, ingest that file from where it is. When it came back inline, write it unchanged with Write to {out}/<tool>-<n>.json.
-4. Import all files in one command: uv run insights ingest <file> <file> ...
+4. Import all files in one command, exactly this program (do not use uv): {ingest} ingest <file> <file> ...
 5. Reply with one line: the ingest command's JSON output, or the first error you hit.
 
 Do not read or print client names or phone numbers. Do not call any other tool. If a call fails, retry it once, then continue with the rest and report the error."""
@@ -49,7 +50,7 @@ def window(s: Session, through: dt.date, ahead_days: int = 0) -> tuple[dt.date, 
 def build_prompt(s: Session, f: dt.date, t: dt.date, out: Path, schedules: bool = True) -> str:
     barbers = "\n".join(f"   - {b.name}: team_member_id={b.altegio_id}" for b in s.scalars(select(Barber).where(Barber.active.is_(True))))
     step = (f"2. For each active team member below call schedules_get with date_from={f}, date_to={t}:\n{barbers}\n") if schedules else ""
-    return PROMPT.format(location=settings.location_id, date_from=f, date_to=t, out=out, schedules=step)
+    return PROMPT.format(location=settings.location_id, date_from=f, date_to=t, out=out, schedules=step, ingest=INSIGHTS)
 
 
 def _runner(prompt: str, out: Path) -> dict:
@@ -85,9 +86,13 @@ def fetch_fresh(s: Session, through: dt.date, now: dt.datetime | None = None, ah
         res = {"ok": False, "error": f"{type(e).__name__}: {e}"[:300]}
     s.expire_all()
     s.commit()                                           # see what the ingest (a separate process) wrote
+    imported = s.scalar(select(func.count(SyncRun.id)).where(SyncRun.source == "connector_files", SyncRun.status == "ok", SyncRun.started >= started))
     after = (data_status(s), s.scalar(select(func.count(Appointment.id))), s.scalar(select(func.count(Client.altegio_id))))
     res |= {"started_at": started.isoformat(), "window": [str(f), str(t)], "last_visit": str(after[0]["last_visit"]), "last_schedule": str(after[0]["last_schedule"]),
             "appointments_added": after[1] - before[1], "clients_added": after[2] - before[2]}
+    res["imported"] = bool(imported)
+    if res.get("ok") and not imported:                    # Claude said it was done, but the database received nothing: that is a failure
+        res["ok"], res["error"] = False, "the fetch finished but nothing was imported: " + str(res.get("reply", ""))[-160:]
     shutil.rmtree(out, ignore_errors=True)
     return res
 

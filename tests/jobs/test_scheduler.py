@@ -135,7 +135,7 @@ def test_run_now_ignores_the_schedule_and_dry_run_leaves_no_trace(s, owner):
 
 # ------------------------------------------------------------------ the weekly flow: init -> fresh fetch -> process -> send
 @pytest.fixture
-def fetcher(monkeypatch):
+def fetcher(s, monkeypatch):
     """A fake headless Claude: records its prompt and, when told to, imports the week the way the real ingest would."""
     from barberis_insights.jobs import fetch
     monkeypatch.setattr(settings, "weekly_fetch", True)
@@ -145,6 +145,9 @@ def fetcher(monkeypatch):
         calls["prompts"].append(prompt)
         if calls["arrive"]:
             calls["arrive"]()
+        if calls.get("imports", True) and calls["ok"]:
+            from barberis_insights.db.models import SyncRun
+            s.add(SyncRun(source="connector_files", status="ok")); s.flush()
         return {"ok": calls["ok"], "error": "" if calls["ok"] else "claude is not signed in"}
     monkeypatch.setattr(fetch, "_runner", run)
     monkeypatch.setattr(settings, "data_dir", __import__("pathlib").Path(__import__("tempfile").mkdtemp()))
@@ -179,3 +182,17 @@ def test_a_dry_run_never_starts_the_fetch(s, owner, fetcher):
     data_through(s, "2026-03-15")
     jobs.run_now(s, "weekly_review", MON, dry_run=True)
     assert fetcher["prompts"] == []
+
+
+def test_a_fetch_that_imported_nothing_is_a_failure_even_if_claude_says_it_is_done(s, owner, fetcher):
+    data_through(s, "2026-03-15")
+    fetcher["imports"] = False                        # Claude reports success but no import ran
+    out = tick(s, MON, only="weekly_review")
+    assert out[0]["fetch"]["ok"] is False and out[0]["fetch"]["imported"] is False
+    assert any("nothing was imported" in m[1] for m in owner.sent)         # the owner is told
+
+
+def test_the_fetch_prompt_uses_the_absolute_ingest_program(s):
+    from barberis_insights.jobs import fetch
+    prompt = fetch.build_prompt(s, dt.date(2026, 3, 1), dt.date(2026, 3, 15), __import__("pathlib").Path("/tmp/x"))
+    assert fetch.INSIGHTS in prompt and "uv run" not in prompt and fetch.INSIGHTS in fetch.ALLOWED

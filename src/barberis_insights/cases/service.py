@@ -16,12 +16,13 @@ return that nobody caused can be told from a win-back.
 from __future__ import annotations
 
 import datetime as dt
+import math
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..clients import contact
-from ..clients.risk import risk_list, threshold
+from ..clients.risk import lapsed_line, risk_list, threshold
 from ..config import settings
 from ..db.models import Appointment, Barber, CaseEvent, Client, ClientProfile, RiskCase, now
 
@@ -36,16 +37,18 @@ def _event(case: RiskCase, kind: str, by: str = "job", note: str = "") -> None:
     case.events.append(CaseEvent(kind=kind, by=by, note=note))
 
 
+def _facts(p: ClientProfile):
+    from ..clients.profile import Facts
+    return Facts(client=p.client_id, first=p.first_visit, last=p.last_visit, visits=p.visits, spend=p.lifetime_spend, usual_barber=p.usual_barber or 0,
+                 last_barber=p.last_barber or p.usual_barber or 0, median_gap=p.median_gap_days, days_since=p.days_since_last)
+
+
 def _line(p: ClientProfile, trigger: str) -> int:
     """The line this client crossed, in days of silence."""
-    if trigger == "lapsed":
-        return settings.lapsed_after_days
     if trigger == "first_timer":
         return settings.first_timer_days
-    from ..clients.profile import Facts
-    f = Facts(client=p.client_id, first=p.first_visit, last=p.last_visit, visits=p.visits, spend=p.lifetime_spend, usual_barber=p.usual_barber or 0,
-              last_barber=p.usual_barber or 0, median_gap=p.median_gap_days, days_since=p.days_since_last)
-    return int(round(threshold(f)))
+    f = _facts(p)
+    return int(round(lapsed_line(f) if trigger == "lapsed" else threshold(f)))
 
 
 def active_cases(s: Session, client_ids=None) -> dict[int, RiskCase]:
@@ -55,15 +58,29 @@ def active_cases(s: Session, client_ids=None) -> dict[int, RiskCase]:
     return {c.client_id: c for c in s.scalars(q)}
 
 
+def suggest_barber(s: Session, left: Barber | None, recent_days: int = 90, today: dt.date | None = None) -> int | None:
+    """Who to offer a client whose barber left: a current barber of the same level, the least busy lately (so the offer fills free time)."""
+    today = today or dt.date.today()
+    active = [b for b in s.scalars(select(Barber).where(Barber.active.is_(True)))]
+    same = [b for b in active if left is not None and left.tier and b.tier == left.tier] or active
+    busy = {b.altegio_id: s.scalar(select(func.count(Appointment.id)).where(Appointment.barber_id == b.altegio_id, Appointment.status == "arrived",
+                                                                          Appointment.date >= today - dt.timedelta(days=recent_days))) for b in same}
+    return min(same, key=lambda b: busy[b.altegio_id]).altegio_id if same else None
+
+
 def detect(s: Session, today: dt.date | None = None) -> dict:
-    """Open a case for every client past a line who has none for it. Returns what was opened and what was left out, and why."""
+    """Open a case for every client past a line who has none for it. Returns what was opened and what was left out, and why.
+    The very first run opens only the highest-priority tenth of those who qualify (nobody can work hundreds of old cases); after that a case
+    opens only for a client who crossed the line within the case term, so the list stays about what is new."""
     today = today or dt.date.today()
     profiles = {p.client_id: p for p in s.scalars(select(ClientProfile))}
     rows = risk_list(s, tuple(TRIGGER_OF), None, 10 ** 6, include_ineligible=True)
     have = {(c.client_id, c.trigger, c.last_visit) for c in s.scalars(select(RiskCase))}
+    first_run = s.scalar(select(RiskCase.id).limit(1)) is None
     active = active_cases(s)
-    barber_ids = {b.altegio_id for b in s.scalars(select(Barber))}
-    opened, left_out = [], {"no_offer": 0, "blocked": 0, "no_phone": 0, "has_case": 0}
+    barbers = {b.altegio_id: b for b in s.scalars(select(Barber))}
+    left_out = {"no_offer": 0, "blocked": 0, "no_phone": 0, "has_case": 0, "crossed_long_ago": 0, "first_run_cap": 0}
+    cands = []
     for r in rows:
         if not r["suggested_offer"]:
             left_out["no_offer"] += 1; continue
@@ -76,16 +93,31 @@ def detect(s: Session, today: dt.date | None = None) -> dict:
         if r["client_id"] in active or (r["client_id"], trigger, p.last_visit) in have:
             left_out["has_case"] += 1; continue
         line = _line(p, trigger)
-        case = RiskCase(client_id=p.client_id, trigger=trigger, trigger_days=line, crossed_on=p.last_visit + dt.timedelta(days=line), last_visit=p.last_visit,
+        crossed = p.last_visit + dt.timedelta(days=line)
+        if not first_run and crossed < today - dt.timedelta(days=settings.case_expire_days):
+            left_out["crossed_long_ago"] += 1; continue
+        cands.append((p, r, trigger, line, crossed))
+    if first_run and cands:
+        cands.sort(key=lambda c: -c[0].priority)
+        keep = max(settings.case_first_run_min, math.ceil(settings.case_first_run_share * len(cands)))
+        left_out["first_run_cap"] = max(0, len(cands) - keep)
+        cands = cands[:keep]
+    opened = []
+    for p, r, trigger, line, crossed in cands:
+        usual = barbers.get(p.usual_barber)
+        left = usual is None or not usual.active
+        snapshot = {"segment": p.segment, "visits": p.visits, "lifetime_spend": p.lifetime_spend, "days_since": p.days_since_last, "median_gap": p.median_gap_days,
+                    "first_visit": str(p.first_visit), "last_visit": str(p.last_visit), "priority": p.priority, "return_chance": p.return_chance,
+                    "phone": r["phone"], "name": r["name"], "asof": str(p.asof)}
+        if left:
+            snapshot |= {"barber_left": True, "suggested_barber_id": suggest_barber(s, usual, today=today)}
+        case = RiskCase(client_id=p.client_id, trigger=trigger, trigger_days=line, crossed_on=crossed, last_visit=p.last_visit,
                         expires_on=today + dt.timedelta(days=settings.case_expire_days), offer=r["suggested_offer"],
-                        barber_id=p.usual_barber if p.usual_barber in barber_ids else None, priority=p.priority,
-                        snapshot={"segment": p.segment, "visits": p.visits, "lifetime_spend": p.lifetime_spend, "days_since": p.days_since_last,
-                                  "median_gap": p.median_gap_days, "first_visit": str(p.first_visit), "last_visit": str(p.last_visit),
-                                  "priority": p.priority, "phone": r["phone"], "name": r["name"], "asof": str(p.asof)})
-        _event(case, "opened", "job", f"{trigger} line {line} d crossed on {case.crossed_on}")
+                        barber_id=p.usual_barber if usual is not None else None, priority=p.priority, snapshot=snapshot)
+        _event(case, "opened", "job", f"{trigger} line {line} d crossed on {crossed}" + (" (barber left)" if left else ""))
         s.add(case); opened.append(case)
     s.flush()
-    return {"opened": len(opened), "left_out": left_out, "ids": [c.id for c in opened]}
+    return {"opened": len(opened), "left_out": left_out, "first_run": first_run, "ids": [c.id for c in opened]}
 
 
 def _close(case: RiskCase, outcome: str, by: str, reason: str | None = None, comment: str = "") -> None:
@@ -197,7 +229,8 @@ def case_rows(s: Session, tab: str = "open", barber: int | None = None, limit: i
         snap = c.snapshot or {}
         out.append({"case": c, "id": c.id, "client_id": c.client_id, "name": (cl.name if cl else "") or snap.get("name", ""), "phone": cl.phone if cl and cl.phone else snap.get("phone"),
                     "trigger": c.trigger, "trigger_days": c.trigger_days, "crossed_on": c.crossed_on, "status": c.status, "outcome": c.outcome, "reason": c.reason,
-                    "offer": c.offer, "barber_id": c.barber_id, "priority": c.priority, "snapshot": snap, "flag": flags.get(c.client_id),
+                    "offer": c.offer, "barber_id": c.barber_id, "priority": c.priority, "chance": snap.get("return_chance"), "barber_left": bool(snap.get("barber_left")),
+                    "suggested_barber_id": snap.get("suggested_barber_id"), "snapshot": snap, "flag": flags.get(c.client_id),
                     "days_left": (c.expires_on - today).days if c.status == "open" else None, "booked_for": c.booked_for, "processed_by": c.processed_by,
                     "days_since": (today - c.last_visit).days, "lifetime_spend": snap.get("lifetime_spend", 0), "median_gap": snap.get("median_gap"), "visits": snap.get("visits"),
                     "closed": c.closed, "contacted": c.contacted, "visited_on": c.visited_on, "visit_revenue": c.visit_revenue, "comment": c.comment})

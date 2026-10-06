@@ -27,12 +27,13 @@
     <thead><tr>
       <th scope="col" class="l">{{ t("col.client") }}</th>
       {% if tab == "processed" %}<th scope="col" class="tl">{{ t("case.outcome") }}</th><th scope="col" class="tl">{{ t("case.processed") }}</th><th scope="col" class="tl">{{ t("case.result") }}</th>
-      {% else %}<th scope="col" class="tl">{{ t("case.trigger") }}</th><th scope="col">{{ t("risk.col_silent") }}</th><th scope="col">{{ t("risk.col_value") }}</th><th scope="col">{{ t("col.priority") }}</th>{% endif %}
+      {% else %}<th scope="col" class="tl">{{ t("case.trigger") }}</th><th scope="col">{{ t("risk.col_silent") }}</th><th scope="col">{{ t("risk.col_value") }}</th><th scope="col">{{ t("case.chance") }}</th>{% endif %}
       <th scope="col" class="l">{{ t("col.offer") }}</th><th scope="col"><span class="sr-only">{{ t("case.open") }}</span></th></tr></thead>
     <tbody>{% set pmax = (rows|map(attribute="priority")|max) or 1 %}{% for r in rows %}<tr>
       <td class="l"><a href="/cases/{{ r.id }}">{{ r.name or t('client.fallback', id=r.client_id) }}</a>
         <span class="muted sm">#{{ r.client_id }}{% if bnames.get(r.barber_id) %} · {{ bnames.get(r.barber_id) }}{% endif %}</span>
-        {% if r.phone %}<span class="sm"><a href="tel:{{ r.phone }}">{{ r.phone }}</a></span>{% endif %}</td>
+        {% if r.phone %}<span class="sm"><a href="tel:{{ r.phone }}">{{ r.phone }}</a></span>{% endif %}
+        {% if r.barber_left %}<span class="chip warn sm"><i></i>{{ t("case.barber_left") }}</span>{% endif %}</td>
       {% if tab == "processed" %}
       <td class="tl" data-label="{{ t('case.outcome') }}"><span class="pill outcome-{{ r.outcome }}">{{ label("case.outcome.", r.outcome) }}</span>{% if r.reason %}<span class="muted sm">{{ label("case.reason.", r.reason) }}{% if r.comment %}: {{ r.comment }}{% endif %}</span>{% endif %}</td>
       <td class="tl" data-label="{{ t('case.processed') }}">{{ r.processed_by or t("case.by_job") }}<span class="muted sm">{{ r.closed.strftime('%Y-%m-%d') if r.closed else '' }}</span></td>
@@ -44,7 +45,7 @@
         {% else %}<span class="sm"><b>{{ t("case.booking_on", date=r.booked_for) if r.booked_for else t("case.booking_reported") }}</b></span>{% endif %}</td>
       <td data-label="{{ t('risk.col_silent') }}"><b>{{ t("risk.days_n", n=r.days_since) }}</b><span class="muted sm">{% if r.median_gap %}{{ t("risk.usually_n", n=r.median_gap|round|int) }}{% endif %}</span></td>
       <td data-label="{{ t('risk.col_value') }}"><b>₴{{ '{:,.0f}'.format(r.lifetime_spend or 0).replace(',', ' ') }}</b><span class="muted sm">{{ t("risk.visits_n", n=r.visits) }}</span></td>
-      <td data-label="{{ t('col.priority') }}"><span class="cell-bar"><span class="rank-track" aria-hidden="true"><b class="s1" style="width:{{ (100 * r.priority / pmax)|round|int }}%"></b></span><span class="num">{{ r.priority|round|int }}</span></span></td>
+      <td data-label="{{ t('col.priority') }}"><span class="cell-bar"><span class="rank-track" aria-hidden="true"><b class="s1" style="width:{{ (100 * r.priority / pmax)|round|int }}%"></b></span><span class="num">{{ ((100 * r.chance)|round|int ~ "%") if r.chance is not none else "—" }}</span></span><span class="muted sm">{{ t("case.chance_note", value='{:,.0f}'.format(r.priority).replace(',', ' ')) }}</span></td>
       {% endif %}
       <td class="l offer" data-label="{{ t('col.offer') }}">{% if r.offer %}<span title="{{ label('offer.', r.offer) }}">{{ label('offer_short.', r.offer, label('offer.', r.offer)) }}</span>{% else %}—{% endif %}</td>
       <td class="tl"><a class="btn ghost" href="/cases/{{ r.id }}">{{ t("case.open") if tab != "processed" else t("case.view") }}</a></td></tr>{% endfor %}</tbody></table></div>

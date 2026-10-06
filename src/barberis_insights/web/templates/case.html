@@ -19,8 +19,11 @@
   {{ stat(t("case.why"), t("risk.days_n", n=case.trigger_days), none, none, none, none, none, t("case.crossed_long", date=case.crossed_on)) }}
   {{ stat(t("risk.col_silent"), t("risk.days_n", n=(today - case.last_visit).days), none, none, none, none, none, ((t("risk.usually_n", n=case.snapshot.median_gap|round|int) ~ " · ") if case.snapshot.median_gap else "") ~ case.last_visit) }}
   {{ stat(t("risk.col_value"), "₴" ~ '{:,.0f}'.format(case.snapshot.lifetime_spend or 0).replace(',', ' '), none, none, none, none, none, t("risk.visits_n", n=case.snapshot.visits)) }}
-  {{ stat(t("col.usual_barber"), bnames.get(case.barber_id, '—')) }}
+  {{ stat(t("col.usual_barber"), bnames.get(case.barber_id, '—'), none, none, none, none, none, t("case.barber_left") if case.snapshot.barber_left else none) }}
+  {% if case.snapshot.return_chance is not none %}{{ stat(t("case.chance"), (100 * case.snapshot.return_chance)|round|int ~ "%", none, none, none, none, none, t("case.chance_help")) }}{% endif %}
 </div>
+
+{% if case.snapshot.barber_left %}<div class="banner warn" role="status"><b>{{ t("case.barber_left") }}.</b> {{ t("case.barber_left_help", name=bnames.get(case.snapshot.suggested_barber_id, '—')) }}</div>{% endif %}
 
 {% if case.status == "closed" %}
   {% call panel(t("case.result_title"), none) %}

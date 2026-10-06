@@ -40,7 +40,7 @@ def run(ctx: AnalysisContext) -> dict:
             last = max(d for d in dates[c] if d < asof)
             mine.append({"scope": b.key, "client_id": c, "shop_visits": f.visits, "visits_to_barber": len([d for d in dates[c] if d < asof]),
                          "median_gap_days": f.median_gap, "days_silent": (asof - last).days, "lifetime_spend": round(f.spend),
-                         "priority": priority(f, "overdue")})
+                         "priority": priority(f)[0]})
         mine.sort(key=lambda r: -r["priority"])
         value = sum(r["lifetime_spend"] for r in mine)
         days = sum(r["days_silent"] for r in mine)

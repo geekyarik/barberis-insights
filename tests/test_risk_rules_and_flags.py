@@ -65,23 +65,40 @@ def _facts(**kw):
     return Facts(**(base | kw))
 
 
-def test_an_early_overdue_regular_gets_a_call_and_a_late_one_gets_the_booking_offer():
+def _so(**kw):
+    """(segment, offer) for a client with these facts."""
     from barberis_insights.clients.risk import classify
-    assert classify(_facts(days_since=60))[::2] == ("overdue", "call_only")                  # line is 45: 15 days past it
-    assert classify(_facts(days_since=100))[::2] == ("overdue", "book_now")                  # 55 days past it
+    r = classify(_facts(**kw))
+    return r[0], r[3]
+
+
+def test_an_early_overdue_regular_gets_a_call_and_a_late_one_gets_the_booking_offer():
+    assert _so(days_since=60) == ("overdue", "call_only")                  # gap 30: the line is 45, so 15 days past it
+    assert _so(days_since=100) == ("overdue", "book_now")                  # 55 days past it
+
+
+def test_a_client_with_two_visits_has_one_fixed_line_and_only_ever_gets_a_call():
+    assert _so(visits=2, median_gap=None, days_since=55)[0] == "slipping" or _so(visits=2, median_gap=None, days_since=55)[0] == "active"
+    assert _so(visits=2, median_gap=None, days_since=70) == ("overdue", "call_only")      # line 60, not 45
+    assert _so(visits=2, median_gap=None, days_since=100) == ("overdue", "call_only")     # however late, no discount
+
+
+def test_the_lapsed_line_follows_the_clients_own_rhythm_within_limits():
+    assert _so(median_gap=30.0, days_since=110)[0] == "overdue" and _so(median_gap=30.0, days_since=125)[0] == "lapsed"     # 2 x 30 = 60, floor 120
+    assert _so(median_gap=90.0, days_since=170)[0] == "overdue" and _so(median_gap=90.0, days_since=185)[0] == "lapsed"     # 2 x 90 = 180
+    assert _so(median_gap=250.0, days_since=380)[0] == "lapsed"                                                              # 2 x 250 is capped at 365, but never before the overdue line (375)
 
 
 def test_lapsed_regulars_get_the_offer_only_while_the_data_says_they_can_return():
-    from barberis_insights.clients.risk import classify
-    assert classify(_facts(days_since=300))[::2] == ("lapsed", "book_now")
-    assert classify(_facts(days_since=400))[::2] == ("lapsed", None)                         # silent for over a year
-    assert classify(_facts(days_since=400, visits=2))[::2] == ("lapsed", None)               # not a regular
+    assert _so(days_since=300) == ("lapsed", "book_now")
+    assert _so(days_since=400) == ("lapsed", None)                                         # silent for over a year
+    assert _so(days_since=300, visits=2, median_gap=None) == ("lapsed", None)              # not a regular
 
 
 def test_first_timers_get_the_offer_only_while_the_first_visit_is_recent():
-    from barberis_insights.clients.risk import classify
-    assert classify(_facts(visits=1, median_gap=None, days_since=70))[::2] == ("one_time", "book_now")
-    assert classify(_facts(visits=1, median_gap=None, days_since=300))[::2] == ("one_time", None)
+    assert _so(visits=1, median_gap=None, days_since=20)[0] == "active"                    # not yet 28 days
+    assert _so(visits=1, median_gap=None, days_since=35) == ("one_time", "book_now")
+    assert _so(visits=1, median_gap=None, days_since=300) == ("one_time", None)
 
 
 def test_seeding_retires_the_first_guess_offers(s):
@@ -159,3 +176,30 @@ def test_lifting_a_flag_also_clears_the_older_do_not_contact_mark(s):
     from barberis_insights.db.models import Client
     contact.lift_flag(s, 38); s.get(Client, 38).do_not_contact = False       # what the single "lift" button does
     assert 38 in _ids(s)
+
+
+# ------------------------------------------------------------------ the chance of returning, and the priority built on it
+def test_the_return_model_learns_that_silence_lowers_the_chance_and_visits_raise_it():
+    from barberis_insights.clients.return_model import fit
+    day = dt.date(2025, 1, 1)
+    hist = {}
+    for c in range(200):                                       # regulars who come back after 28 or 50 days, alternately
+        d, hist[c] = day, [day]
+        for i in range(9):
+            d += dt.timedelta(days=28 if i % 2 == 0 else 50); hist[c].append(d)
+    for c in range(200, 600):                                  # one-timers who never come back
+        hist[c] = [day]
+    m = fit(hist, dt.date(2026, 6, 1))
+    assert m.chance(8, 31) > 0.5                               # a regular a few days late usually comes
+    assert m.chance(1, 120) < 0.05                             # a one-timer silent 120 days never does
+    assert m.chance(1, 40) < 0.05 and m.chance(8, 40) > m.chance(1, 40)
+
+
+def test_priority_is_chance_times_a_years_value_so_the_likelier_and_richer_go_first(s):
+    from barberis_insights.clients.risk import yearly_value, priority
+    from barberis_insights.clients.return_model import ReturnModel
+    model = ReturnModel(cells={(2, 3): [100, 50]}, by_silence={3: [100, 50]})          # 50% for 3 visits, 75-104 days silent
+    rich, poor = _facts(spend=12000.0, visits=6, days_since=80), _facts(spend=3000.0, visits=6, days_since=80)
+    assert priority(rich, model)[1] == 0.5 and priority(rich, model)[0] > priority(poor, model)[0] * 3
+    assert round(yearly_value(poor)) == round(500 * 365 / 30)
+    assert priority(_facts(days_since=80), None)[1] == 0.1

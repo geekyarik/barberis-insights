@@ -6,7 +6,7 @@ Two offers, decided on 2026-10-06 from the shop's own visit history and its fina
 
 | Offer | Code | Who gets it | What it is |
 |---|---|---|---|
-| **Call** | `call_only` | Regulars (3+ visits) up to 30 days past their own overdue line | A personal call that proposes a concrete time with their usual barber. No discount. |
+| **Call** | `call_only` | Regulars (3+ visits) up to 30 days past their own overdue line, and clients with two visits | A personal call that proposes a concrete time with their usual barber. No discount. |
 | **Book now** | `book_now` | Regulars more than 30 days past their line; lapsed regulars (180 to 365 days silent); first-time clients 41 to 120 days after their first visit | **15% off if the client books during the call**, with the admin, on a quiet slot, valid 14 days. |
 
 Everyone else (one-time clients older than 120 days, lapsed clients with two visits, regulars silent over a year) gets **no offer**: their chance of returning is too low for a discount to pay back, and the call list would be too long to work. As of 2026-10-06 that is about 2 400 + 590 + 1 180 clients; the offer reaches 60 + 170 + 175 + 59 = about 460.

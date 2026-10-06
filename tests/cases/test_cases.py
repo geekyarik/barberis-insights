@@ -156,3 +156,49 @@ def test_the_queue_is_ordered_by_value_and_next_open_skips_the_one_just_done(s):
 def test_an_early_overdue_regular_gets_a_call_not_a_discount(s):
     regular(s, 10, "2026-07-20"); client(s, 10); build(s); cases.detect(s, TODAY)       # 73 days away: 28 past the line
     assert one_case(s, 10).offer == "call_only"
+
+
+# ------------------------------------------------------------------ the first run, the crossing window, and clients of a barber who left
+def test_the_first_run_opens_only_the_highest_priority_tenth(s, monkeypatch):
+    from barberis_insights.config import settings
+    monkeypatch.setattr(settings, "case_first_run_min", 2)
+    for cid in range(100, 120):                                   # 20 overdue regulars, the later ones richer
+        regular(s, cid, "2026-06-20", cost=400 + 100 * (cid - 100)); client(s, cid)
+    build(s)
+    out = cases.detect(s, TODAY)
+    assert out["first_run"] is True and out["opened"] == 2 and out["left_out"]["first_run_cap"] == 18
+    assert {c.client_id for c in s.query(RiskCase)} == {119, 118}
+
+
+def test_after_the_first_run_only_clients_who_just_crossed_a_line_get_a_case(s, monkeypatch):
+    from barberis_insights.config import settings
+    monkeypatch.setattr(settings, "case_first_run_min", 1)
+    regular(s, 10, "2026-06-20"); client(s, 10)                    # crossed the 45 day line in early August
+    build(s); cases.detect(s, TODAY)                               # the first run takes it (the only one)
+    regular(s, 11, "2026-06-20"); client(s, 11)                    # an old crossing: does not open
+    regular(s, 12, str(TODAY - dt.timedelta(days=52))); client(s, 12)   # crossed 7 days ago: opens
+    build(s)
+    out = cases.detect(s, TODAY)
+    assert out["first_run"] is False and out["left_out"]["crossed_long_ago"] >= 1
+    assert s.query(RiskCase).filter_by(client_id=12).count() == 1 and s.query(RiskCase).filter_by(client_id=11).count() == 0
+
+
+def test_clients_of_a_barber_who_left_are_marked_with_a_same_level_barber_to_suggest(s):
+    from barberis_insights.db.models import Barber
+    s.add_all([Barber(altegio_id=5, key="gone", name="Gone", tier="Майстер", active=False), Barber(altegio_id=6, key="busy", name="Busy", tier="Майстер", active=True),
+               Barber(altegio_id=7, key="free", name="Free", tier="Майстер", active=True), Barber(altegio_id=8, key="exp", name="Expert", tier="Експерт", active=True)])
+    s.flush()
+    for i in range(5):
+        visit(s, 900 + i, TODAY - dt.timedelta(days=10 + i), 6, 500)                # Busy had five recent visits, Free none
+    visit(s, 950, TODAY - dt.timedelta(days=12), 2, 500)                            # the test shop's own barber B (same tier) had one
+    regular(s, 10, "2026-06-20", barber=5); client(s, 10)
+    build(s); cases.detect(s, TODAY)
+    snap = one_case(s, 10).snapshot
+    assert snap["barber_left"] is True and snap["suggested_barber_id"] == 7        # same tier ("Майстер"), the least busy
+    assert cases.case_rows(s, "open")[0]["barber_left"] is True
+
+
+def test_a_case_stores_the_chance_of_returning_and_a_priority_that_follows_it(s):
+    regular(s, 10, "2026-06-20"); client(s, 10); build(s); cases.detect(s, TODAY)
+    c = one_case(s, 10)
+    assert c.snapshot["return_chance"] is not None and c.priority > 0

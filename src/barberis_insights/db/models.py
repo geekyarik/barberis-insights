@@ -92,6 +92,7 @@ class ClientProfile(Base):
     median_gap_days: Mapped[float | None] = mapped_column(Float)
     days_since_last: Mapped[int | None] = mapped_column(Integer)
     segment: Mapped[str] = mapped_column(String(20), default="active")
+    return_chance: Mapped[float | None] = mapped_column(Float)  # P(comes back within 90 days with no contact), from the shop's own history
     priority: Mapped[float] = mapped_column(Float, default=0)
     suggested_offer: Mapped[str | None] = mapped_column(String(40))
 

@@ -48,13 +48,15 @@ def build_facts(ds: Dataset, asof: dt.date) -> dict[int, Facts]:
 
 
 def rebuild_profiles(s: Session, ds: Dataset, asof: dt.date | None = None) -> int:
+    from . import return_model
     from .risk import classify  # local import avoids a cycle
     asof = asof or data_asof(s)
     facts = build_facts(ds, asof)
+    model = return_model.fit({c: sorted({a.date for a in vs if a.date < asof}) for c, vs in ds.shop_history.items()}, asof)
     s.execute(delete(ClientProfile))
     for f in facts.values():
-        seg, prio, offer = classify(f)
+        seg, prio, chance, offer = classify(f, model)
         s.add(ClientProfile(client_id=f.client, asof=asof, first_visit=f.first, last_visit=f.last, visits=f.visits,
                             lifetime_spend=round(f.spend, 2), usual_barber=f.usual_barber, last_barber=f.last_barber,
-                            median_gap_days=f.median_gap, days_since_last=f.days_since, segment=seg, priority=prio, suggested_offer=offer))
+                            median_gap_days=f.median_gap, days_since_last=f.days_since, segment=seg, priority=prio, return_chance=chance, suggested_offer=offer))
     return len(facts)
