@@ -183,7 +183,7 @@ One attempt to bring one client back. A person proposes and approves it, the adm
 _Avoid_: lead, ticket, task
 
 **Offer**:
-What the admin may give a client to come back, e.g. a call only, 10% off, or a free add-on.
+What the admin may give a client to come back, a call only, or 15% off if the client books during the call (docs/OFFERS.md).
 _Avoid_: discount (an offer may be no discount), promo
 
 **Won back**:

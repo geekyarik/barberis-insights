@@ -139,3 +139,38 @@ def test_offer_arms_are_assigned(s):
     cases = service.propose(s, risk_list(s, ("overdue",)), arms=["call_only", "pct10"], seed=1)
     arms = {c.offer_arm for c in cases}
     assert arms == {"call_only", "pct10"} and all(c.suggested_offer == c.offer_arm for c in cases)
+
+
+# ------------------------------------------------------------------ the offer rule (docs/OFFERS.md)
+def _facts(**kw):
+    import datetime as dt
+    from barberis_insights.clients.profile import Facts
+    base = dict(client=1, first=dt.date(2025, 1, 1), last=dt.date(2026, 1, 1), visits=6, spend=5000.0, usual_barber=1, last_barber=1, median_gap=30.0, days_since=60)
+    return Facts(**(base | kw))
+
+
+def test_an_early_overdue_regular_gets_a_call_and_a_late_one_gets_the_booking_offer():
+    from barberis_insights.clients.risk import classify
+    assert classify(_facts(days_since=60))[::2] == ("overdue", "call_only")                  # line is 45: 15 days past it
+    assert classify(_facts(days_since=100))[::2] == ("overdue", "book_now")                  # 55 days past it
+
+
+def test_lapsed_regulars_get_the_offer_only_while_the_data_says_they_can_return():
+    from barberis_insights.clients.risk import classify
+    assert classify(_facts(days_since=400))[::2] == ("lapsed", "book_now")
+    assert classify(_facts(days_since=900))[::2] == ("lapsed", None)                         # silent for years
+    assert classify(_facts(days_since=400, visits=2))[::2] == ("lapsed", None)               # not a regular
+
+
+def test_first_timers_get_the_offer_only_while_the_first_visit_is_recent():
+    from barberis_insights.clients.risk import classify
+    assert classify(_facts(visits=1, median_gap=None, days_since=70))[::2] == ("one_time", "book_now")
+    assert classify(_facts(visits=1, median_gap=None, days_since=300))[::2] == ("one_time", None)
+
+
+def test_seeding_retires_the_first_guess_offers(s):
+    from barberis_insights.db.models import Offer
+    from barberis_insights.outreach.offers import seed_offers
+    s.add(Offer(code="pct10", label="old", kind="percent", value=10, valid_days=30, active=True)); s.flush()
+    seed_offers(s)
+    assert s.get(Offer, "pct10").active is False and s.get(Offer, "book_now").active is True and s.get(Offer, "book_now").value == 15

@@ -48,16 +48,19 @@ def priority(f: Facts, seg: str) -> float:
 
 
 def suggest_offer(f: Facts, seg: str) -> str | None:
-    """Starting rule table; the admin can override per call. Codes match `offers` (see outreach/offers.py)."""
-    if seg not in CALLABLE:
-        return None
-    if seg == "one_time":
-        return "pct10"
-    if f.spend >= 8000:
-        return "free_addon"
-    if seg == "lapsed":
-        return "pct15"
-    return "call_only" if f.days_since <= 90 else "pct10"
+    """Two offers, chosen by how likely the client is to come back on their own (docs/OFFERS.md); the admin can override per call.
+    - an overdue regular up to `early_overdue_days` past their own line: a call, no discount (half return anyway);
+    - an overdue regular further past it, or a lapsed regular within `book_now_lapsed_max_days`: `book_now` (a discount for booking during the call);
+    - a one-time client whose first visit is recent: `book_now` (the second visit within 60 days decides who becomes a regular);
+    - everyone else (older one-time clients, lapsed clients with two visits or silent for years): no offer, the data does not justify one."""
+    if seg == "overdue":
+        return "call_only" if f.days_since - threshold(f) <= settings.early_overdue_days else "book_now"
+    if seg == "lapsed" and f.visits >= 3 and f.days_since <= settings.book_now_lapsed_max_days:
+        return "book_now"
+    lo, hi = settings.book_now_first_timer_days
+    if seg == "one_time" and lo <= f.days_since <= hi:
+        return "book_now"
+    return None
 
 
 def classify(f: Facts) -> tuple[str, float, str | None]:

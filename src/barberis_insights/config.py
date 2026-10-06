@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     lapsed_after_days: int = 180
     case_cooldown_days: int = 60
     winback_window_days: int = 60
+    # win-back offer (docs/OFFERS.md): the discount a client gets for booking during the call, and who is worth one
+    book_now_pct: int = 15
+    early_overdue_days: int = 30  # up to this many days past a regular's own overdue line the offer is a call, not a discount
+    book_now_lapsed_max_days: int = 720  # regulars silent longer than this are not contacted
+    book_now_first_timer_days: tuple[int, int] = (46, 120)  # one-time clients are worth the offer only while the first visit is this recent
     # google sheet for the admin call list
     sheet_id: str | None = None
     sheet_lang: str = "uk"  # language of the call sheet's tabs, headers and dropdowns ("uk" or "en"); the sync reads both

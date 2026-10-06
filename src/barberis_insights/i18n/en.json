@@ -693,5 +693,6 @@
   "risk.selected_n": "Selected: {n}",
   "risk.ab_title": "A/B test of offers",
 
-  "ui.data_current": "Data: up to date"
+  "ui.data_current": "Data: up to date",
+  "offer.book_now": "15% off if booked during the call (quiet slot, 14 days)"
 }

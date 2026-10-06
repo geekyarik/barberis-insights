@@ -3,14 +3,14 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..db.models import Offer
 
 DEFAULT_OFFERS = [
     Offer(code="call_only", label="Friendly call, no discount", kind="none", value=0, valid_days=30),
-    Offer(code="pct10", label="10% off the next visit", kind="percent", value=10, valid_days=30),
-    Offer(code="pct15", label="15% off the next visit", kind="percent", value=15, valid_days=30),
-    Offer(code="free_addon", label="Free head massage with the next haircut", kind="fixed", value=300, valid_days=30),
+    Offer(code="book_now", label="15% off if booked during the call", kind="percent", value=settings.book_now_pct, valid_days=14),
 ]
+RETIRED = ("pct10", "pct15", "free_addon")   # the first guesses, replaced on 2026-10-06 (docs/OFFERS.md); kept so old cases still read
 
 
 def seed_offers(s: Session) -> int:
@@ -18,6 +18,10 @@ def seed_offers(s: Session) -> int:
     for o in DEFAULT_OFFERS:
         if s.get(Offer, o.code) is None:
             s.add(Offer(code=o.code, label=o.label, kind=o.kind, value=o.value, valid_days=o.valid_days, active=True)); n += 1
+    s.flush()
+    for code in RETIRED:
+        if (o := s.get(Offer, code)) is not None:
+            o.active = False
     return n
 
 
