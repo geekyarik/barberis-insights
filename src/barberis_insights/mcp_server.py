@@ -15,15 +15,14 @@ from .analyses import effects as factor_effects, service as analyses
 from .clients.profile import data_asof, rebuild_profiles
 from .clients.risk import risk_list as _risk_list
 from .context import factors, service as notes
-from .db.models import Appointment, Barber, Client, ClientProfile, Hypothesis, Measurement, OutreachCase
+from .db.models import Appointment, Barber, Client, ClientProfile, Hypothesis, Measurement, RiskCase
 from .db.session import engine, session_scope
 from .experiments import factor_link
 from .experiments.evaluate import run as run_hypothesis
 from .goals import service as goals
 from .ingest.connector_files import ingest_files as _ingest
 from .metrics import Dataset, compute_snapshot as _compute, catalog
-from .outreach import service as outreach
-from .outreach.attribution import attribute
+from .cases import service as case_service
 from .playbook import service as playbook
 
 mcp = MCPServer("barberis-insights", instructions=(
@@ -68,7 +67,6 @@ def compute_snapshot(date_from: str, date_to: str) -> dict:
     with session_scope() as s:
         row = analyses.run(s, "barber_scorecard", dt.date.fromisoformat(date_from), dt.date.fromisoformat(date_to), created_by="claude",
                            label="Monthly measurement")
-        attribute(s)
         return {"run": row.id, "asof": str(row.asof), "versions": row.metric_versions, "values": row.result["kpis"]}
 
 
@@ -174,7 +172,7 @@ def list_lenses() -> list[dict]:
 
 @mcp.tool()
 def list_jobs() -> list[dict]:
-    """The scheduled jobs (daily data check, call-sheet sync, weekly review), their cadence and their last run."""
+    """The scheduled jobs (daily data check, daily client cases, weekly review), their cadence and their last run."""
     from .jobs import service as jobs
     with session_scope() as s:
         return jobs.list_jobs(s)
@@ -226,30 +224,23 @@ def client_card(client_id: int) -> dict:
         c, p = s.get(Client, client_id), s.get(ClientProfile, client_id)
         names = {b.altegio_id: b.name for b in s.scalars(select(Barber))}
         visits = s.scalars(select(Appointment).where(Appointment.client_id == client_id).order_by(Appointment.date.desc()).limit(15))
-        cases = s.scalars(select(OutreachCase).where(OutreachCase.client_id == client_id))
+        cases = s.scalars(select(RiskCase).where(RiskCase.client_id == client_id))
         return {"client": {"name": c.name, "phone": c.phone, "do_not_contact": c.do_not_contact} if c else None,
                 "profile": {"segment": p.segment, "visits": p.visits, "spent": p.lifetime_spend, "last_visit": str(p.last_visit),
                             "days_since": p.days_since_last, "usual_gap": p.median_gap_days, "usual_barber": names.get(p.usual_barber)} if p else None,
                 "visits": [{"date": str(v.date), "barber": names.get(v.barber_id), "status": v.status, "cost": v.total_cost,
                             "services": [x.title for x in v.services]} for v in visits],
-                "cases": [{"id": k.id, "status": k.status, "offer": k.offer_given or k.suggested_offer, "contacted": str(k.contacted_on or ""),
-                           "returned": str(k.returned_on or ""), "events": [f"{e.at:%Y-%m-%d} {e.source} {e.outcome or e.kind} {e.note or ''}".strip() for e in k.events]}
+                "cases": [{"id": k.id, "trigger": k.trigger, "status": k.status, "outcome": k.outcome, "reason": k.reason, "offer": k.offer, "contacted": k.contacted,
+                           "visited_on": str(k.visited_on or ""), "events": [f"{e.at:%Y-%m-%d} {e.by} {e.kind} {e.note or ''}".strip() for e in k.events]}
                           for k in cases]}
 
 
 @mcp.tool()
-def list_cases(status: str | None = None) -> list[dict]:
-    """Win-back cases (all, or one status: proposed, approved, in_sheet, called, no_answer, booked, won_back, not_returned, …)."""
+def list_cases(tab: str = "open") -> list[dict]:
+    """Win-back cases the daily job opened. tab: open (to process), booking (a booking exists, waiting for the visit) or processed (closed)."""
     with session_scope() as s:
-        return outreach.case_rows(s, (status,) if status else outreach.OPEN + outreach.CLOSED)
-
-
-@mcp.tool()
-def propose_cases(client_ids: list[int], offer_arms: list[str] | None = None) -> dict:
-    """Propose win-back cases for these clients (they still need the owner's approval in the dashboard)."""
-    with session_scope() as s:
-        rows = [r for r in _risk_list(s, ("overdue", "lapsed", "one_time", "slipping"), None, 100000) if r["client_id"] in set(client_ids)]
-        return {"proposed": [c.id for c in outreach.propose(s, rows, offer_arms)]}
+        rows = case_service.case_rows(s, tab if tab in case_service.TABS else "open")
+        return [{k: (str(v) if hasattr(v, "isoformat") else v) for k, v in r.items() if k not in ("case", "flag")} for r in rows]
 
 
 @mcp.tool()
@@ -298,17 +289,17 @@ def list_tips(barber: str | None = None) -> list[dict]:
 
 @mcp.tool()
 def ingest_files(paths: list[str]) -> dict:
-    """Import files saved from the Altegio Pro connector (appointments_list, schedules_get or client results), then rebuild client profiles and attribution."""
+    """Import files saved from the Altegio Pro connector (appointments_list, schedules_get or client results), then rebuild client profiles."""
     with session_scope() as s:
         out = _ingest(s, paths)
         rebuild_profiles(s, Dataset.load(s))
-        return out | {"attribution": attribute(s), "data_asof": str(data_asof(s))}
+        return out | {"data_asof": str(data_asof(s))}
 
 
 @mcp.tool()
 def sql_readonly(query: str, limit: int = 200) -> dict:
     """Run a read-only SELECT on the local database for ad-hoc analysis. Tables: appointments, appointment_services, schedule_slots,
-    barbers, clients, client_profiles, measurements, goals, outreach_cases, outreach_events, notes, hypotheses, tips."""
+    barbers, clients, client_profiles, measurements, goals, risk_cases, case_events, notes, hypotheses, tips."""
     q = query.strip().rstrip(";")
     if not q.lower().startswith(("select", "with")) or ";" in q:
         raise ToolError("Only a single SELECT/WITH statement is allowed.")

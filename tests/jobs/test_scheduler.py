@@ -11,7 +11,6 @@ from barberis_insights.jobs.registry import JOBS
 from barberis_insights.notifications import service as notify
 from barberis_insights.notifications.channels import register
 from barberis_insights.notifications.channels.fake import FakeChannel
-from barberis_insights.outreach.sheets import FakeSheet
 
 NOSLEEP = lambda _: None
 D = dt.date.fromisoformat
@@ -118,13 +117,6 @@ def test_data_watch_is_quiet_when_the_data_is_fresh(s, owner):
     visit(s, 1, "2026-03-09", 1); s.flush()
     out = tick(s, dt.datetime(2026, 3, 10, 9, 5), only="data_watch")
     assert out[0]["stale"] is False and owner.sent == []
-
-
-def test_sheet_sync_is_skipped_without_a_sheet_and_runs_with_one(s, owner, monkeypatch):
-    monkeypatch.setattr(settings, "sheet_id", None)
-    assert tick(s, dt.datetime(2026, 3, 10, 9, 5), only="sheet_sync")[0]["status"] == "skipped"
-    out = tick(s, dt.datetime(2026, 3, 10, 19, 5), only="sheet_sync", sheet_factory=FakeSheet)
-    assert out[0]["status"] == "ok" and owner.sent == []                 # silent when all is well
 
 
 def test_a_dry_run_records_and_sends_nothing(s, owner):

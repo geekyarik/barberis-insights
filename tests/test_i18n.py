@@ -42,8 +42,9 @@ def test_every_key_used_exists():
 
 def test_every_metric_and_code_has_a_label():
     from barberis_insights.clients.risk import CALLABLE
-    from barberis_insights.outreach.service import CLOSED, OPEN, OUTCOMES
-    need = {f"metric.{m}" for m in REGISTRY} | {f"status.{s}" for s in OPEN + CLOSED} | {f"outcome.{o}" for o in OUTCOMES}
+    from barberis_insights.cases.service import ACTIVE, REJECT_REASONS, TRIGGER_OF
+    need = {f"metric.{m}" for m in REGISTRY} | {f"case.status.{s}" for s in ACTIVE + ("closed",)} | {f"case.reason.{r}" for r in REJECT_REASONS}
+    need |= {f"case.trigger.{t}" for t in TRIGGER_OF.values()} | {f"case.outcome.{o}" for o in ("visited", "rejected", "no_answer", "expired")}
     need |= {f"segment.{s}" for s in CALLABLE + ("slipping", "switched", "active")}
     need |= {f"goal.state.{s}" for s in ("done", "dropped", "no_data", "reached", "waiting", "on_track", "behind")}
     assert sorted(need - set(catalog("uk"))) == []
@@ -53,7 +54,7 @@ def test_fallbacks():
     assert t("nav.goals", "uk") == "Цілі" and t("nav.goals", "en") == "Goals"
     assert t("nav.goals", "de") == "Цілі"                       # unknown language → Ukrainian (default)
     assert t("no.such.key", "uk") == "no.such.key"               # a gap is visible, never a crash
-    assert t("flash.proposed", "uk", n=3).startswith("Запропоновано звернень: 3")
+    assert t("flash.case_booked", "uk").startswith("Збережено")
 
 
 @pytest.mark.parametrize("lang,word", [("uk", "Огляд"), ("en", "Overview")])

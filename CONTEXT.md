@@ -44,10 +44,10 @@ _Avoid_: rank, category
 The barbers being tracked, taken together.
 
 **Owner** / **Manager**:
-The people who use this tool to run the business. The owner also approves win-back cases.
+The people who use this tool to run the business. 
 
 **Admin**:
-The person at the front desk who calls clients for win-back. They work from the call sheet, not this tool.
+The person at the front desk who calls clients for win-back. They work the cases in this tool, with an Administrator login that opens only the Clients section.
 _Avoid_: receptionist, operator
 
 **Client**:
@@ -182,25 +182,15 @@ _Avoid_: blacklist, opt-out
 A reason someone who knows the client gives for not calling them (left the country, mobilised, moved, declined themselves, other), with a comment and an optional date to check again. A flagged client leaves the call list until the flag is lifted or its date passes. A flag stays in this tool only.
 _Avoid_: blacklist, note
 
-**Win-back case**:
-One attempt to bring one client back. A person proposes and approves it, the admin calls, and the client's return is recorded.
-_Avoid_: lead, ticket, task
-
-**Hold**:
-The time a client stays out of the risk list because of their latest win-back case: while it is open; 10 days after a skip; 60 days after a person marks the client handled; 120 days after the call if they did not return; for good after a decline; until the phone changes after a wrong number. A person can lift a hold. A client we won back is not held, and shows "won back before" if they lapse again.
-_Avoid_: cool-down, blacklist
-
-**Handled**:
-A client a person already dealt with outside the tool and flagged, with an optional note, so nobody calls them twice. It is recorded as a case that never reaches the call sheet.
+**Case**:
+One possibly lost client, opened by the daily job when the client crossed a risk line (overdue, lapsed, or a first-timer who did not return), with a snapshot of what we knew that day. An administrator processes it once: booked, rejected with a reason, or no answer. It is open, booking exists, or closed (visited, rejected, no answer, expired), and one client has at most one active case.
+_Avoid_: lead, ticket, task, win-back case
 
 **Offer**:
-What the admin may give a client to come back, a call only, or 15% off if the client books during the call (docs/OFFERS.md).
+What the administrator may give a client to come back, a call only, or 15% off if the client books during the call (docs/OFFERS.md).
 _Avoid_: discount (an offer may be no discount), promo
 
 **Won back**:
-A contacted client who completed a visit within the win-back window after the call.
+A client whose case closed as visited after an administrator had processed it. A client who visits before anyone called is "came on their own", and is not counted as won back.
 _Avoid_: converted, recovered
 
-**Call sheet**:
-The shared Google Sheet where the admin sees approved cases and records call outcomes.
-_Avoid_: CRM, call list (that's the sheet tab)

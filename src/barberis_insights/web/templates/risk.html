@@ -1,18 +1,58 @@
 {% extends "base.html" %}
 {% from "_ui.html" import panel, chip, page_head, empty with context %}
 {% block content %}
-{{ page_head(t("nav.risk"), t("risk.sub_short"), t("risk.asof", date=asof)) }}
+{{ page_head(t("nav.risk"), t("risk.sub_cases"), t("risk.asof", date=asof)) }}
 
-{% call panel(t("risk.filter_title"), none) %}
-<form method="get" class="filters" onchange="this.requestSubmit()">
-  <fieldset class="chipset"><legend class="eyebrow">{{ t("risk.segments") }}</legend>
-    {% for sg in segments %}<label class="chipcheck"><input type="checkbox" name="segment" value="{{ sg }}" {{ 'checked' if sg in chosen }}><span><b>{{ label('segment.', sg) }}</b> {{ seg.get(sg, 0) }}</span></label>{% endfor %}
-  </fieldset>
-  <label>{{ t("col.usual_barber") }}<select name="barber"><option value="">{{ t("common.all") }}</option>{% for b in all_barbers %}<option value="{{ b.key }}" {{ 'selected' if barber==b.key }}>{{ b.name }}</option>{% endfor %}</select></label>
-  <label class="check"><input type="checkbox" name="show_all" value="true" {{ 'checked' if show_all }}> {{ t("risk.show_all") }}</label>
-  <noscript><button>{{ t("common.filter") }}</button></noscript>
-</form>
-{% if held_n %}<p class="holdnote" role="status"><span class="chip hold"><i></i>{{ t("risk.held_n", n=held_n) }}</span> <a href="{{ here }}{{ '&' if '?' in here else '?' }}show_all=true">{{ t("risk.held_show") }}</a></p>{% endif %}
+<div class="toolbar">
+  <nav class="segmented" aria-label="{{ t('risk.tabs') }}">
+    {% for k, n in (("open", counts.open), ("booking", counts.booking), ("processed", counts.processed), ("all", none)) %}<a href="/risk?tab={{ k }}"{% if tab == k %} aria-current="true"{% endif %}>{{ label("risk.tab.", k) }}{% if n is not none %} <b>{{ n }}</b>{% endif %}</a>{% endfor %}
+  </nav>
+  <form method="get" class="filters" onchange="this.requestSubmit()">
+    <input type="hidden" name="tab" value="{{ tab }}">
+    <label>{{ t("col.usual_barber") }}<select name="barber"><option value="">{{ t("common.all") }}</option>{% for b in all_barbers %}<option value="{{ b.key }}" {{ 'selected' if barber==b.key }}>{{ b.name }}</option>{% endfor %}</select></label>
+    {% if tab == "processed" %}<label>{{ t("case.outcome") }}<select name="outcome"><option value="">{{ t("common.all") }}</option>{% for o in ("visited", "rejected", "no_answer", "expired") %}<option value="{{ o }}" {{ 'selected' if outcome==o }}>{{ label("case.outcome.", o) }}</option>{% endfor %}</select></label>{% endif %}
+    {% if tab == "all" %}<fieldset class="chipset"><legend class="eyebrow">{{ t("risk.segments") }}</legend>
+      {% for sg in segments %}<label class="chipcheck"><input type="checkbox" name="segment" value="{{ sg }}" {{ 'checked' if sg in chosen }}><span><b>{{ label('segment.', sg) }}</b> {{ seg.get(sg, 0) }}</span></label>{% endfor %}</fieldset>
+      <label class="check"><input type="checkbox" name="show_all" value="true" {{ 'checked' if show_all }}> {{ t("risk.show_all") }}</label>{% endif %}
+    <noscript><button>{{ t("common.filter") }}</button></noscript>
+  </form>
+</div>
+
+{% if tab != "all" %}
+{% set subs = {"open": t("risk.sub_open", n=expire), "booking": t("risk.sub_booking"), "processed": t("risk.sub_processed")} %}
+{% set empties = {"open": t("risk.empty_open"), "booking": t("risk.empty_booking"), "processed": t("risk.empty_processed")} %}
+{% call panel(label("risk.tab.", tab), subs[tab], "nopad") %}
+  {% if rows %}
+  <div class="tablebox risk-box"><table class="cards risk">
+    <thead><tr>
+      <th scope="col" class="l">{{ t("col.client") }}</th>
+      {% if tab == "processed" %}<th scope="col" class="tl">{{ t("case.outcome") }}</th><th scope="col" class="tl">{{ t("case.processed") }}</th><th scope="col" class="tl">{{ t("case.result") }}</th>
+      {% else %}<th scope="col" class="tl">{{ t("case.trigger") }}</th><th scope="col">{{ t("risk.col_silent") }}</th><th scope="col">{{ t("risk.col_value") }}</th><th scope="col">{{ t("col.priority") }}</th>{% endif %}
+      <th scope="col" class="l">{{ t("col.offer") }}</th><th scope="col"><span class="sr-only">{{ t("case.open") }}</span></th></tr></thead>
+    <tbody>{% set pmax = (rows|map(attribute="priority")|max) or 1 %}{% for r in rows %}<tr>
+      <td class="l"><a href="/cases/{{ r.id }}">{{ r.name or t('client.fallback', id=r.client_id) }}</a>
+        <span class="muted sm">#{{ r.client_id }}{% if bnames.get(r.barber_id) %} · {{ bnames.get(r.barber_id) }}{% endif %}</span>
+        {% if r.phone %}<span class="sm"><a href="tel:{{ r.phone }}">{{ r.phone }}</a></span>{% endif %}</td>
+      {% if tab == "processed" %}
+      <td class="tl" data-label="{{ t('case.outcome') }}"><span class="pill outcome-{{ r.outcome }}">{{ label("case.outcome.", r.outcome) }}</span>{% if r.reason %}<span class="muted sm">{{ label("case.reason.", r.reason) }}{% if r.comment %}: {{ r.comment }}{% endif %}</span>{% endif %}</td>
+      <td class="tl" data-label="{{ t('case.processed') }}">{{ r.processed_by or t("case.by_job") }}<span class="muted sm">{{ r.closed.strftime('%Y-%m-%d') if r.closed else '' }}</span></td>
+      <td class="tl" data-label="{{ t('case.result') }}">{% if r.outcome == "visited" %}<b>₴{{ '{:,.0f}'.format(r.visit_revenue or 0).replace(',', ' ') }}</b><span class="muted sm">{{ r.visited_on }}{% if not r.contacted %} · {{ t("case.on_own") }}{% endif %}</span>{% else %}—{% endif %}</td>
+      {% else %}
+      <td class="tl" data-label="{{ t('case.trigger') }}"><span class="pill {{ 'overdue' if r.trigger == 'overdue' else 'lapsed' if r.trigger == 'lapsed' else 'one_time' }}">{{ label("case.trigger.", r.trigger) }}</span>
+        <span class="muted sm">{{ t("case.crossed", days=r.trigger_days, date=r.crossed_on) }}</span>
+        {% if r.status == "open" %}<span class="muted sm">{{ t("case.days_left", n=r.days_left) if r.days_left >= 0 else t("case.expiring") }}</span>
+        {% else %}<span class="sm"><b>{{ t("case.booking_on", date=r.booked_for) if r.booked_for else t("case.booking_reported") }}</b></span>{% endif %}</td>
+      <td data-label="{{ t('risk.col_silent') }}"><b>{{ t("risk.days_n", n=r.days_since) }}</b><span class="muted sm">{% if r.median_gap %}{{ t("risk.usually_n", n=r.median_gap|round|int) }}{% endif %}</span></td>
+      <td data-label="{{ t('risk.col_value') }}"><b>₴{{ '{:,.0f}'.format(r.lifetime_spend or 0).replace(',', ' ') }}</b><span class="muted sm">{{ t("risk.visits_n", n=r.visits) }}</span></td>
+      <td data-label="{{ t('col.priority') }}"><span class="cell-bar"><span class="rank-track" aria-hidden="true"><b class="s1" style="width:{{ (100 * r.priority / pmax)|round|int }}%"></b></span><span class="num">{{ r.priority|round|int }}</span></span></td>
+      {% endif %}
+      <td class="l offer" data-label="{{ t('col.offer') }}">{% if r.offer %}<span title="{{ label('offer.', r.offer) }}">{{ label('offer_short.', r.offer, label('offer.', r.offer)) }}</span>{% else %}—{% endif %}</td>
+      <td class="tl"><a class="btn ghost" href="/cases/{{ r.id }}">{{ t("case.open") if tab != "processed" else t("case.view") }}</a></td></tr>{% endfor %}</tbody></table></div>
+  {% else %}<div style="padding:0 16px 16px">{{ empty(empties[tab]) }}</div>{% endif %}
+{% endcall %}
+
+{% else %}
+{% call panel(t("risk.filter_title"), t("risk.all_sub")) %}
 {% set how = {"active": t("risk.how_active", **rules), "slipping": t("risk.how_slipping", **rules), "overdue": t("risk.how_overdue", **rules),
   "lapsed": t("risk.how_lapsed", **rules), "one_time": t("risk.how_one_time", **rules), "switched": t("risk.how_switched", **rules)} %}
 <details class="how"><summary>{{ t("risk.how") }}</summary>
@@ -33,92 +73,19 @@
   <p class="sub how-ex">{{ t("risk.how_example", **rules) }}</p>
 </details>
 {% endcall %}
-
-{% if proposed %}
-{% call panel(t("risk.proposed", n=proposed|length), none, "nopad") %}
-  <form method="post" action="/cases/decide">
-    <input type="hidden" name="next_url" value="/risk">
-    <div class="tablebox" style="border:0"><table class="cards"><thead><tr><th scope="col" class="l"><input type="checkbox" onclick="this.closest('table').querySelectorAll('input[name=case_id]').forEach(c=>c.checked=this.checked)" aria-label="{{ t('common.select_all') }}"></th><th scope="col" class="l">{{ t("col.client") }}</th><th scope="col" class="l">{{ t("col.phone") }}</th><th scope="col">{{ t("col.visits") }}</th><th scope="col">{{ t("col.spent") }}</th><th scope="col">{{ t("col.days") }}</th><th scope="col" class="l">{{ t("col.offer") }}</th><th scope="col" class="l">{{ t("col.reason") }}</th></tr></thead>
-    <tbody>{% for r in proposed %}<tr><td class="l"><input type="checkbox" name="case_id" value="{{ r.case_id }}" aria-label="{{ t('risk.select_case', id=r.case_id) }}"></td><td class="l"><a href="/client/{{ r.client_id }}">{{ r.name or t('client.fallback', id=r.client_id) }}</a></td><td class="l" data-label="{{ t('col.phone') }}">{{ r.phone or '—' }}</td><td data-label="{{ t('col.visits') }}">{{ r.visits }}</td><td data-label="{{ t('col.spent') }}">₴{{ '{:,.0f}'.format(r.lifetime_spend or 0).replace(',', ' ') }}</td><td data-label="{{ t('col.days') }}">{{ r.days_since }}</td><td class="l offer" data-label="{{ t('col.offer') }}">{{ label('offer.', r.suggested_offer) if r.suggested_offer else '' }}{% if r.offer_arm %} <span class="muted">(A/B)</span>{% endif %}</td><td class="l" data-label="{{ t('col.reason') }}">{{ label('segment.', r.segment) }}</td></tr>{% endfor %}</tbody></table></div>
-    <div class="actionbar" style="position:static">
-      <label>{{ t("risk.assign_to") }}<input name="assigned_to" placeholder="{{ t('risk.admin_name') }}"></label>
-      <button name="action" value="approve">{{ t("risk.approve") }}</button>
-      <button name="action" value="skip" class="ghost">{{ t("risk.skip") }}</button>
-    </div>
-  </form>
-{% endcall %}
-{% endif %}
-
-{% set pmax = (rows|map(attribute="priority")|max) if rows else 0 %}{% set pmax = pmax if pmax > 0 else 1 %}
-{% call panel(t("risk.candidates", n=rows|length), t("risk.candidates_sub"), "nopad") %}
-<form method="post" action="/risk/propose" id="propose">
-  <input type="hidden" name="next_url" value="{{ request.url.path }}{{ '?' ~ request.url.query if request.url.query }}">
+{% call panel(t("risk.candidates", n=rows|length), none, "nopad") %}
   <div class="tablebox risk-box"><table class="cards risk">
-    <thead><tr>
-      <th scope="col" class="l sel"><input type="checkbox" onclick="document.querySelectorAll('#propose input[name=client_id]').forEach(c=>c.checked=this.checked);riskCount()" aria-label="{{ t('common.select_all') }}"></th>
-      <th scope="col" class="l">{{ t("col.client") }}</th>
-      <th scope="col" class="l">{{ t("col.segment") }}</th>
-      <th scope="col">{{ t("risk.col_silent") }}</th>
-      <th scope="col">{{ t("risk.col_value") }}</th>
-      <th scope="col">{{ t("col.priority") }}</th>
-      <th scope="col" class="l">{{ t("col.offer") }}</th></tr></thead>
+    <thead><tr><th scope="col" class="l">{{ t("col.client") }}</th><th scope="col" class="l">{{ t("col.segment") }}</th><th scope="col">{{ t("risk.col_silent") }}</th><th scope="col">{{ t("risk.col_value") }}</th><th scope="col" class="l">{{ t("col.offer") }}</th><th scope="col" class="l">{{ t("case.title") }}</th></tr></thead>
     <tbody>{% for r in rows %}<tr{% if not r.eligible %} class="blocked"{% endif %}>
-      <td class="l sel">{% if r.eligible %}<input type="checkbox" name="client_id" value="{{ r.client_id }}" onchange="riskCount()" aria-label="{{ t('risk.select_client', id=r.client_id) }}">{% endif %}</td>
-      <td class="l client">
-        <div class="cl-top"><a class="cl-name" href="/client/{{ r.client_id }}">{{ r.name or t('client.fallback', id=r.client_id) }}</a>
-          <button type="button" class="iconbtn{{ ' on' if r.flag }}" data-id="{{ r.client_id }}" data-name="{{ r.name or t('client.fallback', id=r.client_id) }}" data-flag="{{ '1' if r.flag else '' }}" data-reason="{{ r.flag.reason if r.flag else '' }}" data-comment="{{ r.flag.comment if r.flag else '' }}" data-until="{{ r.flag.until if r.flag and r.flag.until else '' }}" onclick="riskNote(this)" title="{{ t('flag.edit') }}" aria-label="{{ t('flag.edit') }}: {{ r.name or t('client.fallback', id=r.client_id) }}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.3 2 2 0 3.3-.5 4.5-1.2a.5.5 0 0 1 .7.4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 14c-3 0-5-2-8-2a6 6 0 0 0-4 1.5"/></svg></button></div>
-        <div class="cl-sub"><span>#{{ r.client_id }}{% if bnames.get(r.usual_barber) %} · {{ bnames.get(r.usual_barber) }}{% endif %}</span>
-          {% if r.phone %}<a href="tel:{{ r.phone }}">{{ r.phone }}</a>{% else %}<span>{{ t("risk.no_phone") }}</span>{% endif %}</div>
-        {% if r.flag and (r.flag.comment or r.flag.until) %}<div class="cl-flag">{% if r.flag.comment %}«{{ r.flag.comment }}»{% endif %}{% if r.flag.until %}<span class="muted"> {{ t("flag.until", date=r.flag.until) }}</span>{% endif %}</div>{% endif %}
-        {% set holdlike = (r.ineligible_reasons|reject('in', releasable)|reject('eq', 'in_progress')|list)|length == 0 %}
-        {% if r.won_back or not r.eligible %}<div class="cl-chips">
-          {% if r.won_back %}<span class="chip won_back"><i></i>{{ t("risk.won_back_n", n=r.won_back.n, date=r.won_back.last) if r.won_back.last else t("risk.won_back_n_nodate", n=r.won_back.n) }}</span>{% endif %}
-          {% if not r.eligible %}<span class="chip {{ 'hold' if holdlike else 'warn' }}"><i></i>{{ reasons(r.ineligible_reasons) }}{% if r.hold_until %} · {{ t("risk.until_n", date=r.hold_until) }}{% endif %}</span>
-            {% if r.ineligible_reasons|select('in', releasable)|list %}<button name="release" value="{{ r.client_id }}" formaction="/risk/release" class="linkbtn">{{ t("risk.release") }}</button>{% endif %}{% endif %}
-        </div>{% endif %}</td>
+      <td class="l"><a href="/client/{{ r.client_id }}">{{ r.name or t('client.fallback', id=r.client_id) }}</a><span class="muted sm">#{{ r.client_id }}{% if bnames.get(r.usual_barber) %} · {{ bnames.get(r.usual_barber) }}{% endif %}</span>
+        {% if not r.eligible %}<span class="chip warn sm"><i></i>{{ reasons(r.ineligible_reasons) }}</span>{% endif %}</td>
       <td class="l" data-label="{{ t('col.segment') }}"><span class="pill {{ r.segment }}">{{ label('segment.', r.segment) }}</span></td>
-      <td data-label="{{ t('risk.col_silent') }}"><span class="v"><b>{{ t("risk.days_n", n=r.days_since) }}</b>
-        <span class="muted sm">{% if r.median_gap %}{{ t("risk.usually_n", n=r.median_gap|round|int) }} · {% endif %}{{ r.last_visit }}</span></span></td>
-      <td data-label="{{ t('risk.col_value') }}"><span class="v"><b>₴{{ '{:,.0f}'.format(r.lifetime_spend).replace(',', ' ') }}</b><span class="muted sm">{{ t("risk.visits_n", n=r.visits) }}</span></span></td>
-      <td data-label="{{ t('col.priority') }}"><span class="cell-bar" title="{{ r.priority }}"><span class="rank-track" aria-hidden="true"><b class="s1" style="width:{{ (100 * r.priority / pmax)|round|int }}%"></b></span><span class="num">{{ r.priority|round|int }}</span></span></td>
-      <td class="l offer" data-label="{{ t('col.offer') }}">{% if r.suggested_offer %}<span title="{{ label('offer.', r.suggested_offer) }}">{{ label('offer_short.', r.suggested_offer, label('offer.', r.suggested_offer)) }}</span>{% else %}—{% endif %}</td></tr>
-    {% else %}<tr><td class="l muted" colspan="7">{{ t("risk.empty") }}</td></tr>{% endfor %}</tbody></table></div>
-  <div class="actionbar">
-    <button id="propose-btn" disabled>{{ t("risk.propose") }}</button>
-    <button id="handle-btn" class="ghost" formaction="/risk/handle" disabled>{{ t("risk.handled") }}</button>
-    <input name="note" class="notefield" placeholder="{{ t('risk.handled_note') }}" aria-label="{{ t('risk.handled_note') }}">
-    <span id="risk-count" class="muted" data-tpl="{{ t('risk.selected_n', n='%n') }}">{{ t("risk.selected_n", n=0) }}</span>
-    <details class="ab"><summary>{{ t("risk.ab_title") }}</summary><div class="muted sm">{{ t("risk.ab") }}</div>
-      <div class="abopts">{% for o in offers %}<label class="check"><input type="checkbox" name="arms" value="{{ o.code }}"> {{ label('offer.', o.code, o.label) }}</label>{% endfor %}</div></details>
-  </div>
-</form>
+      <td data-label="{{ t('risk.col_silent') }}"><b>{{ t("risk.days_n", n=r.days_since) }}</b><span class="muted sm">{% if r.median_gap %}{{ t("risk.usually_n", n=r.median_gap|round|int) }} · {% endif %}{{ r.last_visit }}</span></td>
+      <td data-label="{{ t('risk.col_value') }}"><b>₴{{ '{:,.0f}'.format(r.lifetime_spend).replace(',', ' ') }}</b><span class="muted sm">{{ t("risk.visits_n", n=r.visits) }}</span></td>
+      <td class="l offer" data-label="{{ t('col.offer') }}">{% if r.suggested_offer %}{{ label('offer_short.', r.suggested_offer, label('offer.', r.suggested_offer)) }}{% else %}—{% endif %}</td>
+      <td class="l" data-label="{{ t('case.title') }}">{% set ac = active.get(r.client_id) %}{% if ac %}<a href="/cases/{{ ac.id }}">#{{ ac.id }} · {{ label("case.status.", ac.status) }}</a>{% else %}—{% endif %}</td></tr>
+    {% else %}<tr><td class="l muted" colspan="6">{{ t("risk.empty") }}</td></tr>{% endfor %}</tbody></table></div>
 {% endcall %}
-<dialog id="note" class="note" aria-labelledby="note-title">
-  <header class="note-h">
-    <div><h2 id="note-title">{{ t("flag.title") }}</h2><p id="note-name" class="note-who"></p></div>
-    <form method="dialog"><button class="iconbtn" aria-label="{{ t('common.close') }}"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></form>
-  </header>
-  <form method="post" id="flag-form" class="note-f" data-flagform>
-    <input type="hidden" name="next_url" value="{{ here }}">
-    <p class="note-help">{{ t("flag.help") }}</p>
-    <fieldset class="note-reasons"><legend>{{ t("flag.reason") }}</legend>
-      {% for k in flag_reasons %}<label class="chipcheck"><input type="radio" name="reason" value="{{ k }}" {{ 'checked' if loop.first }} required><span>{{ label("flag.", k) }}</span></label>{% endfor %}
-    </fieldset>
-    <label class="note-field"><span>{{ t("flag.comment") }}<span class="req" aria-hidden="true" hidden> *</span></span><input name="comment" maxlength="500" placeholder="{{ t('flag.comment_ph') }}"></label>
-    <label class="note-field">{{ t("flag.until_label") }}<input name="until" type="date" min="{{ today }}"><small>{{ t("flag.until_hint") }}</small></label>
-    <div class="note-actions">
-      <button type="button" class="ghost" onclick="this.closest('dialog').close()">{{ t("common.cancel") }}</button>
-      <button>{{ t("common.save") }}</button>
-    </div>
-  </form>
-  <form method="post" id="lift-form" class="note-lift" hidden><input type="hidden" name="next_url" value="{{ here }}"><button class="linkbtn">{{ t("flag.lift") }}</button></form>
-</dialog>
-<script>function riskNote(b){var d=document.getElementById('note'),id=b.dataset.id,f=document.getElementById('flag-form');
-document.getElementById('note-name').textContent=b.dataset.name+' · #'+id;
-f.action='/client/'+id+'/flag';
-var r=f.querySelector('input[name=reason][value="'+(b.dataset.reason||'')+'"]')||f.querySelector('input[name=reason]');r.checked=true;
-f.comment.value=b.dataset.comment||'';f.until.value=b.dataset.until||'';flagSync(f);
-var l=document.getElementById('lift-form');l.action='/client/'+id+'/flag/lift';l.hidden=!b.dataset.flag;
-d.showModal();r.focus()}</script>
-<script>function riskCount(){var n=document.querySelectorAll('#propose input[name=client_id]:checked').length,e=document.getElementById('risk-count');e.textContent=e.dataset.tpl.replace('%n',n);document.getElementById('propose-btn').disabled=!n;document.getElementById('handle-btn').disabled=!n}</script>
+<form method="post" action="/risk/rebuild"><button class="ghost">{{ t("risk.rebuild") }}</button></form>
+{% endif %}
 {% endblock %}

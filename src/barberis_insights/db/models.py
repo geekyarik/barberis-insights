@@ -156,6 +156,47 @@ class Offer(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
+class RiskCase(Base):
+    """One possibly lost client, opened by the daily job and processed by an administrator. Holds a snapshot of what we knew that day."""
+    __tablename__ = "risk_cases"
+    __table_args__ = (UniqueConstraint("client_id", "trigger", "last_visit"),)   # one case per client, per line crossed, per silence
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    client_id: Mapped[int] = mapped_column(Integer, index=True)
+    trigger: Mapped[str] = mapped_column(String(20))   # overdue | lapsed | first_timer: the line the client crossed
+    trigger_days: Mapped[int] = mapped_column(Integer)  # that line, in days of silence
+    crossed_on: Mapped[dt.date] = mapped_column(Date)   # last visit + the line
+    last_visit: Mapped[dt.date] = mapped_column(Date)
+    opened: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now)
+    expires_on: Mapped[dt.date] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(String(20), default="open", index=True)  # open | booking_exists | closed
+    outcome: Mapped[str | None] = mapped_column(String(20))  # visited | rejected | no_answer | expired
+    reason: Mapped[str | None] = mapped_column(String(20))   # why rejected: a flag reason, declined_offer, wrong_number, other
+    comment: Mapped[str] = mapped_column(Text, default="")
+    offer: Mapped[str | None] = mapped_column(String(40))
+    barber_id: Mapped[int | None] = mapped_column(Integer)   # the client's usual barber when the case opened
+    priority: Mapped[float] = mapped_column(Float, default=0)
+    contacted: Mapped[bool] = mapped_column(Boolean, default=False)  # an administrator recorded a result: a later visit follows our call
+    booked_for: Mapped[dt.date | None] = mapped_column(Date)
+    appointment_id: Mapped[int | None] = mapped_column(Integer)
+    admin_booked_on: Mapped[dt.date | None] = mapped_column(Date)  # the day an administrator said they booked the client
+    visited_on: Mapped[dt.date | None] = mapped_column(Date)
+    visit_revenue: Mapped[float | None] = mapped_column(Float)
+    processed_by: Mapped[str | None] = mapped_column(String(50))
+    closed: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    snapshot: Mapped[dict] = mapped_column(JSON, default=dict)
+    events: Mapped[list["CaseEvent"]] = relationship(cascade="all, delete-orphan", lazy="selectin", order_by="CaseEvent.at")
+
+
+class CaseEvent(Base):
+    __tablename__ = "case_events"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("risk_cases.id", ondelete="CASCADE"), index=True)
+    at: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now)
+    kind: Mapped[str] = mapped_column(String(20))  # opened | admin_booked | booking_seen | booking_lost | visited | rejected | no_answer | expired
+    by: Mapped[str] = mapped_column(String(50), default="job")
+    note: Mapped[str] = mapped_column(Text, default="")
+
+
 class OutreachCase(Base):
     __tablename__ = "outreach_cases"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

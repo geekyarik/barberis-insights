@@ -88,6 +88,12 @@ def test_client_names_are_shown_to_the_owner_but_never_phones(s, owner):
     for d in ("2026-01-05", "2026-01-12", "2026-01-19"):
         visit(s, 21, d, 1)
     client(s, 21, phone="+380501112233").name = "Олексій"
+    visit(s, 40, "2026-03-10", 1, 500)                                  # the data runs on, so client 21 is 50 days silent: an open case
+    s.flush()
+    from barberis_insights.cases import service as cases
+    from barberis_insights.clients.profile import rebuild_profiles
+    from barberis_insights.metrics import Dataset
+    rebuild_profiles(s, Dataset.load(s)); cases.detect(s, dt.date(2026, 3, 11)); s.flush()
     r = weekly.weekly_content(s, F, T)
     service.send_weekly(s, r, sleep=NOSLEEP)
     text = owner.sent[0][1]

@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% from "_ui.html" import stat, panel, chip, empty with context %}
+{% block content %}
+<a class="backlink" href="/risk?tab={{ 'open' if case.status == 'open' else 'booking' if case.status == 'booking_exists' else 'processed' }}">← {{ t("nav.risk") }}</a>
+<header class="page-h">
+  <div>
+    <div class="eyebrow">{{ t("case.title") }} #{{ case.id }} · {{ t("case.opened_on", date=case.opened.date()) }}</div>
+    <h1>{{ c.name if c and c.name else t('client.fallback', id=case.client_id) }}</h1>
+    <p class="sub contactline">{% if c and c.phone %}<a class="bigphone" href="tel:{{ c.phone }}">{{ c.phone }}</a>{% else %}<span class="muted">{{ t("client.no_phone") }}</span>{% endif %}
+      · <a href="/client/{{ case.client_id }}">{{ t("case.client_card") }}</a></p>
+  </div>
+  <div class="page-chips">
+    <span class="pill {{ 'overdue' if case.trigger == 'overdue' else 'lapsed' if case.trigger == 'lapsed' else 'one_time' }}">{{ label("case.trigger.", case.trigger) }}</span>
+    {{ chip(label("case.status.", case.status), 'ok' if case.status == 'closed' and case.outcome == 'visited' else 'behind' if case.status == 'closed' else '') }}
+  </div>
+</header>
+
+<div class="stats">
+  {{ stat(t("case.why"), t("risk.days_n", n=case.trigger_days), none, none, none, none, none, t("case.crossed_long", date=case.crossed_on)) }}
+  {{ stat(t("risk.col_silent"), t("risk.days_n", n=(today - case.last_visit).days), none, none, none, none, none, ((t("risk.usually_n", n=case.snapshot.median_gap|round|int) ~ " · ") if case.snapshot.median_gap else "") ~ case.last_visit) }}
+  {{ stat(t("risk.col_value"), "₴" ~ '{:,.0f}'.format(case.snapshot.lifetime_spend or 0).replace(',', ' '), none, none, none, none, none, t("risk.visits_n", n=case.snapshot.visits)) }}
+  {{ stat(t("col.usual_barber"), bnames.get(case.barber_id, '—')) }}
+</div>
+
+{% if case.status == "closed" %}
+  {% call panel(t("case.result_title"), none) %}
+    <p class="stateline"><b>{{ label("case.outcome.", case.outcome) }}</b>{% if case.reason %} — {{ label("case.reason.", case.reason) }}{% endif %}{% if case.comment %}: {{ case.comment }}{% endif %}</p>
+    <p class="muted">{{ t("case.closed_by", who=case.processed_by or t("case.by_job"), date=case.closed.strftime('%Y-%m-%d %H:%M') if case.closed else '') }}
+      {% if case.outcome == "visited" %} · <b>{{ t("case.visited_on", date=case.visited_on, sum='{:,.0f}'.format(case.visit_revenue or 0).replace(',', ' ')) }}</b>{% if not case.contacted %} · {{ t("case.on_own") }}{% endif %}{% endif %}</p>
+  {% endcall %}
+{% else %}
+<div class="cols-2">
+  {% call panel(t("case.script_title"), t("case.script_sub")) %}
+    <p class="offerline"><b>{{ label('offer.', case.offer) if case.offer else '—' }}</b></p>
+    <p class="muted">{% if case.offer == "book_now" %}{{ t("case.script_book_now", pct=pct) }}{% elif case.offer %}{{ t("case.script_call_only") }}{% endif %}</p>
+    {% if case.status == "open" %}<p class="muted sm">{{ t("case.days_left_long", n=days_left, date=case.expires_on) if days_left >= 0 else t("case.expiring") }}</p>
+    {% else %}<p class="stateline"><b>{{ t("case.booking_on", date=case.booked_for) if case.booked_for else t("case.booking_reported") }}</b></p>
+      <p class="muted sm">{{ t("case.booking_help") }}</p>{% endif %}
+    {% if flag %}<p class="stateline"><b>{{ label("flag.", flag.reason) }}</b>{% if flag.comment %}: {{ flag.comment }}{% endif %}</p>{% endif %}
+  {% endcall %}
+  {% if case.status == "open" %}
+  {% call panel(t("case.process_title"), t("case.process_sub")) %}
+    <form method="post" action="/cases/{{ case.id }}/booked" class="note-f case-action">
+      <h3>{{ t("case.act_booked") }}</h3>
+      <label>{{ t("case.booked_for") }}<input name="booked_for" type="date" min="{{ today }}"></label>
+      <label>{{ t("client.note") }}<input name="note" maxlength="300"></label>
+      <div><button>{{ t("case.act_booked") }}</button></div>
+    </form>
+    <form method="post" action="/cases/{{ case.id }}/reject" class="note-f case-action" data-flagform>
+      <h3>{{ t("case.act_reject") }}</h3>
+      <label>{{ t("flag.reason") }}<select name="reason" required>{% for k in reasons %}<option value="{{ k }}">{{ label("case.reason.", k) }}</option>{% endfor %}</select></label>
+      <label>{{ t("flag.comment") }}<span class="req" aria-hidden="true" hidden> *</span><input name="comment" maxlength="500" placeholder="{{ t('flag.comment_ph') }}"></label>
+      <label>{{ t("flag.until_label") }}<input name="until" type="date" min="{{ today }}"></label>
+      <div><button class="danger">{{ t("case.act_reject") }}</button></div>
+    </form>
+    <form method="post" action="/cases/{{ case.id }}/no-answer" class="note-f case-action">
+      <h3>{{ t("case.act_no_answer") }}</h3><p class="muted sm">{{ t("case.no_answer_help") }}</p>
+      <div><button class="ghost">{{ t("case.act_no_answer") }}</button></div>
+    </form>
+  {% endcall %}
+  {% endif %}
+</div>
+{% endif %}
+
+{% call panel(t("case.history"), none) %}
+  <ul class="events">{% for e in case.events %}<li>{{ e.at.strftime('%Y-%m-%d %H:%M') }} · <b>{{ label("case.event.", e.kind) }}</b> · {{ e.by }}{% if e.note %} — {{ e.note }}{% endif %}</li>{% endfor %}</ul>
+  {% if others %}<p class="muted sm">{{ t("case.others") }}: {% for o in others %}<a href="/cases/{{ o.id }}">#{{ o.id }} ({{ label("case.status.", o.status) }}{% if o.outcome %}, {{ label("case.outcome.", o.outcome) }}{% endif %})</a>{{ ", " if not loop.last }}{% endfor %}</p>{% endif %}
+{% endcall %}
+
+{% call panel(t("client.recent_visits"), none, "nopad") %}
+<div class="tablebox" style="border:0"><table class="cards"><thead><tr><th scope="col" class="l">{{ t("col.date") }}</th><th scope="col" class="tl">{{ t("common.barber") }}</th><th scope="col" class="tl">{{ t("col.services") }}</th><th scope="col">{{ t("col.cost") }}</th></tr></thead>
+<tbody>{% for v in visits %}<tr><td class="l"><b>{{ v.date }}</b></td><td class="tl" data-label="{{ t('common.barber') }}">{{ bnames.get(v.barber_id, v.barber_name) }}</td><td class="tl wrap" data-label="{{ t('col.services') }}">{{ v.services|map(attribute='title')|join(', ') }}</td><td data-label="{{ t('col.cost') }}">₴{{ v.total_cost|round|int }}</td></tr>{% endfor %}</tbody></table></div>
+{% endcall %}
+{% endblock %}

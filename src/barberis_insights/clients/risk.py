@@ -17,7 +17,6 @@ from sqlalchemy.orm import Session
 
 from ..config import settings
 from ..db.models import Client, ClientProfile
-from ..outreach.service import holds, won_back_history
 from .contact import active_flags
 from .profile import Facts
 
@@ -72,17 +71,14 @@ def classify(f: Facts) -> tuple[str, float, str | None]:
 
 def risk_list(s: Session, segments: tuple[str, ...] = ("overdue", "lapsed"), barber: int | None = None, limit: int = 200,
               include_ineligible: bool = False, min_visits: int = 2) -> list[dict]:
-    """Ranked call candidates with eligibility flags. Eligible = consent not refused, not do-not-contact, not held by an earlier case (outreach.service.holds).
-    `ineligible_reasons` are codes (dnc, no_consent, no_phone, or a hold: in_progress, handled, skipped, not_returned, declined, wrong_number);
-    interfaces translate them (i18n "reason.*"). `hold_until` is the date a hold ends (None = until a person lifts it).
-    `won_back` is how often we already won this client back ({n, last}), so a returning client is recognised.
+    """Ranked call candidates with eligibility flags. Eligible = consent not refused, not do-not-contact, not flagged, has a phone.
+    `ineligible_reasons` are codes (dnc, no_consent, flag_<reason>, no_phone); interfaces translate them (i18n "reason.*").
     """
     q = select(ClientProfile).where(ClientProfile.segment.in_(segments)).order_by(ClientProfile.priority.desc())
     if barber:
         q = q.where(ClientProfile.usual_barber == barber)
     profiles = [p for p in s.scalars(q) if p.visits >= min_visits or p.segment == "one_time"]
     clients = {c.altegio_id: c for c in s.scalars(select(Client).where(Client.altegio_id.in_([p.client_id for p in profiles])))}
-    held, won = holds(s), won_back_history(s)
     flags = active_flags(s, [p.client_id for p in profiles])
     out = []
     for p in profiles:
@@ -92,9 +88,6 @@ def risk_list(s: Session, segments: tuple[str, ...] = ("overdue", "lapsed"), bar
             reasons.append("dnc")
         if c and c.data_processing_allowed is False:
             reasons.append("no_consent")
-        hold = held.get(p.client_id)
-        if hold:
-            reasons.append(hold["reason"])
         flag = flags.get(p.client_id)
         if flag:
             reasons.append(f"flag_{flag.reason}")
@@ -105,8 +98,7 @@ def risk_list(s: Session, segments: tuple[str, ...] = ("overdue", "lapsed"), bar
         out.append({"client_id": p.client_id, "name": c.name if c else "", "phone": c.phone if c else None, "flag": ({"reason": flag.reason, "comment": flag.comment, "until": flag.until, "since": flag.created.date()} if flag else None), "segment": p.segment,
                     "visits": p.visits, "lifetime_spend": p.lifetime_spend, "last_visit": str(p.last_visit), "days_since": p.days_since_last,
                     "median_gap": p.median_gap_days, "usual_barber": p.usual_barber, "priority": p.priority,
-                    "suggested_offer": p.suggested_offer, "eligible": not reasons, "ineligible_reasons": reasons,
-                    "hold_until": hold["until"] if hold else None, "won_back": won.get(p.client_id)})
+                    "suggested_offer": p.suggested_offer, "eligible": not reasons, "ineligible_reasons": reasons})
         if len(out) >= limit:
             break
     return out

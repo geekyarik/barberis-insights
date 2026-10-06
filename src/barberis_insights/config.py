@@ -38,19 +38,14 @@ class Settings(BaseSettings):
     overdue_min_days: int = 45
     overdue_gap_factor: float = 1.5
     lapsed_after_days: int = 180
-    # how long a client stays out of the risk list after a case ends; declined and do-not-contact are permanent, a wrong number lasts until the phone changes
-    hold_skipped_days: int = 10
-    hold_handled_days: int = 60
-    hold_not_returned_days: int = 120
-    winback_window_days: int = 60
+    # win-back cases (docs/CASES.md)
+    case_expire_days: int = 14  # an open case nobody processed closes as expired after this many days
+    case_booking_grace_days: int = 3  # a booking an administrator reported must show up in the CRM within this many days
     # win-back offer (docs/OFFERS.md): the discount a client gets for booking during the call, and who is worth one
     book_now_pct: int = 15
     early_overdue_days: int = 30  # up to this many days past a regular's own overdue line the offer is a call, not a discount
     book_now_lapsed_max_days: int = 365  # regulars silent longer than this are not contacted (a year; beyond it 4% or fewer return on their own, and the list is too long to call)
     book_now_first_timer_days: tuple[int, int] = (46, 120)  # one-time clients are worth the offer only while the first visit is this recent
-    # google sheet for the admin call list
-    sheet_id: str | None = None
-    sheet_lang: str = "uk"  # language of the call sheet's tabs, headers and dropdowns ("uk" or "en"); the sync reads both
     # notifications and jobs
     telegram_bot_token: str | None = None
     telegram_owner_chat_id: int | None = None  # a private chat or a group with only the owner in it: the weekly message carries client names

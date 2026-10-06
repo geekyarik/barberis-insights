@@ -283,14 +283,13 @@ Each feed is a plugin, like a Mirror adapter. Settled by the research of 2026-10
 - **Do not contact** is a Fact held in Altegio (a tagged line in the client's description), not local-only data. Clients reads it from Mirror. There is no local-only client table for now.
 - Clients depends on Context: a Factor scoped to one client with `suppress_overdue` removes the client from Overdue and from proposed win-back until it ends. The Context text is shown to the owner and may be written to the client's description as a tagged line (ADR-0010).
 
-### 6.7 Outreach
-- **Case lifecycle:** proposed → approved → in sheet → contacted outcomes → won back or not returned.
-- **Approval:** a person approves every case before an admin sees it.
-- **Admin interface:** a Google Sheet, through a service account (ADR-0004). The sync is idempotent; contacts are removed from the sheet when a case closes.
+### 6.7 Cases
+- **Lifecycle** (decided 2026-10-06, ADR-0012, rules in `docs/CASES.md`): a daily job fetches fresh data, follows the active cases up, then opens a case for each client past a risk line. An administrator processes each case in the dashboard: booked, rejected with a reason, or no answer. A case closes only when the client really visits, is rejected, gets no answer (one try), or expires after 14 days.
+- **Data:** `risk_cases` (client id, the line crossed, a snapshot of the risk data, offer, status, outcome, reason, booking, visit) and `case_events`. The client row holds nothing about cases.
+- **Admin interface:** the dashboard, behind a login (`users`, roles super-admin and administrator; an administrator sees only the Clients section). The Google Sheet and the approval step are gone.
 - **Write-back (ADR-0010):** Outreach alone may write short tagged lines to a client's description in Altegio, through a write-back port. Outcome lines (`[insights] win-back: contacted …`) are projections, overwritten freely. Mirror stays read-only.
 - **Do not contact:** the tag in the description is the single representation. Accepted spellings: `не турбувати`, `do not contact`, `dnc`, case-insensitive; we write `[insights] do not contact`. After every client import the local flag equals "tag present". Staff setting it closes any open case as `do_not_contact` (source `altegio`), removes it from the sheet on the next sync, and writes an audit event.
   - Today the description arrives only through the manual client export, so the flag is refreshed only then; `client_export.py` currently only sets it and never clears it (to change).
-- **Attribution:** a case counts as won back when the client completes a visit within N days of contact. Offer A/B arms feed Experiments.
 
 ### 6.8 Goals
 - **Shape:** a goal = scope + metric (and its version) + lens + baseline run or measurement + target + due date.
@@ -318,7 +317,7 @@ Each feed is a plugin, like a Mirror adapter. Settled by the research of 2026-10
 | Job | Cadence (default) | Does | Report sent |
 |---|---|---|---|
 | `daily_digest` *(TODO, not in this phase)* | every day, 09:00 | yesterday per barber, today's free hours, new win-back outcomes | Daily digest |
-| `sheet_sync` | every day, 09:00 and 19:00 | pulls the admin's outcomes, attributes returns, pushes approved cases | only on problems |
+| `client_cases` | every day, 08:00 | fetches fresh data (with future bookings), follows the active cases up, opens new cases (docs/CASES.md) | only on problems |
 | `weekly_review` | Monday, 09:00 | last week vs the week before and the same week last year, per barber and team; overdue clients; goals that changed status | Weekly review |
 | `monthly_review` *(deferred, TODO)* | 1st of the month, 09:00 | runs every analysis for the month, compares with the previous month and the baseline, updates goal progress | Monthly review (§6.4) |
 | `data_watch` | every day | raises an alert when the newest data is older than N days or an import failed | Alert |
@@ -328,7 +327,7 @@ Each feed is a plugin, like a Mirror adapter. Settled by the research of 2026-10
   - A window is complete when appointments are covered through its end and shifts are imported for every week in it, both checked against `sync_runs`.
   - An incomplete window blocks the chain (`blocked: needs data`) and sends one Alert, at most once a day, naming the missing weeks and the exact refresh command.
   - Catch-up creates every analysis run and Goal history entry, but sends one message: the latest week in full, older weeks as one-line deltas. Each week's figures are in that job run's record.
-- **Built 2026-10-04:** `data_watch`, `sheet_sync` and `weekly_review` (jobs are code in `jobs/`, so there is no `jobs` table; `job_runs` records every run). Statuses: ok, skipped, blocked, failed, running. A failed slot is retried after an hour; a run that has been `running` for less than 30 minutes stops a second one starting. `insights jobs plist` prints the launchd agent; loading it is left to the owner.
+- **Built 2026-10-04:** `data_watch`, `client_cases` and `weekly_review` (jobs are code in `jobs/`, so there is no `jobs` table; `job_runs` records every run). Statuses: ok, skipped, blocked, failed, running. A failed slot is retried after an hour; a run that has been `running` for less than 30 minutes stops a second one starting. `insights jobs plist` prints the launchd agent; loading it is left to the owner.
   - Alerts implemented: stale data, failed or blocked job, failed import, a goal that turned to "behind". *Not yet:* a barber's weekly visits falling 30 % under their 8-week average.
 - **Runs are recorded** (`job_runs`: job, scheduled for, started, finished, status, counts, error), visible on *Data & sync*, and safe to repeat: each job is idempotent, like imports and syncs.
 - **Fresh data is the catch** (ADR-0002): until Altegio's REST API works, no job can fetch new appointments by itself. Until then:

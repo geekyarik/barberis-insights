@@ -58,8 +58,8 @@ def pending_slots(s: Session, job: JobDef, now: dt.datetime) -> list[dt.datetime
     return [x for x in slots if x.strftime(FMT) > last]
 
 
-def _run(s: Session, job: JobDef, slot: dt.datetime, now: dt.datetime, dry_run: bool, sheet_factory) -> tuple[str, dict]:
-    ctx = JobContext(s, slot, now, dry_run, sheet_factory)
+def _run(s: Session, job: JobDef, slot: dt.datetime, now: dt.datetime, dry_run: bool) -> tuple[str, dict]:
+    ctx = JobContext(s, slot, now, dry_run)
     try:
         res = job.run(ctx)
         return res.get("status", "ok"), res
@@ -69,7 +69,7 @@ def _run(s: Session, job: JobDef, slot: dt.datetime, now: dt.datetime, dry_run: 
 
 
 def tick(s: Session, now: dt.datetime | None = None, only: str | None = None, dry_run: bool = False,
-         sheet_factory: Callable | None = None, sleep: Callable[[float], None] = time.sleep) -> list[dict]:
+         sleep: Callable[[float], None] = time.sleep) -> list[dict]:
     now = local_now(now)
     out = []
     if dry_run:                                    # show what would run; record and send nothing
@@ -94,7 +94,7 @@ def tick(s: Session, now: dt.datetime | None = None, only: str | None = None, dr
             row = last if (last and last.status == "blocked" and last.started.date() == utcnow().date()) else JobRun(job=job.key, slot=key)
             row.status, row.started, row.error = "running", utcnow(), ""
             s.add(row); s.commit()
-            status, res = _run(s, job, slot, now, dry_run, sheet_factory)
+            status, res = _run(s, job, slot, now, dry_run)
             row.status, row.finished, row.counts = status, utcnow(), {k: v for k, v in res.items() if k not in ("status", "error")}
             row.error = res.get("error", "")
             s.commit()
@@ -114,13 +114,13 @@ def tick(s: Session, now: dt.datetime | None = None, only: str | None = None, dr
     return out
 
 
-def run_now(s: Session, key: str, slot: dt.datetime | None = None, dry_run: bool = False, sheet_factory: Callable | None = None,
+def run_now(s: Session, key: str, slot: dt.datetime | None = None, dry_run: bool = False,
             now: dt.datetime | None = None, sleep: Callable[[float], None] = time.sleep) -> dict:
     """Run one job for one slot immediately, whether or not it is due or done (the manual path: CLI, dashboard, MCP)."""
     job = JOBS[key]
     now = local_now(now)
     slot = slot or (slots_until(job, now) or [now])[-1]
-    status, res = _run(s, job, slot, now, dry_run, sheet_factory)
+    status, res = _run(s, job, slot, now, dry_run)
     if not dry_run:
         s.add(JobRun(job=key, slot=slot.strftime(FMT), status=status, finished=utcnow(), counts={k: v for k, v in res.items() if k not in ("status", "error")}, error=res.get("error", "")))
         if status == "ok" and job.deliver:

@@ -14,7 +14,6 @@ class JobContext:
     slot: dt.datetime            # the local time the run was scheduled for (naive, the shop's clock)
     now: dt.datetime
     dry_run: bool = False
-    sheet_factory: Callable | None = None   # tests and dry runs pass a fake sheet
 
 
 @dataclass(frozen=True)

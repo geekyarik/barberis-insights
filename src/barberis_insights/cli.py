@@ -416,87 +416,20 @@ def seed() -> None:
 
 
 @app.command()
-def propose(
-    segment: list[str] = typer.Option(["overdue"], help="Segments to propose cases for"), limit: int = 30,
-    barber: Optional[str] = None, arms: Optional[str] = typer.Option(None, help="Comma-separated offer codes for an A/B test, e.g. call_only,pct10"),
-) -> None:
-    """Create proposed win-back cases from the top of the risk list (approve them in the dashboard or with `approve`)."""
+def cases(today: Optional[str] = typer.Option(None, help="YYYY-MM-DD, default today"), dry_run: bool = typer.Option(False, "--dry-run", help="Roll back")) -> None:
+    """Open new win-back cases and follow the active ones up (what the daily job does after the fresh data is in)."""
+    from .cases import service
     from .clients.profile import rebuild_profiles
-    from .clients.risk import risk_list
     from .db.session import session_scope
-    from .ingest.base import barber_by_key
     from .metrics import Dataset
-    from .outreach.service import propose as do_propose
+    day = _date(today) if today else dt.date.today()
     with session_scope() as s:
         rebuild_profiles(s, Dataset.load(s))
-        rows = risk_list(s, tuple(segment), barber_by_key(s, barber).altegio_id if barber else None, limit)
-        cases = do_propose(s, rows, arms.split(",") if arms else None)
-        typer.echo(f"proposed {len(cases)} cases (eligible candidates: {len(rows)})")
-
-
-@app.command()
-def approve(case_ids: list[int], assigned_to: Optional[str] = None) -> None:
-    """Approve proposed cases so the next sheet sync sends them to the admin."""
-    from .db.session import session_scope
-    from .outreach.service import approve as do_approve
-    with session_scope() as s:
-        typer.echo(f"approved {do_approve(s, case_ids, assigned_to)}")
-
-
-@app.command("sheet-sync")
-def sheet_sync(dry_run: bool = typer.Option(False, "--dry-run", help="Use an in-memory sheet and roll back"),
-               lang: str = typer.Option(None, "--lang", help="Sheet language: uk or en (default: INSIGHTS_SHEET_LANG, uk)")) -> None:
-    """Pull the admin's outcomes, mark returned clients, push approved cases, archive closed ones."""
-    from .db.session import session_factory
-    from .outreach.offers import active_offers
-    from .i18n import normalize
-    from .outreach.sheets import FakeSheet, GspreadSheet, sync, tab_name
-    s = session_factory()()
-    try:
+        out = {"detect": service.detect(s, day), "refresh": service.refresh(s, day)}
+        out["detect"].pop("ids")
         if dry_run:
-            sheet = FakeSheet()
-        else:
-            if not settings.sheet_id:
-                raise typer.BadParameter("Set INSIGHTS_SHEET_ID in .env (the id from the sheet URL)")
-            try:
-                sheet = GspreadSheet(settings.sheet_id)
-            except (RuntimeError, FileNotFoundError) as e:
-                typer.echo(f"Could not connect to the sheet: {e}", err=True)
-                raise typer.Exit(1)
-        lang = normalize(lang or settings.sheet_lang)
-        out = sync(s, sheet, [o.code for o in active_offers(s)], lang)
-        s.rollback() if dry_run else s.commit()
-        typer.echo(json.dumps(out | ({"dry_run_rows": sheet.read(tab_name("call", lang))[:5]} if dry_run else {}), ensure_ascii=False, indent=1, default=str))
-    finally:
-        s.close()
-
-
-@app.command("sheet-auth")
-def sheet_auth() -> None:
-    """Connect to the admin call sheet (service-account key, or a one-time Google sign-in) and create its tabs."""
-    from .db.session import session_scope
-    from .outreach.offers import active_offers
-    from .outreach.sheets import GspreadSheet, prepare
-    if not settings.sheet_id:
-        raise typer.BadParameter("Set INSIGHTS_SHEET_ID in .env first")
-    try:
-        sheet = GspreadSheet(settings.sheet_id, interactive=True)
-    except (RuntimeError, FileNotFoundError) as e:
-        typer.echo(f"Could not connect to the sheet: {e}", err=True)
-        raise typer.Exit(1)
-    with session_scope() as s:
-        offers = [o.code for o in active_offers(s)]
-    prepare(sheet, offers)
-    typer.echo(f"Signed in. Sheet “{sheet.sh.title}” is ready with tabs: {[w.title for w in sheet.sh.worksheets()]}")
-
-
-@app.command()
-def attribute() -> None:
-    """Mark contacted clients as won back / not returned from the latest visit data."""
-    from .db.session import session_scope
-    from .outreach.attribution import attribute as do_attribute
-    with session_scope() as s:
-        typer.echo(json.dumps(do_attribute(s)))
+            s.rollback()
+        typer.echo(json.dumps(out, ensure_ascii=False, indent=1))
 
 
 @app.command()

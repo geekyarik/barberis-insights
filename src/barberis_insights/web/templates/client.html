@@ -40,19 +40,12 @@
         <div><button class="danger">{{ t("flag.save") }}</button></div></form></details>
   {% endcall %}
   {% call panel(t("client.cases"), none) %}
-    {% if hold %}<div class="holdbox" role="status"><span class="chip hold"><i></i>{{ label('reason.', hold.reason) }}{% if hold.until %} · {{ t("risk.until_n", date=hold.until) }}{% endif %}</span>
-      {% if hold.reason in releasable %}<form method="post" action="/risk/release" class="inline"><input type="hidden" name="next_url" value="/client/{{ cid }}"><button name="release" value="{{ cid }}" class="linkbtn">{{ t("risk.release") }}</button></form>{% endif %}</div>{% endif %}
-    {% if won %}<div class="holdbox"><span class="chip won_back"><i></i>{{ t("risk.won_back_n", n=won.n, date=won.last) if won.last else t("risk.won_back_n_nodate", n=won.n) }}</span></div>{% endif %}
-    {% for k in cases %}
+    {% for k in client_cases %}
       <div class="caseblock">
-        <div><span class="pill {{ k.status }}">{{ label('status.', k.status) }}</span> {{ t("client.case_line", id=k.id, date=k.created.date()) }}{% if k.assigned_to %} · {{ k.assigned_to }}{% endif %}{% if k.offer_given %} · {{ label('offer.', k.offer_given) }}{% endif %}</div>
-        <ul class="events">{% for e in k.events %}<li>{{ e.at.strftime('%Y-%m-%d') }} · {{ label('source.', e.source) }} · {{ label('status.', e.outcome) if e.outcome else label('event.', e.kind) }}{% if e.offer_given %} · {{ label('offer.', e.offer_given) }}{% endif %}{% if e.note %} — {{ e.note }}{% endif %}</li>{% endfor %}</ul>
-        {% if k.status in ['proposed', 'approved', 'in_sheet', 'called', 'no_answer', 'booked'] %}
-        <details class="markbox"><summary>{{ t("client.change_status") }}</summary>
-        <form method="post" action="/cases/{{ k.id }}/status" class="note-f">
-          <label>{{ t("client.set_status") }}<select name="status">{% for st in ['called','no_answer','booked','declined','do_not_contact','wrong_number','skipped'] %}<option value="{{ st }}">{{ label('status.', st) }}</option>{% endfor %}</select></label>
-          <label>{{ t("col.offer") }}<input name="offer"></label><label>{{ t("client.note") }}<input name="note"></label><div><button class="ghost">{{ t("common.save") }}</button></div>
-        </form></details>{% endif %}
+        <div><a href="/cases/{{ k.id }}"><b>{{ t("case.title") }} #{{ k.id }}</b></a> · <span class="pill case-{{ k.status }}">{{ label("case.status.", k.status) }}</span>{% if k.outcome %} <span class="pill outcome-{{ k.outcome }}">{{ label("case.outcome.", k.outcome) }}</span>{% endif %}</div>
+        <p class="muted sm" style="margin:4px 0">{{ label("case.trigger.", k.trigger) }} · {{ t("case.crossed", days=k.trigger_days, date=k.crossed_on) }} · {{ t("case.opened_on", date=k.opened.date()) }}</p>
+        {% if k.reason %}<p class="sm" style="margin:2px 0">{{ label("case.reason.", k.reason) }}{% if k.comment %}: {{ k.comment }}{% endif %}</p>{% endif %}
+        {% if k.outcome == "visited" %}<p class="sm" style="margin:2px 0"><b>{{ t("case.visited_on", date=k.visited_on, sum='{:,.0f}'.format(k.visit_revenue or 0).replace(',', ' ')) }}</b></p>{% endif %}
       </div>
     {% else %}<p class="muted">{{ t("client.no_cases") }}</p>{% endfor %}
   {% endcall %}

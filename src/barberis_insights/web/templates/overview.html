@@ -68,9 +68,9 @@
 {% call panel(t("overview.todo"), t("overview.todo_sub")) %}
   {% if calls %}<div class="tablebox" style="margin:0 -16px -16px;border:0"><table class="cards">
     <thead><tr><th scope="col" class="l">{{ t("col.client") }}</th><th scope="col" class="l">{{ t("col.usual_barber") }}</th><th scope="col">{{ t("col.days") }}</th><th scope="col">{{ t("col.spent") }}</th><th scope="col" class="l">{{ t("col.offer") }}</th></tr></thead>
-    <tbody>{% for r in calls %}<tr><td class="l"><a href="/client/{{ r.client_id }}">{{ r.name or t('client.fallback', id=r.client_id) }}</a> <span class="muted">#{{ r.client_id }}</span></td>
-      <td class="l" data-label="{{ t('col.usual_barber') }}">{{ bnames.get(r.usual_barber, '') }}</td><td data-label="{{ t('col.days') }}">{{ r.days_since }}</td>
-      <td data-label="{{ t('col.spent') }}">{{ kfmt('spend', r.lifetime_spend) }}</td><td class="l" data-label="{{ t('col.offer') }}">{{ label('offer.', r.suggested_offer) if r.suggested_offer else '' }}</td></tr>{% endfor %}</tbody></table></div>
+    <tbody>{% for r in calls %}<tr><td class="l"><a href="/cases/{{ r.id }}">{{ r.name or t('client.fallback', id=r.client_id) }}</a> <span class="muted">#{{ r.client_id }}</span></td>
+      <td class="l" data-label="{{ t('col.usual_barber') }}">{{ bnames.get(r.barber_id, '') }}</td><td data-label="{{ t('col.days') }}">{{ r.days_since }}</td>
+      <td data-label="{{ t('col.spent') }}">{{ kfmt('spend', r.lifetime_spend) }}</td><td class="l" data-label="{{ t('col.offer') }}">{{ label('offer_short.', r.offer, label('offer.', r.offer)) if r.offer else '' }}</td></tr>{% endfor %}</tbody></table></div>
   {% else %}{{ empty(t("overview.todo_none")) }}{% endif %}
 {% endcall %}
 {% endblock %}

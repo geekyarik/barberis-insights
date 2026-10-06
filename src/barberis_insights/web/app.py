@@ -17,11 +17,12 @@ from sqlalchemy.orm import Session
 from ..analyses import effects, service as analyses
 from ..clients.profile import data_asof, rebuild_profiles
 from ..clients import contact
+from ..cases import service as cases
 from ..clients.risk import CALLABLE, risk_list
 from ..config import settings
 from ..clients.names import names_for
 from ..context import factors, service as notes
-from ..db.models import Appointment, Barber, Client, ClientProfile, Hypothesis, Measurement, OutreachCase, SyncRun
+from ..db.models import Appointment, Barber, Client, ClientProfile, Hypothesis, Measurement, RiskCase, SyncRun
 from ..db.session import session_factory
 from ..experiments import factor_link
 from ..experiments.evaluate import run as run_hypothesis
@@ -33,8 +34,6 @@ from ..jobs import service as jobs_service
 from ..metrics import compute_snapshot
 from ..metrics.registry import REGISTRY, catalog
 from ..metrics.weekly import weekly_rows
-from ..outreach import service as outreach
-from ..outreach.offers import active_offers
 from ..playbook import service as playbook
 from . import auth, charts, data as vm
 from ..db.models import User
@@ -348,7 +347,7 @@ def overview(request: Request, s: Session = Depends(db)):
     board = goals.board(s)
     order = {"behind": 0, "ok": 1, "new": 2, "done": 3, "dropped": 4}
     top_goals = sorted(board, key=lambda g: (order.get(g["state"], 5), g["scope"]))[:6]
-    calls = risk_list(s, ("overdue",), None, 5, include_ineligible=False)
+    calls = cases.case_rows(s, "open", limit=6)
     dates = vm.measurement_dates(s)
     cur = vm.values_at(s, dates[-1] if dates else None)
     review_job = next((j["last"] for j in jobs_service.list_jobs(s) if j["job"] == "weekly_review"), None)
@@ -531,72 +530,96 @@ def goal_delete(request: Request, goal_id: str, confirm: str = Form(""), next_ur
     return back(request, next_url, "goal_deleted")
 
 
-# ---------------------------------------------------------------- clients at risk
+# ---------------------------------------------------------------- clients at risk: the case queue
+TABS = ("open", "booking", "processed", "all")
+
+
 @app.get("/risk", response_class=HTMLResponse)
-def risk_page(request: Request, segment: list[str] = Query(default=[]), barber: str = "", show_all: bool = False, limit: int = 100,
-              s: Session = Depends(db)):
-    segment = segment or ["overdue"]
+def risk_page(request: Request, tab: str = "open", outcome: str = "", barber: str = "", segment: list[str] = Query(default=[]), show_all: bool = False,
+              limit: int = 100, s: Session = Depends(db)):
+    tab = tab if tab in TABS else "open"
     bid = s.scalar(select(Barber.altegio_id).where(Barber.key == barber)) if barber else None
+    ctx: dict = {"tab": tab, "counts": cases.counts(s), "barber": barber, "bnames": names(s), "asof": s.scalar(select(func.max(ClientProfile.asof))),
+                 "here": request.url.path + (f"?{request.url.query}" if request.url.query else ""), "today": dt.date.today(), "expire": settings.case_expire_days}
+    if tab != "all":
+        rows = cases.case_rows(s, tab, bid)
+        if tab == "processed" and outcome:
+            rows = [r for r in rows if r["outcome"] == outcome]
+        return page(request, s, "risk.html", "risk", title="nav.risk", rows=rows, outcome=outcome, **ctx)
+    segment = segment or ["overdue"]
     rows = risk_list(s, tuple(segment), bid, limit, include_ineligible=show_all)
-    proposed = outreach.case_rows(s, ("proposed",))
     seg = C.Counter(st for (st,) in s.execute(select(ClientProfile.segment)))
-    asof = s.scalar(select(func.max(ClientProfile.asof)))
     comma = lang_of(request) == "uk"
     factor = f"{settings.overdue_gap_factor:g}".replace(".", ",") if comma else f"{settings.overdue_gap_factor:g}"
     ex_gap = 40
-    held_n = 0 if show_all else sum(1 for r in risk_list(s, tuple(segment), bid, 100000, include_ineligible=True) if r["ineligible_reasons"] and r["ineligible_reasons"] != ["no_phone"])
     rules = {"min": settings.overdue_min_days, "factor": factor, "lapsed": settings.lapsed_after_days, "ex_gap": ex_gap,
              "ex_line": round(max(settings.overdue_min_days, settings.overdue_gap_factor * ex_gap))}
-    return page(request, s, "risk.html", "risk", title="nav.risk", rows=rows, segments=SEGMENTS, chosen=segment, barber=barber,
-                show_all=show_all, proposed=proposed, seg=seg, bnames=names(s), asof=asof, offers=active_offers(s), rules=rules, releasable=outreach.RELEASABLE, held_n=held_n,
-                here=request.url.path + (f"?{request.url.query}" if request.url.query else ""), flag_reasons=contact.REASONS, today=dt.date.today())
+    return page(request, s, "risk.html", "risk", title="nav.risk", rows=rows, segments=SEGMENTS, chosen=segment, show_all=show_all, seg=seg, rules=rules,
+                active=cases.active_cases(s, [r["client_id"] for r in rows]), **ctx)
 
 
 @app.post("/risk/rebuild")
 def risk_rebuild(request: Request, s: Session = Depends(db)):
     n = rebuild_profiles(s, vm.dataset(s))
-    return back(request, "/risk", "profiles_rebuilt", n=n)
+    return back(request, "/risk?tab=all", "profiles_rebuilt", n=n)
 
 
-@app.post("/risk/propose")
-async def risk_propose(request: Request, s: Session = Depends(db)):
-    form = await request.form()
-    ids = {int(x) for x in form.getlist("client_id")}
-    arms = [a for a in form.getlist("arms") if a]
-    rows = [r for r in risk_list(s, SEGMENTS, None, 100000, include_ineligible=False) if r["client_id"] in ids]
-    cases = outreach.propose(s, rows, arms or None)
-    return back(request, "/risk", "proposed", n=len(cases))
+@app.get("/cases/{case_id}", response_class=HTMLResponse)
+def case_page(request: Request, case_id: int, s: Session = Depends(db)):
+    case = s.get(RiskCase, case_id)
+    if case is None:
+        raise HTTPException(404)
+    c, p = s.get(Client, case.client_id), s.get(ClientProfile, case.client_id)
+    visits = list(s.scalars(select(Appointment).where(Appointment.client_id == case.client_id, Appointment.deleted.is_(False)).order_by(Appointment.date.desc()).limit(8)))
+    others = list(s.scalars(select(RiskCase).where(RiskCase.client_id == case.client_id, RiskCase.id != case.id).order_by(RiskCase.opened.desc())))
+    flag = contact.active_flags(s, [case.client_id]).get(case.client_id)
+    return page(request, s, "case.html", "risk", title="case.title", case=case, c=c, p=p, visits=visits, others=others, flag=flag, bnames=names(s),
+                reasons=cases.REJECT_REASONS, today=dt.date.today(), pct=settings.book_now_pct, days_left=(case.expires_on - dt.date.today()).days)
 
 
-def risk_next(form) -> str:
-    n = str(form.get("next_url") or "/risk")
-    return n if (n.startswith("/risk") or n.startswith("/client/")) and not n.startswith("//") else "/risk"
+def _after_case(request: Request, s: Session, case: RiskCase, key: str, **params) -> RedirectResponse:
+    """After processing, go straight to the next case in the queue (or back to the list when it is empty)."""
+    nxt = cases.next_open(s, case.id)
+    return back(request, f"/cases/{nxt.id}" if nxt else "/risk", key if nxt else key + "_last", **params)
 
 
-@app.post("/risk/handle")
-async def risk_handle(request: Request, s: Session = Depends(db)):
-    form = await request.form()
-    n = outreach.mark_handled(s, {int(x) for x in form.getlist("client_id")}, (form.get("note") or "").strip() or None)
-    return back(request, risk_next(form), "handled", n=n, days=settings.hold_handled_days)
+def _case_or_404(s: Session, case_id: int) -> RiskCase:
+    case = s.get(RiskCase, case_id)
+    if case is None:
+        raise HTTPException(404)
+    return case
 
 
-@app.post("/risk/release")
-async def risk_release(request: Request, s: Session = Depends(db)):
-    form = await request.form()
-    n = outreach.release(s, {int(form["release"])})
-    return back(request, risk_next(form), "released", n=n)
+@app.post("/cases/{case_id}/booked")
+def case_booked(request: Request, case_id: int, booked_for: str = Form(""), note: str = Form(""), s: Session = Depends(db)):
+    case = _case_or_404(s, case_id)
+    try:
+        cases.record_booking(s, case, request.state.user["username"], dt.date.fromisoformat(booked_for) if booked_for else None, note.strip())
+    except ValueError as e:
+        return back(request, f"/cases/{case_id}", "case_bad", "warn", why=str(e))
+    return _after_case(request, s, case, "case_booked")
 
 
-@app.post("/cases/decide")
-async def cases_decide(request: Request, s: Session = Depends(db)):
-    form = await request.form()
-    ids = [int(x) for x in form.getlist("case_id")]
-    action = form.get("action")
-    if action == "approve":
-        n = outreach.approve(s, ids, (form.get("assigned_to") or "").strip() or None)
-        return back(request, form.get("next_url") or "/risk", "approved", n=n)
-    n = outreach.skip(s, ids, (form.get("note") or "").strip() or None)
-    return back(request, form.get("next_url") or "/risk", "skipped", n=n)
+@app.post("/cases/{case_id}/reject")
+def case_reject(request: Request, case_id: int, reason: str = Form(...), comment: str = Form(""), until: str = Form(""), s: Session = Depends(db)):
+    case = _case_or_404(s, case_id)
+    try:
+        cases.reject(s, case, request.state.user["username"], reason, comment.strip(), dt.date.fromisoformat(until) if until else None)
+    except contact.CommentRequired:
+        return back(request, f"/cases/{case_id}", "case_bad", "warn", why=tr("flag.comment_required", lang_of(request)))
+    except ValueError as e:
+        return back(request, f"/cases/{case_id}", "case_bad", "warn", why=str(e))
+    return _after_case(request, s, case, "case_rejected")
+
+
+@app.post("/cases/{case_id}/no-answer")
+def case_no_answer(request: Request, case_id: int, note: str = Form(""), s: Session = Depends(db)):
+    case = _case_or_404(s, case_id)
+    try:
+        cases.no_answer(s, case, request.state.user["username"], note.strip())
+    except ValueError as e:
+        return back(request, f"/cases/{case_id}", "case_bad", "warn", why=str(e))
+    return _after_case(request, s, case, "case_no_answer")
 
 
 # ---------------------------------------------------------------- client card
@@ -606,7 +629,7 @@ def client_page(request: Request, cid: int, s: Session = Depends(db)):
     visits = list(s.scalars(select(Appointment).where(Appointment.client_id == cid, Appointment.deleted.is_(False)).order_by(Appointment.date.desc()).limit(60)))
     if not (c or p or visits):
         raise HTTPException(404)
-    cases = list(s.scalars(select(OutreachCase).where(OutreachCase.client_id == cid).order_by(OutreachCase.created.desc())))
+    client_cases = list(s.scalars(select(RiskCase).where(RiskCase.client_id == cid).order_by(RiskCase.opened.desc())))
     per_barber = C.Counter(dict(s.execute(select(Appointment.barber_id, func.count()).where(Appointment.client_id == cid, Appointment.status == "arrived",
                                                                                            Appointment.deleted.is_(False)).group_by(Appointment.barber_id)).all()))
     bn = names(s)
@@ -615,8 +638,8 @@ def client_page(request: Request, cid: int, s: Session = Depends(db)):
     total_visits = sum(per_barber.values())
     flag = contact.active_flags(s, [cid]).get(cid)
     return page(request, s, "client.html", "risk", title=c.name if c and c.name else tr("client.fallback", lang_of(request), id=cid), cid=cid, c=c, p=p, visits=visits,
-                cases=cases, per_barber=per_barber, bnames=bn, barbers_chart=barbers_chart, total_visits=total_visits, flag=flag, flag_history=contact.history(s, cid), flag_reasons=contact.REASONS,
-                here=f"/client/{cid}", today=dt.date.today(), hold=outreach.holds(s, {cid}).get(cid), won=outreach.won_back_history(s, {cid}).get(cid), releasable=outreach.RELEASABLE)
+                client_cases=client_cases, per_barber=per_barber, bnames=bn, barbers_chart=barbers_chart, total_visits=total_visits, flag=flag, flag_history=contact.history(s, cid), flag_reasons=contact.REASONS,
+                here=f"/client/{cid}", today=dt.date.today())
 
 
 def _next(url: str, cid: int) -> str:
@@ -645,50 +668,22 @@ def client_flag_lift(request: Request, cid: int, next_url: str = Form(""), s: Se
     return back(request, _next(next_url, cid), "flag_lifted")
 
 
-# ---------------------------------------------------------------- win-back
+# ---------------------------------------------------------------- win-back results
 @app.get("/outreach", response_class=HTMLResponse)
-def outreach_page(request: Request, status: str = "", s: Session = Depends(db)):
-    statuses = (status,) if status else outreach.OPEN + outreach.CLOSED
-    rows = outreach.case_rows(s, statuses)
-    all_cases = list(s.scalars(select(OutreachCase)))
-    contacted = [c for c in all_cases if c.status in ("won_back", "not_returned")]
-    by = lambda key: sorted(((k, sum(1 for c in v if c.status == "won_back"), len(v), sum(c.revenue_recovered or 0 for c in v)) for k, v in
-                             _group(contacted, key).items()), key=lambda r: -r[2])
-    return page(request, s, "outreach.html", "outreach", title="nav.outreach", rows=rows, status=status, counts=C.Counter(c.status for c in all_cases),
-                won=sum(1 for c in contacted if c.status == "won_back"), closed=len(contacted), revenue=sum(c.revenue_recovered or 0 for c in contacted),
-                by_offer=by(lambda c: c.offer_given or c.suggested_offer or "—"), by_admin=by(lambda c: c.assigned_to or "—"),
-                by_segment=by(lambda c: c.segment), statuses=outreach.OPEN + outreach.CLOSED, outcomes=outreach.OUTCOMES,
-                offers=active_offers(s), sheet=bool(settings.sheet_id), bnames=names(s))
-
-
-def _group(items, key):
-    g = C.defaultdict(list)
-    for x in items:
-        g[key(x)].append(x)
-    return g
-
-
-@app.post("/cases/{case_id}/status")
-def case_status(request: Request, case_id: int, status: str = Form(...), note: str = Form(""), offer: str = Form(""), s: Session = Depends(db)):
-    c = s.get(OutreachCase, case_id)
-    if not c:
-        raise HTTPException(404)
-    outreach.set_status(s, c, status, note=note.strip() or None, offer=offer or None)
-    return back(request, f"/client/{c.client_id}", "case_status", id=case_id, status=helpers(lang_of(request))["label"]("status.", status))
-
-
-@app.post("/outreach/sync")
-def outreach_sync(request: Request, s: Session = Depends(db)):
-    if not settings.sheet_id:
-        return back(request, "/outreach", "sheet_missing", "warn")
-    from ..outreach.sheets import GspreadSheet, sync
-    try:
-        r = sync(s, GspreadSheet(settings.sheet_id), [o.code for o in active_offers(s)])
-    except Exception as e:  # shown to the user, nothing written on failure
-        s.rollback()
-        return back(request, "/outreach", "sheet_failed", "warn", error=e)
-    return back(request, "/outreach", "synced", pulled=r["pulled_changes"], pushed=r["pushed"], archived=r["archived"], won=r["won_back"],
-                lost=r["not_returned"])
+def outreach_page(request: Request, s: Session = Depends(db)):
+    allc = list(s.scalars(select(RiskCase)))
+    closed = [c for c in allc if c.status == "closed"]
+    worked = [c for c in closed if c.contacted]                       # an administrator processed them: the ones our work can claim
+    def group(key, items):
+        g = C.defaultdict(list)
+        for c in items:
+            g[key(c)].append(c)
+        return sorted(((k, len(v), sum(1 for c in v if c.outcome == "visited"), sum(c.visit_revenue or 0 for c in v if c.outcome == "visited")) for k, v in g.items()), key=lambda r: -r[1])
+    won = [c for c in worked if c.outcome == "visited"]
+    return page(request, s, "outreach.html", "outreach", title="nav.outreach", total=len(allc), counts=cases.counts(s), outcomes=C.Counter(c.outcome for c in closed),
+                worked=len(worked), won=len(won), won_revenue=sum(c.visit_revenue or 0 for c in won), on_own=sum(1 for c in closed if c.outcome == "visited" and not c.contacted),
+                by_offer=group(lambda c: c.offer or "—", [c for c in worked if c.outcome != "expired"]), by_trigger=group(lambda c: c.trigger, closed),
+                by_admin=group(lambda c: c.processed_by or "—", worked), by_reason=C.Counter(c.reason for c in closed if c.outcome == "rejected").most_common())
 
 
 # ---------------------------------------------------------------- context
