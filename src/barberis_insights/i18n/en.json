@@ -679,5 +679,17 @@
   "team.risk_title": "Dependence and risk",
   "team.risk_sub": "Lower is safer: the share of clients who see only one barber, and the overdue total.",
   "team.table": "All figures for the period",
-  "team.visits_pw": "Visits per working week"
+  "team.visits_pw": "Visits per working week",
+
+  "risk.sub_short": "Who has been away and who is worth a call. Most valuable first.",
+  "risk.filter_title": "Who to show",
+  "risk.how": "How segments are counted",
+  "risk.candidates_sub": "Tick clients and propose them for the call list; after your approval they go to the admin.",
+  "risk.col_silent": "Away",
+  "risk.col_value": "Value",
+  "risk.days_n": "{n} d",
+  "risk.usually_n": "usually {n} d",
+  "risk.visits_n": "{n} visits",
+  "risk.selected_n": "Selected: {n}",
+  "risk.ab_title": "A/B test of offers"
 }
