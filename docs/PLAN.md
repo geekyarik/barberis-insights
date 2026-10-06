@@ -66,7 +66,7 @@ Turn the hand-made analyses into code, so the analysis cycle (ARCHITECTURE §3) 
    - `seasonality` (measures recurring-factor effects from 3–4 years of history)
    - `overdue_regulars`
 4. **Baseline:** run every analysis for the 2026-01-12 – 2026-09-27 window and store the runs as **Baseline 2026-09-27**. Re-point the existing goals at it.
-5. **Reports:** the barber book and team comparison as dashboard pages rendered from stored runs, plus HTML export. Then retire the two claude.ai artifact pages, with your go-ahead before deleting.
+5. **Reports** *(removed 2026-10-06, ADR-0011)*: the barber book and team comparison became the live Barber and Team pages.
 6. **Monthly cycle:** update `barberis-goals-refresh` to run import → analyze → compare (with the baseline and previous run) → report.
 
 **Done when** a new month's data produces runs for every analysis, and the dashboard shows each barber's and the team's comparison with the baseline and goal status, with no hand-made analysis needed.

@@ -87,11 +87,11 @@ _Avoid_: utilization, occupancy, load
 
 **Measurement**:
 The queryable copy of the metric values of one Analysis run (or manual snapshot, which is itself a run), for one Window, as of its last day. Goals compare against the latest Measurement. A Measurement is never written on its own.
-_Avoid_: snapshot (in conversation), report
+_Avoid_: snapshot (in conversation)
 
 **Analysis**:
 A defined way to answer one business question for a window, a scope and a lens, e.g. "where did last period's clients go?" It produces a structured result.
-_Avoid_: report (a report combines analyses), study
+_Avoid_: report, study
 
 **Analysis run**:
 One stored, unchangeable result of an analysis, for one window, scope and lens, at one point in time.
@@ -105,13 +105,6 @@ _Avoid_: starting point (in docs), benchmark
 What changed between two comparable analysis runs, metric by metric, judged better or worse by each metric's direction.
 _Avoid_: diff, delta report
 
-**Report**:
-A readable page made of analysis runs, goals and context, e.g. a barber book or the monthly review.
-_Avoid_: dashboard (that's the app), analysis
-
-**Report run**:
-One frozen Report: the analysis runs, goal states and Lens it was composed from. It is what gets delivered and what the owner can reopen unchanged.
-
 **Job**:
 Work the tool does by itself on a cadence (daily, weekly, monthly), such as sending the daily digest.
 _Avoid_: cron, task (a task is a person's work)
@@ -119,8 +112,12 @@ _Avoid_: cron, task (a task is a person's work)
 **Slot**:
 One scheduled moment of a Job, a date and an hour on the shop's clock. Every missed Slot is processed, in order; a Slot whose data is incomplete is blocked until the data arrives.
 
+**Weekly review**:
+The Monday message to the owner: last week's figures against the week before and last year, overdue regulars and goals. Its figures are computed from the data when it is sent; nothing is stored as a report, and the dashboard shows the same facts live.
+_Avoid_: report
+
 **Digest**:
-A short message of yesterday's or today's numbers, built from day-level facts. It is not an Analysis, is not stored as a Measurement, and does not feed Goals. A digest summarises; a report explains.
+A short message of yesterday's or today's numbers, built from day-level facts. It is not an Analysis, is not stored as a Measurement, and does not feed Goals. A digest summarises.
 _Avoid_: newsletter, notification
 
 **Alert**:
@@ -131,7 +128,7 @@ _Avoid_: warning, notification
 The way a message reaches a person: Telegram, email, and so on.
 
 **Subscription**:
-Who gets which report or alert, through which channel.
+Who gets which message (the weekly review or an alert), through which channel.
 
 **Revenue**:
 The service price after discounts on visits. It is not cash received, because payments are not recorded in the CRM.

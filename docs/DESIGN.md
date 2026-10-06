@@ -15,7 +15,6 @@ A side tool for the **owner and managers** of a barbershop. Every week they ask 
 | Are we hitting our goals? | **Goals** |
 | Which clients should we call, and did calling work? | **Clients at risk**, **Win-back**, **Client** |
 | What was going on that the numbers do not show? | **Context** |
-| Can I send this to someone? | **Reports** |
 | Is the data fresh, and what ran? | **Data & sync** |
 
 **Main priority: the client** (do they come, return and stay). Retention and overdue regulars therefore get space on the Overview and on every barber page, not a hidden tab.

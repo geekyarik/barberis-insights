@@ -1,5 +1,0 @@
-{% extends "base.html" %}
-{% block content %}
-{% if not export %}<p><a href="/reports">{{ t("report.back") }}</a> · <a href="/reports/{{ r.id }}/export">{{ t("report.export") }}</a></p>{% endif %}
-{% include "_report_" ~ r.report_key ~ ".html" %}
-{% endblock %}

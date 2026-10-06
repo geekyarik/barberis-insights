@@ -5,7 +5,7 @@ from conftest import visit
 from metric_helpers import slot as shift
 
 from barberis_insights.config import settings
-from barberis_insights.db.models import Delivery, JobRun, ReportRun
+from barberis_insights.db.models import Delivery, JobRun
 from barberis_insights.jobs import service as jobs
 from barberis_insights.jobs.registry import JOBS
 from barberis_insights.notifications import service as notify
@@ -41,7 +41,7 @@ def tick(s, now, **kw):
 def test_a_due_weekly_review_runs_once_and_is_delivered(s, owner):
     data_through(s, "2026-03-15")
     out = [r for r in tick(s, MON, only="weekly_review")]
-    assert out[0]["status"] == "ok" and s.query(ReportRun).count() == 1
+    assert out[0]["status"] == "ok" and out[0]["content"]["week"] == "2026-W11"
     assert len(owner.sent) == 1 and "Тижневий огляд" in owner.sent[0][1]
     assert tick(s, MON + dt.timedelta(minutes=15), only="weekly_review") == []        # nothing is due any more
     assert len(owner.sent) == 1
@@ -70,7 +70,7 @@ def test_missed_weeks_are_all_processed_in_order_and_sent_as_one_message(s, owne
     s.add(JobRun(job="weekly_review", slot="2026-03-02T09", status="ok")); s.flush()
     out = tick(s, dt.datetime(2026, 3, 23, 12, 0), only="weekly_review")
     assert [r["slot"] for r in out] == ["2026-03-09T09", "2026-03-16T09", "2026-03-23T09"]
-    assert [r["status"] for r in out] == ["ok"] * 3 and s.query(ReportRun).count() == 3
+    assert [r["status"] for r in out] == ["ok"] * 3
     assert len(owner.sent) == 1                         # one message
     text = owner.sent[0][1]
     assert "тиждень 12" in text and "Наздогнали" in text and text.count("тиждень 10") == 1 and "тиждень 11" in text
@@ -138,4 +138,4 @@ def test_run_now_ignores_the_schedule_and_dry_run_leaves_no_trace(s, owner):
     data_through(s, "2026-03-15")
     r = jobs.run_now(s, "weekly_review", dt.datetime(2026, 3, 16, 9), dry_run=True, now=MON, sleep=NOSLEEP)
     s.rollback()
-    assert r["status"] == "ok" and s.query(ReportRun).count() == 0 and s.query(JobRun).count() == 0 and owner.sent == []
+    assert r["status"] == "ok" and s.query(JobRun).count() == 0 and owner.sent == []

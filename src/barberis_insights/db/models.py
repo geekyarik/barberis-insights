@@ -303,25 +303,6 @@ class AnalysisRun(Base):
     result: Mapped[dict] = mapped_column(JSON)
 
 
-class ReportRun(Base):
-    """One frozen report: the analysis runs, goal states and lens it was composed from. Delivered and reopened unchanged."""
-    __tablename__ = "report_runs"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    report_key: Mapped[str] = mapped_column(String(40), index=True)
-    window_from: Mapped[dt.date] = mapped_column(Date)
-    window_to: Mapped[dt.date] = mapped_column(Date)
-    lens: Mapped[str] = mapped_column(String(40), default="raw")
-    analysis_run_ids: Mapped[list] = mapped_column(JSON, default=list)
-    created_by: Mapped[str] = mapped_column(String(20), default="schedule")
-    created: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now)
-    content: Mapped[dict] = mapped_column(JSON)  # everything the report shows; client ids only, names are looked up when rendered
-
-
-@event.listens_for(ReportRun, "before_update")
-def _reports_are_immutable(mapper, connection, target):
-    raise ValueError("report runs are immutable")
-
-
 class Recipient(Base):
     __tablename__ = "recipients"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -345,8 +326,7 @@ class Delivery(Base):
     __table_args__ = (UniqueConstraint("subscription_id", "dedupe_key"),)
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     subscription_id: Mapped[int] = mapped_column(Integer, ForeignKey("subscriptions.id"), index=True)
-    report_run_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("report_runs.id"))
-    dedupe_key: Mapped[str] = mapped_column(String(80))  # "report:<id>" or "alert:<code>:<day>": the same thing is never sent twice
+    dedupe_key: Mapped[str] = mapped_column(String(80))  # "weekly:<week>" or "alert:<code>:<day>": the same thing is never sent twice
     channel: Mapped[str] = mapped_column(String(20))
     status: Mapped[str] = mapped_column(String(20))  # sent | failed
     attempts: Mapped[int] = mapped_column(Integer, default=1)

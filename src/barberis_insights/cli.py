@@ -195,12 +195,12 @@ def jobs_run(job: str, slot: Optional[str] = typer.Option(None, help="YYYY-MM-DD
     try:
         out = service.run_now(s, job, when, dry_run)
         if dry_run:
-            if job == "weekly_review" and out.get("report_id"):
+            if job == "weekly_review" and out.get("content"):
                 from .clients.names import names_for
-                from .db.models import ReportRun
                 from .notifications import render
-                r = s.get(ReportRun, out["report_id"])
-                typer.echo(render.weekly_review(r.content, settings.owner_lang, names_for(s, [x["client_id"] for x in r.content["overdue"]["top"]])))
+                c = out["content"]
+                typer.echo(render.weekly_review(c, settings.owner_lang, names_for(s, [x["client_id"] for x in c["overdue"]["top"]])))
+                out = {k: v for k, v in out.items() if k != "content"}
             s.rollback()
         else:
             s.commit()

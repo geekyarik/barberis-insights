@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from ..clients.names import names_for
 from ..config import settings
-from ..db.models import Delivery, Recipient, ReportRun, Subscription
+from ..db.models import Delivery, Recipient, Subscription
 from . import render
 from .channels import ChannelError, get as get_channel
 
@@ -40,11 +40,11 @@ def _subs(s: Session, kind: str, only_channel: str | None = None):
     return s.execute(q).all()
 
 
-def _deliver(s: Session, sub: Subscription, rcp: Recipient, text: str, dedupe: str, report_id: int | None, sleep: Callable[[float], None]) -> Delivery | None:
+def _deliver(s: Session, sub: Subscription, rcp: Recipient, text: str, dedupe: str, sleep: Callable[[float], None]) -> Delivery | None:
     done = s.scalar(select(Delivery).where(Delivery.subscription_id == sub.id, Delivery.dedupe_key == dedupe))
     if done is not None and done.status == "sent":
         return None                                     # never twice for the same thing and recipient
-    d = done or Delivery(subscription_id=sub.id, report_run_id=report_id, dedupe_key=dedupe, channel=sub.channel, status="failed", attempts=0)
+    d = done or Delivery(subscription_id=sub.id, dedupe_key=dedupe, channel=sub.channel, status="failed", attempts=0)
     err = ""
     for attempt in range(1, ATTEMPTS + 1):
         d.attempts += 1
@@ -60,13 +60,13 @@ def _deliver(s: Session, sub: Subscription, rcp: Recipient, text: str, dedupe: s
     return d
 
 
-def send_report(s: Session, report: ReportRun, kind: str = "weekly_review", catchup: list[dict] | None = None,
-                sleep: Callable[[float], None] = time.sleep) -> list[Delivery]:
+def send_weekly(s: Session, content: dict, catchup: list[dict] | None = None, sleep: Callable[[float], None] = time.sleep) -> list[Delivery]:
+    """The weekly message for one week; sent once per week and recipient."""
     out = []
-    for sub, rcp in _subs(s, kind):
-        names = names_for(s, [r["client_id"] for r in report.content.get("overdue", {}).get("top", [])])
-        text = render.weekly_review(report.content, rcp.lang, names, catchup)
-        d = _deliver(s, sub, rcp, text, f"report:{report.id}", report.id, sleep)
+    for sub, rcp in _subs(s, "weekly_review"):
+        names = names_for(s, [r["client_id"] for r in content.get("overdue", {}).get("top", [])])
+        text = render.weekly_review(content, rcp.lang, names, catchup)
+        d = _deliver(s, sub, rcp, text, f"weekly:{content['week']}", sleep)
         if d:
             out.append(d)
     return out
@@ -77,7 +77,7 @@ def send_alert(s: Session, code: str, day: str, sleep: Callable[[float], None] =
     subject = str(params.get("job") or params.get("title") or "")
     out = []
     for sub, rcp in _subs(s, "alert"):
-        d = _deliver(s, sub, rcp, render.alert(code, rcp.lang, **params), f"alert:{code}:{subject}:{day}"[:80], None, sleep)
+        d = _deliver(s, sub, rcp, render.alert(code, rcp.lang, **params), f"alert:{code}:{subject}:{day}"[:80], sleep)
         if d:
             out.append(d)
     return out
@@ -87,7 +87,7 @@ def send_test(s: Session, channel: str | None = None) -> list[Delivery]:
     from ..i18n import t
     out = []
     for sub, rcp in _subs(s, "alert", channel):
-        d = _deliver(s, sub, rcp, t("msg.test", rcp.lang), f"test:{time.time_ns()}", None, time.sleep)
+        d = _deliver(s, sub, rcp, t("msg.test", rcp.lang), f"test:{time.time_ns()}", time.sleep)
         if d:
             out.append(d)
     return out

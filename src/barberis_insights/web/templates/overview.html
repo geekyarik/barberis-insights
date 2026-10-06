@@ -8,8 +8,6 @@
   {% if fresh.stale %}{{ t("overview.data_stale", date=fresh.last_visit or "—", days=fresh.age_days if fresh.age_days is not none else "—") }}{% endif %}
   {% if review_job and review_job.status in ('blocked', 'failed') %}<div>{{ t("overview.review_blocked") }}</div>{% endif %}
 </div>
-{% elif review %}
-<div class="banner">{{ t("overview.review_last", week=review.content.week) }} · <a href="/reports/{{ review.id }}">{{ t("report.open") }}</a></div>
 {% endif %}
 
 <div class="stats" aria-label="{{ t('overview.week_sub', week=week_label) }}">

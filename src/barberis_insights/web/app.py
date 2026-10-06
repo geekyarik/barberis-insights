@@ -34,9 +34,7 @@ from ..metrics.weekly import weekly_rows
 from ..outreach import service as outreach
 from ..outreach.offers import active_offers
 from ..playbook import service as playbook
-from ..reports import service as reports
 from . import charts, data as vm
-from .report_views import VIEWS
 
 HERE = Path(__file__).parent
 app = FastAPI(title="BARBERIS insights", docs_url="/api/docs", openapi_url="/api/openapi.json")
@@ -217,11 +215,10 @@ def overview(request: Request, s: Session = Depends(db)):
     calls = risk_list(s, ("overdue",), None, 5, include_ineligible=False)
     dates = vm.measurement_dates(s)
     cur = vm.values_at(s, dates[-1] if dates else None)
-    review = next(iter(reports.list_reports(s, "weekly_review", 1)), None)
     review_job = next((j["last"] for j in jobs_service.list_jobs(s) if j["job"] == "weekly_review"), None)
     return page(request, s, "overview.html", "overview", title="nav.overview", tiles=tiles, week_label=f"{last['week']} · {last['start']}", revenue_chart=revenue_chart, rows=rows,
                 health=health, seg=seg, overdue_run=overdue_run, top_goals=top_goals, board=board, calls=calls, bnames=names(s), cur=cur, latest=dates[-1] if dates else None,
-                review=review, review_job=review_job, factors_n=len(dated), seg_asof=s.scalar(select(func.max(ClientProfile.asof))),
+                review_job=review_job, factors_n=len(dated), seg_asof=s.scalar(select(func.max(ClientProfile.asof))),
                 scope_names={"team": t("common.team")} | names_by_key(s))
 
 
@@ -305,7 +302,7 @@ def barber_refresh_analyses(request: Request, key: str, s: Session = Depends(db)
     """Re-run the client analyses for this barber over the latest twelve complete weeks (the follow-up window for retention)."""
     m = vm.weekly_matrix(s)
     end = m["end"]; f = end - dt.timedelta(weeks=12) + dt.timedelta(days=1)
-    rf, rt = reports.followup_window(s, f, end)
+    rf, rt = analyses.followup_window(s, f, end)
     for name, (wf, wt) in {"weekday_pattern": (f, end), "client_sources": (f, end), "exclusive_clients": (f, end), "service_mix": (f, end),
                            "client_retention": (rf, rt), "return_cohorts": (rf, rt)}.items():
         analyses.run(s, name, wf, wt, scope=key, created_by="dashboard")
@@ -692,54 +689,6 @@ def data_snapshot(request: Request, date_from: str = Form(...), date_to: str = F
         return back(request, "/data", "measure_weeks", "warn")
     run = analyses.run(s, "barber_scorecard", f, t, created_by="dashboard", ds=vm.dataset(s), label="Monthly measurement")
     return back(request, "/data", "measure_saved", date=t, n=sum(len(v) for v in run.result["kpis"].values()))
-
-
-# ---------------------------------------------------------------- reports
-def _report_names(s: Session, r) -> dict:
-    ids = [x["client_id"] for x in r.content.get("overdue", {}).get("top", [])] if r.report_key == "weekly_review" else []
-    return names_for(s, ids)
-
-
-@app.get("/reports", response_class=HTMLResponse)
-def reports_page(request: Request, s: Session = Depends(db)):
-    today = dt.date.today()
-    end = today - dt.timedelta(days=today.weekday() + 1)           # the last Sunday
-    return page(request, s, "reports.html", "reports", title="nav.reports", reports=reports.list_reports(s, limit=50),
-                kinds=("barber_book", "team_comparison", "weekly_review"), suggest_to=end, suggest_from=end - dt.timedelta(weeks=8) + dt.timedelta(days=1))
-
-
-@app.post("/reports/build")
-def reports_build(request: Request, kind: str = Form(...), barber: str = Form(""), date_from: str = Form(...), date_to: str = Form(...),
-                  s: Session = Depends(db)):
-    f, t = dt.date.fromisoformat(date_from), dt.date.fromisoformat(date_to)
-    if f.weekday() != 0 or t.weekday() != 6 or t < f:
-        return back(request, "/reports", "report_bad_window", "warn")
-    try:
-        r = reports.barber_book(s, barber, f, t) if kind == "barber_book" else reports.team_comparison(s, f, t)
-    except (ValueError, KeyError) as e:
-        return back(request, "/reports", "report_unknown", "warn", why=str(e))
-    return RedirectResponse(f"/reports/{r.id}", status_code=303)
-
-
-def _report_page(request: Request, s: Session, rid: int, export: bool):
-    r = reports.get(s, rid)
-    if r is None or r.report_key not in VIEWS:
-        raise HTTPException(404)
-    c = r.content
-    return page(request, s, "report.html", "reports", title=f"report.kind.{r.report_key}", r=r, c=c, names=c.get("names", {}), vm=VIEWS[r.report_key](c), export=export, client_names=_report_names(s, r))
-
-
-@app.get("/reports/{rid}", response_class=HTMLResponse)
-def report_view(request: Request, rid: int, s: Session = Depends(db)):
-    return _report_page(request, s, rid, False)
-
-
-@app.get("/reports/{rid}/export")
-def report_export(request: Request, rid: int, s: Session = Depends(db)):
-    """The same report as one HTML file (no navigation, no scripts) to save or send."""
-    resp = _report_page(request, s, rid, True)
-    resp.headers["Content-Disposition"] = f'attachment; filename="barberis-report-{rid}.html"'
-    return resp
 
 
 # ---------------------------------------------------------------- JSON API (for scripts, Claude, a future SPA)

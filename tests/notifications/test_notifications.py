@@ -5,12 +5,12 @@ from conftest import visit
 from metric_helpers import F, T, shop
 
 from barberis_insights.config import settings
-from barberis_insights.db.models import Delivery, Recipient, ReportRun, Subscription
+from barberis_insights.db.models import Delivery, Recipient, Subscription
 from barberis_insights.notifications import render, service
 from barberis_insights.notifications.channels import ChannelError, register
 from barberis_insights.notifications.channels.fake import FakeChannel
 from barberis_insights.notifications.channels.telegram import TelegramChannel, split
-from barberis_insights.reports import service as reports
+from barberis_insights.notifications import weekly
 
 NOSLEEP = lambda _: None
 
@@ -27,7 +27,7 @@ def owner(s, monkeypatch):
 def report(s):
     shop(s)
     visit(s, 40, "2026-03-04", 1, 500)
-    return reports.weekly_review(s, F, T)
+    return weekly.weekly_content(s, F, T)
 
 
 def test_owner_is_subscribed_once_even_when_set_up_twice(s, owner):
@@ -40,37 +40,32 @@ def test_no_owner_without_a_chat_id(s, monkeypatch):
     assert service.ensure_owner(s) is None
 
 
-def test_weekly_review_is_composed_from_runs_and_frozen(s):
-    r = report(s)
-    assert r.report_key == "weekly_review" and len(r.analysis_run_ids) == 3
-    assert r.content["team"]["revenue"] == 3500 and r.content["names"] == {"a": "A", "b": "B"}
-    assert r.content["overdue"]["count"] == 0 and "goals" in r.content
-    r.content = {}
-    with pytest.raises(ValueError, match="immutable"):
-        s.flush()
-    s.rollback()
+def test_weekly_content_is_computed_from_the_data(s):
+    c = report(s)
+    assert c["team"]["revenue"] == 3500 and c["names"] == {"a": "A", "b": "B"}
+    assert c["overdue"]["count"] == 0 and "goals" in c and c["week"].count("-W") == 1
 
 
-def test_a_report_is_delivered_once_per_recipient(s, owner):
+def test_a_week_is_delivered_once_per_recipient(s, owner):
     r = report(s)
-    first = service.send_report(s, r, sleep=NOSLEEP)
+    first = service.send_weekly(s, r, sleep=NOSLEEP)
     assert [d.status for d in first] == ["sent"] and len(owner.sent) == 1
-    assert service.send_report(s, r, sleep=NOSLEEP) == [] and len(owner.sent) == 1
+    assert service.send_weekly(s, r, sleep=NOSLEEP) == [] and len(owner.sent) == 1
 
 
 def test_delivery_is_retried_then_recorded(s, owner):
     owner.fail_times = 2
-    d = service.send_report(s, report(s), sleep=NOSLEEP)[0]
+    d = service.send_weekly(s, report(s), sleep=NOSLEEP)[0]
     assert d.status == "sent" and d.attempts == 3
 
 
 def test_a_failed_delivery_keeps_its_error_and_is_retried_next_time(s, owner):
     owner.fail_times = 99
     r = report(s)
-    d = service.send_report(s, r, sleep=NOSLEEP)[0]
+    d = service.send_weekly(s, r, sleep=NOSLEEP)[0]
     assert d.status == "failed" and d.attempts == 3 and "simulated" in d.error
     owner.fail_times = 0
-    again = service.send_report(s, r, sleep=NOSLEEP)[0]
+    again = service.send_weekly(s, r, sleep=NOSLEEP)[0]
     assert again.id == d.id and again.status == "sent" and again.attempts == 4
 
 
@@ -84,7 +79,7 @@ def test_an_alert_goes_out_once_a_day(s, owner):
 
 def test_the_message_is_in_the_recipients_language(s, owner):
     r = report(s)
-    uk, en = render.weekly_review(r.content, "uk"), render.weekly_review(r.content, "en")
+    uk, en = render.weekly_review(r, "uk"), render.weekly_review(r, "en")
     assert "Тижневий огляд" in uk and "Weekly review" in en and "Виручка" in uk and "Revenue" in en
 
 
@@ -93,17 +88,17 @@ def test_client_names_are_shown_to_the_owner_but_never_phones(s, owner):
     for d in ("2026-01-05", "2026-01-12", "2026-01-19"):
         visit(s, 21, d, 1)
     client(s, 21, phone="+380501112233").name = "Олексій"
-    r = reports.weekly_review(s, F, T)
-    service.send_report(s, r, sleep=NOSLEEP)
+    r = weekly.weekly_content(s, F, T)
+    service.send_weekly(s, r, sleep=NOSLEEP)
     text = owner.sent[0][1]
     assert "Олексій" in text and "380501112233" not in text
 
 
 def test_barbers_without_data_that_week_are_left_out(s):
     r = report(s)
-    r.content["barbers"]["idle"] = {"revenue": None, "visits": None, "util": None, "rph": None, "check": None}
-    r.content["names"]["idle"] = "Idle"
-    assert "Idle" not in render.weekly_review(r.content, "en")
+    r["barbers"]["idle"] = {"revenue": None, "visits": None, "util": None, "rph": None, "check": None}
+    r["names"]["idle"] = "Idle"
+    assert "Idle" not in render.weekly_review(r, "en")
 
 
 def test_telegram_messages_are_split_under_the_limit():

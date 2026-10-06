@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from ..context import factors
 from ..db.models import Appointment, AnalysisRun, SyncRun
+from ..ingest.status import data_status
 from ..metrics import Dataset
 from ..metrics.measurements import save_measurement
 from . import _discover
@@ -97,3 +98,14 @@ def compare(s: Session, before_id: int, after_id: int) -> dict:
     if before is None or after is None:
         raise KeyError("unknown run id")
     return compare_runs(before, after)
+
+
+FOLLOW_UP_DAYS = 90
+
+
+def followup_window(s: Session, f: dt.date, t: dt.date) -> tuple[dt.date, dt.date]:
+    """The latest window of the same length whose 90-day follow-up has fully happened (for retention and return cohorts)."""
+    last = data_status(s)["last_visit"] or t
+    late = (t + dt.timedelta(days=FOLLOW_UP_DAYS) - last).days
+    shift = dt.timedelta(weeks=-(-late // 7)) if late > 0 else dt.timedelta(0)
+    return f - shift, t - shift

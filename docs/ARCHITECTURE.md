@@ -49,7 +49,7 @@ flowchart LR
 3. **Goals** are set on metrics that the analyses report.
 4. **Compare:** a later run of the same analysis, scope and lens is **compared** with the baseline and with the previous run. The comparison says, metric by metric, whether things moved toward the goals, and Context explains why.
 
-The two analyses first built by hand in chat — the per-barber weekly book and the team comparison — become the first analyses in code (§5.3), and their pages become reports rebuilt from stored runs (§5.4).
+The two analyses first built by hand in chat — the per-barber weekly book and the team comparison — become the first analyses in code (§5.3), and their pages become the Barber and Team pages, computed from the data (§6.4).
 
 ## 4. Principles
 
@@ -58,7 +58,7 @@ The two analyses first built by hand in chat — the per-barber weekly book and 
 3. **Analyses are code, and their results are data** (ADR-0007). One module per metric, and one module per analysis. Runs are stored and compared; nothing important lives only in a chat answer.
 4. **Every number is reproducible.** A run or measurement records its window, the versions of its metric and analysis definitions, its lens, and a fingerprint of the data it saw.
 5. **Modules own their data.** A module changes its own tables only. Others go through its service interface.
-   New modules (Analyses, Reports, Scheduler, Notifications) expose a service interface from their first commit.
+   New modules (Analyses, Scheduler, Notifications) expose a service interface from their first commit.
    The graph is acyclic: Context and Mirror depend on nobody, and Context never calls Experiments (a Factor's verdict is read from its linked Hypotheses).
 6. **Pure domain logic, thin edges.** Metrics and analyses are pure functions over loaded data, testable with fixtures. I/O (database, Altegio files, Google, web) sits at the edges.
 7. **Local-first and private.** It runs on the owner's laptop. Personal data stays in `var/` and never goes to git. Only the data the admin needs reaches their sheet.
@@ -67,7 +67,7 @@ The two analyses first built by hand in chat — the per-barber weekly book and 
    - No module reads a fixed laptop path; everything comes from `INSIGHTS_*` config.
    - Authentication and multiple users are out of scope. A hosted version needs its own ADR.
 9. **Claude is a first-class user.** Every capability a person has in the dashboard is also exposed through the MCP server, with the same rules. Claude writes the narrative on top of stored runs, never instead of them.
-10. **Extensible by registration.** New metrics, analyses, data sources, factor feeds and report sections plug in without changing existing modules.
+10. **Extensible by registration.** New metrics, analyses, data sources, factor feeds plug in without changing existing modules.
 
 ## 5. Module map
 
@@ -138,9 +138,8 @@ Dependencies point **one way**, from left to right. Mirror and Context depend on
 | **Goals** | Goals on metrics, with baseline, target, due date, and progress from measurements and runs | `goals`, `goal_events` | Metrics, Analyses | `goals/` |
 | **Experiments** | Hypotheses (each linked to a Factor) and their evaluation (difference-in-differences, before/after, offer A/B), controlling for Context | `hypotheses` | Metrics, Context, Outreach | `experiments/` |
 | **Playbook** | Shared routines and tips for barbers | `tips` | — | `playbook/` |
-| **Reports** | Compose stored analysis runs, goals and Context into readable pages (barber book, team comparison, monthly review); freeze each as a Report run; export them | `report_runs` | Analyses, Goals, Context | not yet (dashboard pages do parts) |
 | **Scheduler** | Run jobs on a daily, weekly or monthly cadence; catch up runs missed while the laptop was asleep; record every run | `jobs`, `job_runs` | the services of the modules it runs | not yet |
-| **Notifications** | Deliver reports and alerts to people through channels (Telegram first), in each recipient's language; record every delivery | `recipients`, `subscriptions`, `deliveries` (refer to `report_runs`) | Reports | not yet (the website already sends Telegram messages for call-back requests) |
+| **Notifications** | Deliver the weekly review and alerts to people through channels (Telegram first), in each recipient's language; record every delivery | `recipients`, `subscriptions`, `deliveries` | Analyses, Goals | not yet (the website already sends Telegram messages for call-back requests) |
 | **Interfaces** | Dashboard, JSON API, CLI, MCP server | — | all modules (through services) | `web/`, `api/`, `cli.py`, `mcp_server.py` |
 
 **Planned:**
@@ -227,15 +226,8 @@ An **analysis** answers one business question for a window, scope and lens, with
 - **Built:** all twelve (2026-10-04): `barber_scorecard`, `client_retention` (stayed / switched / lost within a 90-day follow-up), `overdue_regulars`, `weekly_book`, `weekday_pattern`, `service_mix`, `new_clients`, `client_sources`, `return_cohorts`, `exclusive_clients`, `departure_impact` (the one analysis about a former barber, by `barber` key), `price_demand` (each price change set against the other barbers over the same weeks), and `seasonality` (the effect source for recurring Factors; the current year is measured against the trailing 52 weeks). Client typing reads all loaded history, so a run near 2022-01-03 carries a `history_too_short` note. Windows are whole ISO weeks; scope is `team` (with a per-barber breakdown) or one current barber; former barbers never appear. Rows hold client ids only. A scorecard run stores its metric values as a measurement when asked (`insights snapshot`), so there is one write path.
 - **Comparison:** `compare(before, after)` gives each KPI's change and whether it is better or worse (using the metric's direction), plus what is new or resolved among the findings. Runs are only comparable when the analysis version, metric versions, scope and lens match; otherwise the comparison says why not.
 
-### 6.4 Reports
-- **What a report is:** a composition of analysis runs, goals and Context, for example:
-  - *Barber book*: `barber_scorecard` + `weekly_book` + `weekday_pattern` + `client_retention` + `return_cohorts` + goals for one barber
-  - *Team comparison*: `barber_scorecard` for all + `weekday_pattern` + `client_retention` + team goals
-  - *Monthly review* *(deferred, TODO)*: all of the above, compared with the previous run and the baseline. When built, its Window is the last 4 or 5 complete ISO weeks, ending in the week that contains the 14th; its label shows the real dates. Goal due dates snap to the end of a week.
-- **Where they appear:** reports render in the dashboard and export to HTML. Claude adds the narrative through MCP, citing run IDs.
-- **Report runs:** a Report is frozen as a `report_run` (the analysis run IDs, goal states and resolved Lens it used). Re-rendering never changes what was sent, and deliveries refer to a Report run.
-- **Built 2026-10-04:** the *barber book* (scorecard against the team and last year, week by week, weekdays and hours, retention, return cohorts, sources, exclusive clients, overdue regulars, services, goals) and the *team comparison* (every barber side by side), under *Reports* in the dashboard, built from stored runs and frozen as `report_runs`. Retention and cohorts need 90 days of follow-up, so they run on the latest window that has fully happened and the page says so. Each report exports as one HTML file (no navigation, no scripts). Reports render from their own frozen content, so a report never changes after it was made. The monthly review stays deferred.
-- **They replace the two hand-built artifact pages.** *(Retiring them needs the owner's go-ahead.)*
+### 6.4 No stored reports
+There is no "report" concept (decided 2026-10-06, ADR-0011). Everything the dashboard shows is computed from the Mirror (the CRM data stored locally) and from the stored analysis runs, goals and Context; the Barber, Team, Explore and Overview pages are live views of those facts. The weekly message to the owner is built from the data at the moment it is sent, and the record of what went out is the delivery row and the job's own run record. A monthly review stays deferred; when built it is a page or a message, not a stored report. Its Window is the last 4 or 5 complete ISO weeks, ending in the week that contains the 14th; its label shows the real dates. Goal due dates snap to the end of a week.
 
 ### 6.5 Context — the second source of truth
 This module turns the owner's knowledge into data the analysis can act on.
@@ -282,7 +274,7 @@ Each feed is a plugin, like a Mirror adapter. Settled by the research of 2026-10
 - **Lenses** (`raw`, `clean` built in; others saved in `lenses`): a rule listing which treatments to honour. `exclude` removes the days from the window (appointments, shifts and the window length) and `adjust` shrinks scheduled time. A run stores the factors its lens resolved to (id, version, periods), and runs whose lens or resolved factors differ are not compared. So far only `barber_scorecard` honours a lens; the others refuse one with a message. Client-history figures are not lens-aware yet.
 - **Effect of a recurring factor:** `insights factors estimate` / the *Measure the effect* button runs `seasonality` over the factor's latest finished occurrence and links the run; fewer than two earlier years shows "not enough history". `control` is stored but not yet used by Experiments.
 - **Belief status** is read from linked Hypotheses (`hypotheses.factor_id`) by `experiments/factor_link.py` and never stored on the factor; *Test this belief* makes a before/after hypothesis from the first expected effect.
-- **Where it shows:** the Context page, both reports (a *What was in force* section), the CLI (`insights factors`, `--lens`) and MCP (`list_factors`, `create_factor`, `estimate_factor_effect`, `test_factor_belief`, `list_lenses`).
+- **Where it shows:** the Context page, the charts (marks on the time axis), the CLI (`insights factors`, `--lens`) and MCP (`list_factors`, `create_factor`, `estimate_factor_effect`, `test_factor_belief`, `list_lenses`).
 
 ### 6.6 Clients
 - **Profiles** are derived from Mirror on every ingest: first and last visit, visits, spend, usual barber, usual gap.
@@ -335,7 +327,7 @@ Each feed is a plugin, like a Mirror adapter. Settled by the research of 2026-10
 - **Catch-up:** every missed slot is processed, none skipped, in strict order. A slot runs only after the previous slot of that job is done.
   - A window is complete when appointments are covered through its end and shifts are imported for every week in it, both checked against `sync_runs`.
   - An incomplete window blocks the chain (`blocked: needs data`) and sends one Alert, at most once a day, naming the missing weeks and the exact refresh command.
-  - Catch-up creates every analysis run and Goal history entry, but sends one message: the latest week in full, older weeks as one-line deltas. Older Report runs can be reopened.
+  - Catch-up creates every analysis run and Goal history entry, but sends one message: the latest week in full, older weeks as one-line deltas. Each week's figures are in that job run's record.
 - **Built 2026-10-04:** `data_watch`, `sheet_sync` and `weekly_review` (jobs are code in `jobs/`, so there is no `jobs` table; `job_runs` records every run). Statuses: ok, skipped, blocked, failed, running. A failed slot is retried after an hour; a run that has been `running` for less than 30 minutes stops a second one starting. `insights jobs plist` prints the launchd agent; loading it is left to the owner.
   - Alerts implemented: stale data, failed or blocked job, failed import, a goal that turned to "behind". *Not yet:* a barber's weekly visits falling 30 % under their 8-week average.
 - **Runs are recorded** (`job_runs`: job, scheduled for, started, finished, status, counts, error), visible on *Data & sync*, and safe to repeat: each job is idempotent, like imports and syncs.
@@ -347,7 +339,7 @@ Each feed is a plugin, like a Mirror adapter. Settled by the research of 2026-10
 
 ### 6.12 Notifications — channels and recipients
 - **Recipient:** a person (owner, manager, later a barber) with a language (uk/en) and an address per channel.
-- **Subscription:** recipient + report or alert + channel, for example "owner gets the daily digest in Telegram". Barbers could later get only their own numbers.
+- **Subscription:** recipient + weekly review or alert + channel, for example "owner gets the daily digest in Telegram". Barbers could later get only their own numbers.
 - **Channel adapters** share one contract: `send(recipient, message) → delivery id`. A message is built once from a report and rendered per channel: short text for chat apps, full HTML for email or as an attached file.
 - **Channel options:**
 
@@ -358,7 +350,7 @@ Each feed is a plugin, like a Mirror adapter. Settled by the research of 2026-10
 | **Viber** | the same as Telegram, if the team prefers Viber | business messaging is paid and needs approval | only if Telegram doesn't fit |
 | **macOS notification** | "job failed", "data is stale" | none | only reaches the laptop owner |
 
-- **Deliveries are recorded** (`deliveries`: subscription, report run, channel, sent at, status, error) and retried a few times; a report is never sent twice for the same run and recipient.
+- **Deliveries are recorded** (`deliveries`: subscription, a key such as `weekly:2026-W40`, channel, sent at, status, error) and retried a few times; a week is never sent twice to the same recipient.
 - **Recipients:** only the owner, through a separate Telegram bot (not the website's call-back bot). Reports first: the weekly review. Alerts: data older than 3 days, a failed or blocked job, a Goal that moved to "behind", and a barber's weekly visits more than 30 % under their 8-week average.
 - **Privacy:** messages leave the laptop and are stored by the channel provider. For now the only recipient is the owner and the owner has set no limits on client data in messages, so none are enforced (the client base is the shop's working resource). If managers or barbers become recipients, add a per-recipient limit then. Links to the dashboard work only on the laptop, so a message is complete without opening anything.
 - **Language:** each message is rendered from the i18n catalogs in the recipient's language.
@@ -367,12 +359,12 @@ Each feed is a plugin, like a Mirror adapter. Settled by the research of 2026-10
 We don't use an external BI tool (ADR-0009); quick "slice it differently" questions are answered by our own components, built on the same metric registry and analyses so every number has one definition.
 - **Explorer page:** pick metrics, scopes (barbers, team, segment), a window and its grain (day, week, month), a lens, and a comparison (previous period, same period last year, baseline). It shows a chart and the table behind it.
 - **Breakdowns:** by weekday, hour, service, booking channel (online or front desk), client type (new, returning, from other barbers), and segment.
-- **Saved views:** a named explorer setup that can be pinned to the overview, added to a report, or sent by a scheduled job.
-- **Reusable components:** line or bar over time, weekday-by-hour heat map, breakdown table, KPI tiles with change, cohort table. Reports and pages use the same components.
+- **Saved views:** a named explorer setup that can be pinned to the overview, or sent by a scheduled job.
+- **Reusable components:** line or bar over time, weekday-by-hour heat map, breakdown table, KPI tiles with change, cohort table. All pages use the same components.
 - **Export:** CSV of any table, kept local.
 - **Claude:** answers questions the explorer doesn't cover through MCP (`query_metrics`, `run_analysis`, read-only SQL), and a useful answer can be saved as a view or turned into a new metric or analysis.
 - **Boundary:** the Explorer calls only registered Metrics (each declares its breakdown dimensions) and registered Analyses. It writes no SQL and holds no client-level logic; a breakdown that needs it (such as client type) is added to an Analysis or a Clients service.
-- **Saved views** store parameters, not numbers. Results are ephemeral until a view is pinned to a Report, and then the Report run stores the analysis runs behind it.
+- **Saved views** store parameters, not numbers. Results are ephemeral until a view is pinned to the overview.
 - Anything that matters more than once becomes a metric or an analysis, not a saved SQL query.
 
 ## 7. Cross-cutting
@@ -396,7 +388,6 @@ We don't use an external BI tool (ADR-0009); quick "slice it differently" questi
 |---|---|---|
 | a metric | a new module under `metrics/<family>/` with `@metric`, `VERSION` and a fixture test | Metrics only |
 | an analysis | a new module under `analyses/` implementing `run` and `compare`, plus a fixture test | Analyses only |
-| a report | compose existing analyses in `reports/` | Reports only |
 | a data source | an adapter writing through `ingest/base.py` | Mirror only |
 | a factor feed | a feed adapter producing factors | Context only |
 | a lens | a named treatment set in Context | Context, used by Metrics and Analyses |
@@ -412,13 +403,13 @@ We don't use an external BI tool (ADR-0009); quick "slice it differently" questi
 | Metrics layout | done 2026-10-04: 16 keys, one module per metric under `metrics/<family>/` with a `VERSION`, discovered at start-up, each with a fixture test in `tests/metrics/` | done 2026-10-04: `metric_version` on measurements and goals |
 | Analyses | done 2026-10-04: `analyses/` with a service, stored immutable `analysis_runs`, comparison, CLI (`insights analyses|runs|compare`), MCP tools and all twelve analyses | dashboard pages from stored runs (Reports) |
 | Baseline / comparison | one stored measurement (2026-09-27); goals compare with the latest measurement | baseline and previous runs compared per analysis; goal history from runs |
-| Reports | done 2026-10-04: barber book and team comparison composed from stored runs, in the dashboard, exported to HTML; the two claude.ai artifact pages still exist | retire the artifact pages (owner's go-ahead) |
+| Reports | removed 2026-10-06 (ADR-0011); was: barber book and team comparison composed from stored runs, in the dashboard, exported to HTML; the two claude.ai artifact pages still exist | retire the artifact pages (owner's go-ahead) |
 | Owner context | done 2026-10-04: `factors` with effects, treatments, recurrence, lenses and belief status; notes migrated | feeds that create factors (research under way); lens support in the other analyses |
 | Analysis lens | runs record their lens and the factors it resolved to; only `barber_scorecard` honours one | the other analyses; measurements and hypotheses record their lens |
 | Module boundaries | services take a database session and read any table; `web/app.py` queries tables | each module exposes a service; cross-module reads go through it |
 | Altegio access | connector files plus a manual export; read-only | plus a REST adapter (blocked on the partner token); Outreach may write tagged lines to client descriptions (ADR-0010) |
 | Ad-hoc exploration | asking Claude in chat; fixed dashboard pages | an Explorer page with saved views on the metric registry (ADR-0009) |
-| Scheduling and delivery | built 2026-10-04: Scheduler (`jobs/`), Reports (`report_runs`), Notifications with a Telegram channel and recorded deliveries; waiting for the owner to press Start in the bot and load the launchd agent | a Run-now button and job list on *Data & sync*; the visits-drop alert; email |
+| Scheduling and delivery | built 2026-10-04: Scheduler (`jobs/`), Notifications with a Telegram channel and recorded deliveries; waiting for the owner to press Start in the bot and load the launchd agent | a Run-now button and job list on *Data & sync*; the visits-drop alert; email |
 
 ## 10. Change process
 This document changes **with** the code, never after it:

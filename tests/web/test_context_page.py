@@ -63,11 +63,3 @@ def test_saving_a_lens(client, s):
     assert "Without holidays" in client.get("/context").text
     bad = client.post("/lenses", data={"key": "raw", "label": "x", "honour": []}, follow_redirects=False)
     assert bad.status_code == 303 and "msg=" in bad.headers["location"]
-
-
-def test_reports_show_the_factors_in_force(client, s):
-    visit(s, 50, "2026-07-01", 2)
-    factors.add(s, "Competitor opened", "2026-03-05", kind="external", category="competition"); s.commit()
-    rid = client.post("/reports/build", data={"kind": "team_comparison", "date_from": "2026-03-02", "date_to": "2026-03-15"}, follow_redirects=False).headers["location"].split("/")[-1]
-    page = client.get(f"/reports/{rid}").text
-    assert "Що діяло в цей період" in page and "Competitor opened" in page
