@@ -1,7 +1,7 @@
 """Risk segments, priority and suggested offer for each client (shop level).
 
 Segments (days = days since the last visit, threshold = max(overdue_min_days, factor × median gap)):
-  one_time   1 visit and silent longer than overdue_min_days — first-timers who never came back
+  one_time   1 visit and silent longer than first_timer_days — first-timers who never came back
   active     within the usual gap
   slipping   past the usual gap but not yet past the threshold (watch only)
   overdue    past the threshold, up to lapsed_after_days — the call list
@@ -32,7 +32,7 @@ def threshold(f: Facts) -> float:
 def segment(f: Facts) -> str:
     d = f.days_since
     if f.visits == 1:
-        return "one_time" if d > settings.overdue_min_days else "active"
+        return "one_time" if d > settings.first_timer_days else "active"
     if d > settings.lapsed_after_days:
         return "lapsed"
     if d > threshold(f):

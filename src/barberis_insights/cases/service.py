@@ -41,7 +41,7 @@ def _line(p: ClientProfile, trigger: str) -> int:
     if trigger == "lapsed":
         return settings.lapsed_after_days
     if trigger == "first_timer":
-        return settings.overdue_min_days
+        return settings.first_timer_days
     from ..clients.profile import Facts
     f = Facts(client=p.client_id, first=p.first_visit, last=p.last_visit, visits=p.visits, spend=p.lifetime_spend, usual_barber=p.usual_barber or 0,
               last_barber=p.usual_barber or 0, median_gap=p.median_gap_days, days_since=p.days_since_last)

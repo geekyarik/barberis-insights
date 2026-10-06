@@ -8,12 +8,12 @@ Every client with at least one visit falls into exactly one. "Days" are days sin
 
 | Category | Rule | Opens a case? |
 |---|---|---|
-| **active** | One visit up to 45 days ago; or within their usual gap | No |
+| **active** | One visit up to 40 days ago; or within their usual gap | No |
 | **switched** | Within the gap, but the last visit was with another barber than usual | No |
 | **slipping** | Past the usual gap, not yet past the overdue line | No |
 | **overdue** | At least 2 visits, silent past the overdue line, up to 180 days | Yes |
 | **lapsed** | At least 2 visits, silent over 180 days | Only some (below) |
-| **one-time** | One visit, silent over 45 days | Only some (below) |
+| **one-time** | One visit, silent over 40 days | Only some (below) |
 
 ## When a case opens
 
@@ -24,7 +24,7 @@ The daily job (08:00) opens a case for a client in these cases, then gives it an
 | **overdue** | Overdue, and **up to 30 days past their own line** | Call, no discount |
 | **overdue** | Overdue, **more than 30 days past** their line | 15% off if they book during the call |
 | **lapsed** | Lapsed **with at least 3 visits and silent 365 days or less** | 15% off if they book during the call |
-| **first-timer** | One-time, **first visit 46 to 120 days ago** | 15% off if they book during the call |
+| **first-timer** | One-time, **first visit 41 to 120 days ago** | 15% off if they book during the call |
 
 **Never gets a case** (even in those categories): a client with a "do not contact" mark, who refused data processing, who has a flag (abroad, mobilised, moved, declined themselves, other) that has not ended, or who has no phone number in Altegio.
 

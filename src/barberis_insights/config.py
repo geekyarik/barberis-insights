@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     baseline_date: str = "2026-09-27"
     # risk rules
     overdue_min_days: int = 45
+    first_timer_days: int = 40  # a client who came once and has not been back for this long is a first-timer to win back
     overdue_gap_factor: float = 1.5
     lapsed_after_days: int = 180
     # win-back cases (docs/CASES.md)
@@ -45,7 +46,7 @@ class Settings(BaseSettings):
     book_now_pct: int = 15
     early_overdue_days: int = 30  # up to this many days past a regular's own overdue line the offer is a call, not a discount
     book_now_lapsed_max_days: int = 365  # regulars silent longer than this are not contacted (a year; beyond it 4% or fewer return on their own, and the list is too long to call)
-    book_now_first_timer_days: tuple[int, int] = (46, 120)  # one-time clients are worth the offer only while the first visit is this recent
+    book_now_first_timer_days: tuple[int, int] = (41, 120)  # one-time clients are worth the offer only while the first visit is this recent
     # notifications and jobs
     telegram_bot_token: str | None = None
     telegram_owner_chat_id: int | None = None  # a private chat or a group with only the owner in it: the weekly message carries client names

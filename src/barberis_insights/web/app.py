@@ -552,7 +552,7 @@ def risk_page(request: Request, tab: str = "open", outcome: str = "", barber: st
     comma = lang_of(request) == "uk"
     factor = f"{settings.overdue_gap_factor:g}".replace(".", ",") if comma else f"{settings.overdue_gap_factor:g}"
     ex_gap = 40
-    rules = {"min": settings.overdue_min_days, "factor": factor, "lapsed": settings.lapsed_after_days, "ex_gap": ex_gap,
+    rules = {"min": settings.overdue_min_days, "ft": settings.first_timer_days, "factor": factor, "lapsed": settings.lapsed_after_days, "ex_gap": ex_gap,
              "ex_line": round(max(settings.overdue_min_days, settings.overdue_gap_factor * ex_gap))}
     return page(request, s, "risk.html", "risk", title="nav.risk", rows=rows, segments=SEGMENTS, chosen=segment, show_all=show_all, seg=seg, rules=rules,
                 active=cases.active_cases(s, [r["client_id"] for r in rows]), **ctx)
