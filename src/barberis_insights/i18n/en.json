@@ -602,7 +602,6 @@
   "common.required_note": "* required field",
 
   "nav.team": "Team",
-  "nav.explore": "Explore",
   "nav.group.analyze": "Analyze",
   "nav.group.clients": "Clients",
   "nav.group.plan": "Plan",
@@ -680,20 +679,5 @@
   "team.risk_title": "Dependence and risk",
   "team.risk_sub": "Lower is safer: the share of clients who see only one barber, and the overdue total.",
   "team.table": "All figures for the period",
-  "team.visits_pw": "Visits per working week",
-  "explore.sub": "Pick a metric and barbers to see the trend and its table of values. For revenue and visits you can overlay last year.",
-  "explore.controls": "What to show",
-  "explore.metric": "Metric",
-  "explore.range": "Range",
-  "explore.who": "Barbers",
-  "explore.ly": "Overlay last year",
-  "explore.show": "Show",
-  "explore.shop": "Shop",
-  "explore.chart_sub": "The last {n} complete weeks.",
-  "explore.summary": "Summary",
-  "explore.series": "Line",
-  "explore.last": "Latest week",
-  "explore.avg": "Average over the range",
-  "explore.scope_note_shop": "With no barbers selected this is the whole shop, including those who have left.",
-  "explore.scope_note_team": "With no barbers selected this is the current team; busy share and revenue per hour come from shifts only."
+  "team.visits_pw": "Visits per working week"
 }

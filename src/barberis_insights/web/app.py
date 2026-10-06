@@ -6,7 +6,7 @@ import datetime as dt
 from pathlib import Path
 from urllib.parse import quote, urlparse
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -359,43 +359,6 @@ def team_page(request: Request, weeks: int = 8, s: Session = Depends(db)):
     return page(request, s, "team.html", "team", title="nav.team", weeks=weeks, rank_util=ranks("util", pct), rank_rph=ranks("rph", money), rank_check=ranks("check", money),
                 diffs_util=diffs_util, diffs_rph=diffs_rph, multiples=multiples, retention=retention, lost=lost, exclusive=exclusive, overdue=overdue, r_run=r_run, e_run=e_run,
                 o_run=o_run, rows=rows, team=team, window=f"{m['starts'][-weeks]} – {m['end']}")
-
-
-EXPLORE = {   # metric -> (field, where it comes from, label key, kind)
-    "revenue": ("revenue", "shop", "metric.revenue", "money"), "visits": ("visits", "shop", "metric.visits", "int"), "check": ("avg_check", "shop", "metric.check", "money"),
-    "new_clients": ("new_clients", "shop", "overview.new_clients", "int"), "util": ("util", "team", "metric.util", "pct"), "rph": ("rph", "team", "metric.rph", "money"),
-}
-
-
-@app.get("/explore", response_class=HTMLResponse)
-def explore_page(request: Request, metric: str = "revenue", who: list[str] = Query(default=[]), weeks: int = 26, ly: int = 1, s: Session = Depends(db)):
-    metric = metric if metric in EXPLORE else "revenue"
-    weeks = weeks if weeks in (13, 26, 52) else 26
-    h = helpers(lang_of(request)); t = h["t"]
-    m = vm.weekly_matrix(s)
-    field, src, label_key, kind = EXPLORE[metric]
-    bar = vm.barbers(s)
-    bfield = {"avg_check": "avg_check", "new_clients": "new_to_shop", "rph": "rev_per_sched_h"}.get(field, field)
-    sel = [k_ for k_ in who if k_ in {b.key for b in bar}] if who else []
-    labels = m["labels"][-weeks:]
-    series, table_cols = [], []
-    fmtf = {"money": lambda v: vm.money(v), "int": lambda v: f"{v:g}", "pct": lambda v: f"{v:.0f}%"}[kind]
-    if not sel or src == "shop" and not sel:
-        rows = m["shop"] if src == "shop" else m["team"]
-        series.append({"name": t("explore.shop") if src == "shop" else t("overview.team_scope"), "values": [r[field] for r in rows[-weeks:]], "cls": "s1"})
-        if ly and field in ("revenue", "visits", "new_clients") and src == "shop":
-            lyf = {"revenue": "revenue_ly", "visits": "visits_ly", "new_clients": "new_ly"}[field]
-            series.append({"name": t("ui.last_year"), "values": [r[lyf] for r in rows[-weeks:]], "cls": "ly", "style": "dash"})
-    for i, b in enumerate(bar):
-        if b.key in sel:
-            rws = m["barbers"][b.key][-weeks:]
-            series.append({"name": b.name, "values": [r[bfield] if r["days"] else None for r in rws], "cls": BARBER_CLS[i % 6]})
-    chart = charts.line_chart(labels, series, title=t(label_key), y_fmt=fmtf, table_label=t("ui.table"))
-    summary = [{"name": s_["name"], "last": next((v for v in reversed(s_["values"]) if v is not None), None),
-                "avg": (sum(v for v in s_["values"] if v is not None) / max(1, sum(1 for v in s_["values"] if v is not None))) if any(v is not None for v in s_["values"]) else None}
-               for s_ in series]
-    return page(request, s, "explore.html", "explore", title="nav.explore", metric=metric, metrics=list(EXPLORE), sel=sel, weeks=weeks, ly=ly, chart=chart, summary=summary,
-                fmtf=fmtf, label_key=label_key, src=src, EXPLORE=EXPLORE, all_barbers=bar)
 
 
 # ---------------------------------------------------------------- goals

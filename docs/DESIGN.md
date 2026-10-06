@@ -11,7 +11,6 @@ A side tool for the **owner and managers** of a barbershop. Every week they ask 
 | Is the shop healthy, and is anything wrong with the data? | **Overview** |
 | How is each barber doing, and why? | **Barber** (one per barber) |
 | Who is ahead, who is behind, by how much? | **Team** |
-| What changed, and what lies behind it? | **Explore** |
 | Are we hitting our goals? | **Goals** |
 | Which clients should we call, and did calling work? | **Clients at risk**, **Win-back**, **Client** |
 | What was going on that the numbers do not show? | **Context** |

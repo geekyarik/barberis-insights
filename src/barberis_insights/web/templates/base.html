@@ -245,7 +245,6 @@ fieldset{border:1px solid var(--rule);border-radius:var(--r);padding:8px 12px}le
     {% for b in all_barbers %}<a href="/barber/{{ b.key }}"{% if nav==b.key %} aria-current="page"{% endif %}>{{ icon('user') }}{{ b.name }}</a>{% endfor %}
     <div class="group">{{ t("nav.group.analyze") }}</div>
     <a href="/team"{% if nav=='team' %} aria-current="page"{% endif %}>{{ icon('team') }}{{ t("nav.team") }}</a>
-    <a href="/explore"{% if nav=='explore' %} aria-current="page"{% endif %}>{{ icon('explore') }}{{ t("nav.explore") }}</a>
     <div class="group">{{ t("nav.group.clients") }}</div>
     <a href="/risk"{% if nav=='risk' %} aria-current="page"{% endif %}>{{ icon('alert') }}{{ t("nav.risk") }}</a>
     <a href="/outreach"{% if nav=='outreach' %} aria-current="page"{% endif %}>{{ icon('phone') }}{{ t("nav.outreach") }}</a>
