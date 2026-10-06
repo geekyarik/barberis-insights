@@ -4,13 +4,13 @@
 {{ page_head(t("nav.risk"), t("risk.sub_short"), t("risk.asof", date=asof)) }}
 
 {% call panel(t("risk.filter_title"), none) %}
-<form method="get" class="filters">
+<form method="get" class="filters" onchange="this.requestSubmit()">
   <fieldset class="chipset"><legend class="eyebrow">{{ t("risk.segments") }}</legend>
     {% for sg in segments %}<label class="chipcheck"><input type="checkbox" name="segment" value="{{ sg }}" {{ 'checked' if sg in chosen }}><span><b>{{ label('segment.', sg) }}</b> {{ seg.get(sg, 0) }}</span></label>{% endfor %}
   </fieldset>
   <label>{{ t("col.usual_barber") }}<select name="barber"><option value="">{{ t("common.all") }}</option>{% for b in all_barbers %}<option value="{{ b.key }}" {{ 'selected' if barber==b.key }}>{{ b.name }}</option>{% endfor %}</select></label>
   <label class="check"><input type="checkbox" name="show_all" value="true" {{ 'checked' if show_all }}> {{ t("risk.show_all") }}</label>
-  <button>{{ t("common.filter") }}</button>
+  <noscript><button>{{ t("common.filter") }}</button></noscript>
 </form>
 <details class="how"><summary>{{ t("risk.how") }}</summary><p class="sub">{{ t("risk.sub") }}</p></details>
 {% endcall %}
