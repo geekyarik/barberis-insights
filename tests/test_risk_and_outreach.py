@@ -157,8 +157,8 @@ def test_an_early_overdue_regular_gets_a_call_and_a_late_one_gets_the_booking_of
 
 def test_lapsed_regulars_get_the_offer_only_while_the_data_says_they_can_return():
     from barberis_insights.clients.risk import classify
-    assert classify(_facts(days_since=400))[::2] == ("lapsed", "book_now")
-    assert classify(_facts(days_since=900))[::2] == ("lapsed", None)                         # silent for years
+    assert classify(_facts(days_since=300))[::2] == ("lapsed", "book_now")
+    assert classify(_facts(days_since=400))[::2] == ("lapsed", None)                         # silent for over a year
     assert classify(_facts(days_since=400, visits=2))[::2] == ("lapsed", None)               # not a regular
 
 
