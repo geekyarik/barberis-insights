@@ -43,8 +43,13 @@ Style: **Minimalism / Swiss** (the skill's pick for dashboards): a grid, white s
 | Surface / page / rule | `#ffffff` / `#f5f7fa` / `#dfe4ec` | Cards, background, borders |
 | Primary | `#1e40af` | Links, the current series, selection, focus ring |
 | Good / bad / warn | `#157a3c` / `#b42318` / `#9a5b00` | Verdicts (always with a sign or a word) |
-| Series | blue `#1e40af`, vermilion `#c2410c`, teal `#0f766e`, purple `#7e3aa6`, sky `#0369a1`, olive `#6b7a1a` | Up to six barbers or categories; identified by direct labels as well |
+| Series (lines, at most 6) | blue `#0b5cad`, vermilion `#c24f00`, purple `#7a3e9d`, green `#00806a`, gold `#946f00`, magenta `#c2185b` | Different barbers on one chart; each line also has a direct end label |
+| Composition fills | blue = healthy / returning, light blue `#8fb8e0` = in between / from other barbers, orange = at risk / lost, grey = gone, pale grey = one-time, purple = new / switched | Stacked bars; segments separated by a 2 px gap |
+| Intensity ramp | teal, five steps `#e1f1ee` to `#0b5a4d` | Busy share and return rates only; values printed in each cell |
+| Comparison | grey dashed `#7b8798` | Last year |
 | Context marker | amber `#b45309` | Factors on a time axis |
+
+**Colour rules** (data-analysis practice, checked 2026-10-06): colour carries one meaning per role and a colour is never reused for another role; categories are limited to six hues with large gaps (an Okabe-Ito-style, colour-blind-safe set), and identity is also given by a direct label; part-to-whole uses meaning-ordered colours rather than a rainbow; intensity uses one hue in lightness steps, a different hue from the accent so a heat cell is never mistaken for a series; green and red appear only for better/worse and always with a sign or a word; ranked bars of barbers use one colour because the name is on the row. Every text-on-fill pair is at least 4.5:1 in both themes.
 
 Typography: the **system font stack** (the tool is local-first and works offline, so no web fonts; the skill's suggested Fira pairing needs a download). Numbers use tabular figures. Sizes: labels 12, body and tables 14 and 13, page title 24, tile numbers 28. Nothing under 12.
 

@@ -55,7 +55,7 @@
   <div class="tablebox" style="border:0"><table class="cards">
     <thead><tr><th scope="col" class="l">{{ t("report.c.weekday") }}</th><th scope="col">{{ t("col.days_worked") }}</th><th scope="col">{{ t("col.util") }}</th><th scope="col">{{ t("col.visits") }}</th><th scope="col">{{ t("col.revenue") }}</th></tr></thead>
     <tbody>{% for d in runs.weekday_pattern.tables.weekday %}<tr><td class="l">{{ t("report.day." ~ d.weekday) }}</td><td data-label="{{ t('col.days_worked') }}">{{ d.days_worked }}</td>
-      <td data-label="{{ t('col.util') }}">{% if d.util is not none %}<span class="cell-bar"><span class="rank-track" aria-hidden="true"><b class="s3" style="width:{{ [d.util, 100]|min }}%"></b></span>{{ d.util|round|int }}%</span>{% else %}—{% endif %}</td>
+      <td data-label="{{ t('col.util') }}">{% if d.util is not none %}<span class="cell-bar"><span class="rank-track" aria-hidden="true"><b class="s4" style="width:{{ [d.util, 100]|min }}%"></b></span>{{ d.util|round|int }}%</span>{% else %}—{% endif %}</td>
       <td data-label="{{ t('col.visits') }}">{{ d.visits }}</td><td data-label="{{ t('col.revenue') }}">{{ kfmt("revenue", d.revenue) }}</td></tr>{% endfor %}</tbody></table></div>
   {% else %}<div style="padding:0 16px 16px">{{ empty(t("barber.no_run")) }}</div>{% endif %}
 {% endcall %}

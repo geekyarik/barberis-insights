@@ -207,7 +207,7 @@ def overview(request: Request, s: Session = Depends(db)):
                                                                                         fmt=lambda x: f"{x:,.0f}".replace(",", " "))})
     # client health
     seg = C.Counter(st for (st,) in s.execute(select(ClientProfile.segment)))
-    parts = [("active", "s3"), ("slipping", "warn-seg"), ("overdue", "s2"), ("lapsed", "muted-seg"), ("one_time", "s5"), ("switched", "s4")]
+    parts = [("active", "s1"), ("slipping", "c-lt"), ("overdue", "s2"), ("lapsed", "c-grey"), ("one_time", "c-pale"), ("switched", "s3")]
     health = charts.stack100([{"label": h["label"]("segment.", k_), "value": seg.get(k_, 0), "cls": c_} for k_, c_ in parts], title=t("overview.client_health"))
     overdue_run = analyses.latest(s, "overdue_regulars")
     # goals and calls
@@ -276,21 +276,21 @@ def barber_page(request: Request, key: str, weeks: int = 26, s: Session = Depend
     money_k = lambda v: vm.money(v) if v >= 1000 else f"{v:.0f}"
     rev_chart = charts.line_chart(labels, [{"name": t("ui.this_year"), "values": col("revenue"), "cls": "s1"}, {"name": t("ui.last_year"), "values": col("revenue_ly"), "cls": "ly", "style": "dash"}],
                                   title=t("barber.revenue_week"), y_fmt=money_k, markers=markers, table_label=t("ui.table"))
-    util_chart = charts.line_chart(labels, [{"name": t("barber.busy_short"), "values": col("util"), "cls": "s3"}], title=t("barber.busy_share"), y_fmt=lambda v: f"{v:.0f}%",
+    util_chart = charts.line_chart(labels, [{"name": t("barber.busy_short"), "values": col("util"), "cls": "s4"}], title=t("barber.busy_share"), y_fmt=lambda v: f"{v:.0f}%",
                                    goal=util_goal["target"] if util_goal else None, goal_label=t("goal.target") if util_goal else "", table_label=t("ui.table"))
-    clients_chart = charts.stacked_columns(labels, [{"name": t("barber.c_returning"), "values": col("returning"), "cls": "s1"}, {"name": t("barber.c_other"), "values": col("from_other"), "cls": "s5"},
-                                                    {"name": t("barber.c_new"), "values": col("new_to_shop"), "cls": "s2"}], title=t("barber.clients_week"))
+    clients_chart = charts.stacked_columns(labels, [{"name": t("barber.c_returning"), "values": col("returning"), "cls": "s1"}, {"name": t("barber.c_other"), "values": col("from_other"), "cls": "c-lt"},
+                                                    {"name": t("barber.c_new"), "values": col("new_to_shop"), "cls": "s3"}], title=t("barber.clients_week"))
     runs = barber_runs(s, key)
     pf = lambda v: f"{v:g}%"
     viz = {}
     if "client_retention" in runs and runs["client_retention"]["kpis"].get("clients"):
         k_ = runs["client_retention"]["kpis"]
-        viz["retention"] = charts.stack100([{"label": t("barber.r_stayed"), "value": k_["stayed_pct"], "cls": "s3"}, {"label": t("barber.r_switched"), "value": k_["switched_pct"], "cls": "warn-seg"},
+        viz["retention"] = charts.stack100([{"label": t("barber.r_stayed"), "value": k_["stayed_pct"], "cls": "s1"}, {"label": t("barber.r_switched"), "value": k_["switched_pct"], "cls": "c-lt"},
                                             {"label": t("barber.r_lost"), "value": k_["lost_pct"], "cls": "s2"}], fmt=pf, title=t("barber.retention_title"), share=False)
     if "client_sources" in runs and runs["client_sources"]["kpis"].get("clients"):
         k_ = runs["client_sources"]["kpis"]
-        viz["sources"] = charts.stack100([{"label": t("barber.c_returning"), "value": k_["returning_pct"], "cls": "s1"}, {"label": t("barber.c_other"), "value": k_["from_other_pct"], "cls": "s5"},
-                                          {"label": t("barber.c_new"), "value": k_["new_pct"], "cls": "s2"}], fmt=pf, title=t("barber.sources_title"), share=False)
+        viz["sources"] = charts.stack100([{"label": t("barber.c_returning"), "value": k_["returning_pct"], "cls": "s1"}, {"label": t("barber.c_other"), "value": k_["from_other_pct"], "cls": "c-lt"},
+                                          {"label": t("barber.c_new"), "value": k_["new_pct"], "cls": "s3"}], fmt=pf, title=t("barber.sources_title"), share=False)
     if "service_mix" in runs:
         viz["services"] = charts.rank_bars([{"label": x["service"], "value": x["share_pct"]} for x in runs["service_mix"]["tables"].get("services", [])[:8]], fmt=pf)
     risk = risk_list(s, ("overdue",), b.altegio_id, 10, include_ineligible=True)
@@ -335,7 +335,7 @@ def team_page(request: Request, weeks: int = 8, s: Session = Depends(db)):
     team = _agg(m["team"][-weeks:])
     link = lambda b: f"/barber/{b.key}"
     def ranks(field, fmtf):
-        return charts.rank_bars([{"label": b.name, "value": per[b.key][field], "href": link(b), "cls": cls[b.key]} for b in vm.barbers(s)], fmt=fmtf, ref=team[field],
+        return charts.rank_bars([{"label": b.name, "value": per[b.key][field], "href": link(b), "cls": "s1"} for b in vm.barbers(s)], fmt=fmtf, ref=team[field],
                                 ref_label=t("report.c.team"))
     money = lambda v: vm.money(v); pct = lambda v: f"{v:.0f}%"
     diffs_util = charts.diverging([{"label": b.name, "value": round(per[b.key]["util"] - team["util"], 1) if per[b.key]["util"] is not None and team["util"] else None}
@@ -344,14 +344,14 @@ def team_page(request: Request, weeks: int = 8, s: Session = Depends(db)):
                                   for b in vm.barbers(s)], fmt=lambda v: f"{v:+.1f}%".replace("-", "−"))
     # small multiples: each barber's revenue over 26 weeks on its own scale
     multiples = [{"name": b.name, "key": b.key, "cls": cls[b.key], "last": per[b.key]["revenue"],
-                  "spark": charts.spark([r["revenue"] if r["days"] else None for r in m["barbers"][b.key][-26:]], w=160, h=44, cls=cls[b.key], label=b.name,
+                  "spark": charts.spark([r["revenue"] if r["days"] else None for r in m["barbers"][b.key][-26:]], w=160, h=44, cls="s1", label=b.name,
                                         fmt=lambda x: f"{x:,.0f}".replace(",", " "))} for b in vm.barbers(s)]
     # client figures from the latest team analyses
     def run_rank(name, field, fmtf, lower=False):
         r = analyses.latest(s, name, "team")
         if not r:
             return None, None
-        return charts.rank_bars([{"label": b.name, "value": r.result["kpis"].get(b.key, {}).get(field), "href": link(b), "cls": cls[b.key]} for b in vm.barbers(s)], fmt=fmtf,
+        return charts.rank_bars([{"label": b.name, "value": r.result["kpis"].get(b.key, {}).get(field), "href": link(b), "cls": "s1"} for b in vm.barbers(s)], fmt=fmtf,
                                 ref=r.result["kpis"].get("team", {}).get(field), ref_label=t("report.c.team"), lower_is_better=lower), r
     pf = lambda v: f"{v:g}%"
     retention, r_run = run_rank("client_retention", "stayed_pct", pf)
