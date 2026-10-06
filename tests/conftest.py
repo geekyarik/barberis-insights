@@ -10,6 +10,13 @@ from barberis_insights.db.models import Appointment, AppointmentService, Barber,
 _ids = itertools.count(1)
 
 
+@pytest.fixture(autouse=True)
+def _no_live_fetch(monkeypatch):
+    """Tests never start a headless Claude; the ones about the fetch step turn it on with a fake runner."""
+    from barberis_insights.config import settings
+    monkeypatch.setattr(settings, "weekly_fetch", False)
+
+
 @pytest.fixture
 def s(tmp_path):
     eng = create_engine(f"sqlite:///{tmp_path / 't.sqlite'}")

@@ -54,6 +54,16 @@ def ingest(files: list[Path] = typer.Argument(..., help="Saved Altegio Pro conne
 
 
 @app.command()
+def fetch(through: Optional[str] = typer.Option(None, help="YYYY-MM-DD, default: last Sunday")) -> None:
+    """Pull fresh data from Altegio through a headless Claude and import it (the weekly job's first step), without sending anything."""
+    from .db.session import session_scope
+    from .jobs import fetch as fetching
+    day = _date(through) if through else dt.date.today() - dt.timedelta(days=dt.date.today().weekday() + 1)
+    with session_scope() as s:
+        typer.echo(json.dumps(fetching.fetch_fresh(s, day), ensure_ascii=False, indent=1, default=str))
+
+
+@app.command()
 def snapshot(
     date_from: str = typer.Option(..., "--from"), date_to: str = typer.Option(..., "--to"),
     cohort: Optional[str] = typer.Option(None, help="FROM:TO override for the 90-day-return cohort"),

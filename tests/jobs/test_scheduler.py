@@ -139,3 +139,51 @@ def test_run_now_ignores_the_schedule_and_dry_run_leaves_no_trace(s, owner):
     r = jobs.run_now(s, "weekly_review", dt.datetime(2026, 3, 16, 9), dry_run=True, now=MON, sleep=NOSLEEP)
     s.rollback()
     assert r["status"] == "ok" and s.query(JobRun).count() == 0 and owner.sent == []
+
+
+# ------------------------------------------------------------------ the weekly flow: init -> fresh fetch -> process -> send
+@pytest.fixture
+def fetcher(monkeypatch):
+    """A fake headless Claude: records its prompt and, when told to, imports the week the way the real ingest would."""
+    from barberis_insights.jobs import fetch
+    monkeypatch.setattr(settings, "weekly_fetch", True)
+    calls = {"prompts": [], "arrive": None, "ok": True}
+
+    def run(prompt, out):
+        calls["prompts"].append(prompt)
+        if calls["arrive"]:
+            calls["arrive"]()
+        return {"ok": calls["ok"], "error": "" if calls["ok"] else "claude is not signed in"}
+    monkeypatch.setattr(fetch, "_runner", run)
+    monkeypatch.setattr(settings, "data_dir", __import__("pathlib").Path(__import__("tempfile").mkdtemp()))
+    return calls
+
+
+def test_the_weekly_flow_fetches_before_it_processes_and_sends(s, owner, fetcher):
+    fetcher["arrive"] = lambda: data_through(s, "2026-03-15")              # the data only exists after the fetch
+    out = tick(s, MON, only="weekly_review")
+    assert out[0]["status"] == "ok" and len(fetcher["prompts"]) == 1
+    assert "2026-03-15" in fetcher["prompts"][0] and "team_member_id=1" in fetcher["prompts"][0]
+    assert len(owner.sent) == 1 and "Тижневий огляд" in owner.sent[0][1]
+
+
+def test_without_fresh_data_the_week_is_blocked_and_nothing_is_sent(s, owner, fetcher):
+    fetcher["ok"] = False
+    out = tick(s, MON, only="weekly_review")
+    assert out[0]["status"] == "blocked" and out[0]["fetch"]["ok"] is False
+    texts = " ".join(m[1] for m in owner.sent)
+    assert "Тижневий огляд" not in texts and "claude is not signed in" in texts      # the owner is told why
+
+
+def test_a_failed_fetch_still_sends_when_the_database_already_holds_the_week(s, owner, fetcher):
+    data_through(s, "2026-03-15")
+    fetcher["ok"] = False
+    out = tick(s, MON, only="weekly_review")
+    assert out[0]["status"] == "ok" and any("Тижневий огляд" in m[1] for m in owner.sent)
+    assert any("claude is not signed in" in m[1] for m in owner.sent)
+
+
+def test_a_dry_run_never_starts_the_fetch(s, owner, fetcher):
+    data_through(s, "2026-03-15")
+    jobs.run_now(s, "weekly_review", MON, dry_run=True)
+    assert fetcher["prompts"] == []

@@ -11,10 +11,14 @@ import datetime as dt
 
 from sqlalchemy import select
 
+from ..config import settings
 from ..db.models import JobRun
+from ..clients.profile import rebuild_profiles
+from ..metrics import Dataset
 from ..ingest.status import complete_through
 from ..notifications import service as notify
 from ..notifications import weekly
+from . import fetch
 from .registry import JobContext, job
 
 
@@ -49,7 +53,13 @@ def _behind_before(s, first: dict) -> set | None:
 def weekly_review(ctx: JobContext) -> dict:
     monday = ctx.slot.date()
     f, t = monday - dt.timedelta(days=7), monday - dt.timedelta(days=1)
-    if not complete_through(ctx.s, t):
-        return {"status": "blocked", "missing": [_week(monday)]}
+    got = None
+    if settings.weekly_fetch and not ctx.dry_run:                       # 1. fresh data from the CRM into the local database
+        got = fetch.fetch_fresh(ctx.s, t, ctx.now)
+        if not got["ok"]:
+            notify.send_alert(ctx.s, "job_failed", ctx.now.date().isoformat(), job="weekly_review: fetch", error=got.get("error", "")[:200])
+    if not complete_through(ctx.s, t):                                  # never report on a week the database does not hold yet
+        return {"status": "blocked", "missing": [_week(monday)], "fetch": got}
+    rebuild_profiles(ctx.s, Dataset.load(ctx.s))                        # 2. process the database: client profiles, then the analyses
     content = weekly.weekly_content(ctx.s, f, t, created_by="manual" if ctx.dry_run else "schedule")
-    return {"content": content, "week": content["week"]}
+    return {"content": content, "week": content["week"], "fetch": got}
