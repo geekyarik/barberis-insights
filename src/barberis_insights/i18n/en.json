@@ -227,7 +227,6 @@
 
   "client.fallback": "Client {id}",
   "client.no_phone": "No phone on file",
-  "client.visits_since": "Visits since 2025",
   "client.days_ago": "{n} days ago",
   "client.days_short": "{n} d",
   "client.cases": "Win-back cases",
@@ -235,7 +234,7 @@
   "client.set_status": "Set status",
   "client.note": "Note",
   "client.no_cases": "No cases yet.",
-  "client.contact": "Contact",
+  "client.contact": "Calls",
   "client.recent_visits": "Recent visits",
   "client.online": "online",
   "client.front_desk": "front desk",
@@ -735,7 +734,7 @@
   "flag.until_label": "Check again on (optional)",
   "flag.save": "Do not call",
   "flag.lift": "Lift the flag",
-  "flag.none": "No flag.",
+  "flag.none": "This client can be called.",
   "flag.until": "until {date}",
   "flag.abroad": "left the country",
   "flag.mobilised": "mobilised",
@@ -753,5 +752,15 @@
 
   "offer_short.book_now": "−15% if booked on the call",
   "offer_short.call_only": "Call, no discount",
-  "flag.dnc_old": "Marked “do not contact” earlier (no reason given)."
+  "flag.dnc_old": "Marked “do not contact” earlier (no reason given).",
+  "client.barbers_title": "Visits by barber",
+  "client.barbers_sub": "All {n} of the client's visits: who they see.",
+  "client.visits_total": "Visits",
+  "client.first_visit_note": "since {date}",
+  "client.avg_check_note": "average check ₴{n}",
+  "client.away": "Away",
+  "client.shown_n": "Showing the latest {n} of {total}",
+  "client.older_visits": "Older visits ({n})",
+  "client.change_status": "Change status",
+  "flag.mark": "Mark: do not call"
 }

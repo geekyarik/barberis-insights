@@ -227,7 +227,6 @@
 
   "client.fallback": "Клієнт {id}",
   "client.no_phone": "Немає телефону",
-  "client.visits_since": "Візити з 2025",
   "client.days_ago": "{n} дн. тому",
   "client.days_short": "{n} дн.",
   "client.cases": "Звернення на повернення",
@@ -235,7 +234,7 @@
   "client.set_status": "Змінити статус",
   "client.note": "Нотатка",
   "client.no_cases": "Звернень ще немає.",
-  "client.contact": "Зв’язок",
+  "client.contact": "Дзвінки",
   "client.recent_visits": "Останні візити",
   "client.online": "онлайн",
   "client.front_desk": "адміністратор",
@@ -735,7 +734,7 @@
   "flag.until_label": "Перевірити знову (необов’язково)",
   "flag.save": "Не телефонувати",
   "flag.lift": "Зняти позначку",
-  "flag.none": "Позначки немає.",
+  "flag.none": "Клієнта можна телефонувати.",
   "flag.until": "до {date}",
   "flag.abroad": "виїхав за кордон",
   "flag.mobilised": "мобілізований",
@@ -753,5 +752,15 @@
 
   "offer_short.book_now": "−15% при записі під час дзвінка",
   "offer_short.call_only": "Дзвінок без знижки",
-  "flag.dnc_old": "Раніше позначено «не турбувати» (без причини)."
+  "flag.dnc_old": "Раніше позначено «не турбувати» (без причини).",
+  "client.barbers_title": "Візити за барберами",
+  "client.barbers_sub": "Усі {n} візитів клієнта: до кого ходить.",
+  "client.visits_total": "Візитів",
+  "client.first_visit_note": "з {date}",
+  "client.avg_check_note": "середній чек ₴{n}",
+  "client.away": "Не був",
+  "client.shown_n": "Показано {n} останніх із {total}",
+  "client.older_visits": "Старіші візити ({n})",
+  "client.change_status": "Змінити статус",
+  "flag.mark": "Позначити: не телефонувати"
 }

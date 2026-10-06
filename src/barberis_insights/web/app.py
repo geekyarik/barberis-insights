@@ -468,14 +468,19 @@ async def cases_decide(request: Request, s: Session = Depends(db)):
 @app.get("/client/{cid}", response_class=HTMLResponse)
 def client_page(request: Request, cid: int, s: Session = Depends(db)):
     c, p = s.get(Client, cid), s.get(ClientProfile, cid)
-    visits = list(s.scalars(select(Appointment).where(Appointment.client_id == cid, Appointment.deleted.is_(False)).order_by(Appointment.date.desc()).limit(40)))
+    visits = list(s.scalars(select(Appointment).where(Appointment.client_id == cid, Appointment.deleted.is_(False)).order_by(Appointment.date.desc()).limit(60)))
     if not (c or p or visits):
         raise HTTPException(404)
     cases = list(s.scalars(select(OutreachCase).where(OutreachCase.client_id == cid).order_by(OutreachCase.created.desc())))
-    per_barber = C.Counter(v.barber_id for v in visits if v.status == "arrived")
+    per_barber = C.Counter(dict(s.execute(select(Appointment.barber_id, func.count()).where(Appointment.client_id == cid, Appointment.status == "arrived",
+                                                                                           Appointment.deleted.is_(False)).group_by(Appointment.barber_id)).all()))
+    bn = names(s)
+    barbers_chart = charts.stack100([{"label": bn.get(b, str(b)), "value": n, "cls": BARBER_CLS[i % 6]} for i, (b, n) in enumerate(per_barber.most_common())],
+                                    fmt=lambda v: f"{v:g}", title=tr("client.barbers_title", lang_of(request))) if per_barber else None
+    total_visits = sum(per_barber.values())
     flag = contact.active_flags(s, [cid]).get(cid)
     return page(request, s, "client.html", "risk", title=c.name if c and c.name else tr("client.fallback", lang_of(request), id=cid), cid=cid, c=c, p=p, visits=visits,
-                cases=cases, per_barber=per_barber, bnames=names(s), flag=flag, flag_history=contact.history(s, cid), flag_reasons=contact.REASONS,
+                cases=cases, per_barber=per_barber, bnames=bn, barbers_chart=barbers_chart, total_visits=total_visits, flag=flag, flag_history=contact.history(s, cid), flag_reasons=contact.REASONS,
                 here=f"/client/{cid}", today=dt.date.today(), hold=outreach.holds(s, {cid}).get(cid), won=outreach.won_back_history(s, {cid}).get(cid), releasable=outreach.RELEASABLE)
 
 

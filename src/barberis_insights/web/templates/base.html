@@ -117,6 +117,11 @@ dialog.note{border:1px solid var(--rule);border-radius:10px;background:var(--pan
 .note-actions{display:flex;justify-content:flex-end;gap:8px}.note-actions button{min-height:40px;padding:0 18px}
 .note-lift{padding:12px 16px;border-top:1px solid var(--rule);background:var(--soft);border-radius:0 0 10px 10px}.note-lift[hidden]{display:none}.note-lift .linkbtn{color:var(--bad);font-size:13px}
 @media (max-width:640px){.note-actions button{flex:1}}
+table td.tl,table th.tl{text-align:left}
+.backlink{display:inline-block;color:var(--ink-2);text-decoration:none;font-size:13px;margin-bottom:-8px}.backlink:hover{color:var(--accent);text-decoration:underline}
+.stateline{margin:0 0 10px}.stateline.ok{color:var(--good)}details.markbox{margin-top:12px;border-top:1px solid var(--rule);padding-top:10px}details.markbox>summary{cursor:pointer;color:var(--accent);font-weight:600;min-height:32px;display:flex;align-items:center}details.markbox .note-f{padding:10px 0 0;border:0}
+.caseblock{border-top:1px solid var(--rule);padding-top:10px;margin-top:10px}.caseblock:first-of-type{border-top:0;margin-top:0;padding-top:0}ul.events{margin:8px 0;padding-left:18px;font-size:13px;color:var(--ink-2)}
+details.more>summary{cursor:pointer;color:var(--accent);padding:10px 16px;font-weight:600}.contactline a{font-weight:600}
 .actionbar details.ab{margin-left:auto}.actionbar .abopts{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px}.actionbar button:disabled{opacity:.5;cursor:not-allowed}
 h2.group-h{font:650 16px var(--f);margin:20px 0 10px}
 .multiples{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}.multiple{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border:1px solid var(--rule);border-radius:var(--r);text-decoration:none;color:var(--ink)}.multiple:hover{background:var(--soft)}
@@ -294,7 +299,7 @@ document.querySelectorAll('input[required]:not([type=radio]),select[required],te
   const label = el.closest('label'); if (!label || label.querySelector('.req')) return;
   const mark = document.createElement('span'); mark.className = 'req'; mark.textContent = ' *'; mark.setAttribute('aria-hidden', 'true');
   const text = [...label.childNodes].find(n => n.nodeType === 3 && n.textContent.trim());
-  if (text) text.after(mark); else label.prepend(mark);
+  if (text) { const w = document.createElement('span'); text.replaceWith(w); w.append(text, mark); } else label.prepend(mark);
 });
 </script>{% endif %}
 <script>
