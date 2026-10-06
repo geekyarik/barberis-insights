@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% from "_ui.html" import panel, page_head with context %}
+{% block content %}
+{{ page_head(t("auth.account"), t("auth.account_sub", name=user.name, role=t("role." ~ user.role))) }}
+{% call panel(t("auth.change_password"), none) %}
+<form method="post" action="/account/password" class="note-f" style="border:0;padding:0;max-width:380px">
+  <label>{{ t("auth.current_password") }}<input name="current" type="password" autocomplete="current-password" required></label>
+  <label>{{ t("auth.new_password") }}<input name="new" type="password" autocomplete="new-password" required minlength="6"></label>
+  <label>{{ t("auth.repeat_password") }}<input name="again" type="password" autocomplete="new-password" required minlength="6"></label>
+  <div><button>{{ t("auth.change_password") }}</button></div>
+</form>
+{% endcall %}
+{% endblock %}

@@ -11,8 +11,9 @@ pytestmark = pytest.mark.skipif(not (settings.data_dir / "insights.sqlite").exis
 
 @pytest.fixture(scope="module")
 def client():
+    from conftest import sign_in
     from barberis_insights.web.app import app
-    return TestClient(app, base_url="http://127.0.0.1:8765")
+    return sign_in(TestClient(app, base_url="http://127.0.0.1:8765"))
 
 
 @pytest.mark.parametrize("path", ["/", "/barber/olia", "/barber/kseniia?weeks=52", "/goals", "/risk", "/risk?segment=lapsed&segment=one_time&show_all=true",

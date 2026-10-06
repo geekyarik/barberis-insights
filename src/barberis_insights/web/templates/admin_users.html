@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "_ui.html" import panel, chip, page_head with context %}
+{% block content %}
+{{ page_head(t("nav.users"), t("auth.users_sub")) }}
+{% call panel(t("auth.users_list"), none, "nopad") %}
+<div class="tablebox" style="border:0"><table class="cards"><thead><tr><th scope="col" class="l">{{ t("auth.username") }}</th><th scope="col" class="tl">{{ t("auth.role") }}</th><th scope="col" class="tl">{{ t("auth.last_login") }}</th><th scope="col" class="tl">{{ t("auth.status") }}</th><th scope="col" class="tl">{{ t("auth.edit") }}</th></tr></thead>
+<tbody>{% for u in users %}<tr><td class="l"><b>{{ u.username }}</b>{% if u.display_name %} <span class="muted">{{ u.display_name }}</span>{% endif %}</td>
+  <td class="tl" data-label="{{ t('auth.role') }}">{{ t("role." ~ u.role) }}</td>
+  <td class="tl" data-label="{{ t('auth.last_login') }}">{{ u.last_login.strftime('%Y-%m-%d %H:%M') if u.last_login else '—' }}</td>
+  <td class="tl" data-label="{{ t('auth.status') }}">{{ chip(t('auth.active') if u.active else t('auth.inactive'), 'ok' if u.active else 'behind') }}</td>
+  <td class="tl" data-label="{{ t('auth.edit') }}"><form method="post" action="/admin/users/{{ u.id }}" class="inline">
+    <select name="role" aria-label="{{ t('auth.role') }}">{% for r in roles %}<option value="{{ r }}" {{ 'selected' if r == u.role }}>{{ t("role." ~ r) }}</option>{% endfor %}</select>
+    <select name="active" aria-label="{{ t('auth.status') }}"><option value="on" {{ 'selected' if u.active }}>{{ t("auth.active") }}</option><option value="off" {{ 'selected' if not u.active }}>{{ t("auth.inactive") }}</option></select>
+    <input name="password" type="password" autocomplete="new-password" placeholder="{{ t('auth.new_password') }}" aria-label="{{ t('auth.reset_password') }}">
+    <button class="ghost">{{ t("common.save") }}</button></form></td></tr>{% endfor %}</tbody></table></div>
+{% endcall %}
+{% call panel(t("auth.add_user"), none) %}
+<form method="post" action="/admin/users" class="note-f" style="border:0;padding:0;max-width:420px">
+  <label>{{ t("auth.username") }}<input name="username" required maxlength="50" autocomplete="off"></label>
+  <label>{{ t("auth.display_name") }}<input name="display_name" maxlength="80" placeholder="{{ t('auth.display_name_ph') }}"></label>
+  <label>{{ t("auth.role") }}<select name="role">{% for r in roles %}<option value="{{ r }}" {{ 'selected' if r == 'administrator' }}>{{ t("role." ~ r) }}</option>{% endfor %}</select></label>
+  <label>{{ t("auth.password") }}<input name="password" type="password" required minlength="6" autocomplete="new-password"></label>
+  <p class="muted sm">{{ t("auth.roles_help") }}</p>
+  <div><button>{{ t("auth.add_user") }}</button></div>
+</form>
+{% endcall %}
+{% endblock %}

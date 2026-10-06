@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import collections as C
 import datetime as dt
+from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import quote, urlparse
 
@@ -35,10 +36,22 @@ from ..metrics.weekly import weekly_rows
 from ..outreach import service as outreach
 from ..outreach.offers import active_offers
 from ..playbook import service as playbook
-from . import charts, data as vm
+from . import auth, charts, data as vm
+from ..db.models import User
 
 HERE = Path(__file__).parent
-app = FastAPI(title="BARBERIS insights", docs_url="/api/docs", openapi_url="/api/openapi.json")
+@asynccontextmanager
+async def lifespan(_app):
+    s = session_factory()()
+    try:
+        if auth.ensure_admin(s):
+            s.commit()
+    finally:
+        s.close()
+    yield
+
+
+app = FastAPI(title="BARBERIS insights", docs_url="/api/docs", openapi_url="/api/openapi.json", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 templates = Jinja2Templates(directory=HERE / "templates")
 templates.env.globals.update(fmt=vm.fmt, kfmt=vm.kfmt, signed=vm.signed, delta_class=vm.delta_class, REGISTRY=REGISTRY, spark=charts.spark, line_chart=charts.line_chart,
@@ -63,6 +76,32 @@ async def same_origin_writes(request: Request, call_next):
         origin = request.headers.get("origin") or request.headers.get("referer")
         if origin and urlparse(origin).netloc != request.url.netloc:
             return JSONResponse({"detail": "cross-site request blocked"}, status_code=403)
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def auth_gate(request: Request, call_next):
+    """Everything needs a login except the login page and static files; an administrator may open only the Clients section."""
+    path = request.url.path
+    request.state.user = None
+    if not path.startswith(auth.PUBLIC):
+        s = session_factory()()
+        try:
+            user = auth.user_for_token(s, request.cookies.get(auth.COOKIE))
+            if user is not None:
+                request.state.user = {"id": user.id, "username": user.username, "name": user.display_name or user.username, "role": user.role,
+                                      "must_change_password": user.must_change_password}
+        finally:
+            s.close()
+        u = request.state.user
+        if u is None:
+            if path.startswith("/api/"):
+                return JSONResponse({"detail": "login required"}, status_code=401)
+            return RedirectResponse(f"/login?next={quote(path + ('?' + request.url.query if request.url.query else ''))}", status_code=303)
+        if not auth.allowed(u["role"], path):
+            if path.startswith("/api/") or request.method != "GET":
+                return JSONResponse({"detail": "not allowed for your role"}, status_code=403)
+            return RedirectResponse(auth.HOME[u["role"]], status_code=303)
     return await call_next(request)
 
 
@@ -117,7 +156,7 @@ def helpers(lang: str) -> dict:
 
 def page(request: Request, s: Session, name: str, nav: str, title: str = "", **ctx):
     h = helpers(lang_of(request))
-    return templates.TemplateResponse(request, name, {"nav": nav, "all_barbers": vm.barbers(s), "fresh": freshness(s), "flash": request.query_params.get("msg"),
+    return templates.TemplateResponse(request, name, {"nav": nav, "user": getattr(request.state, "user", None), "all_barbers": vm.barbers(s), "fresh": freshness(s), "flash": request.query_params.get("msg"),
                                                       "flash_kind": request.query_params.get("kind"), "title": h["t"](title), **h, **ctx})
 
 
@@ -126,6 +165,102 @@ def back(request: Request, url: str, key: str | None = None, kind: str = "", **p
     sep = "&" if "?" in url else "?"
     msg = tr(f"flash.{key}", lang_of(request), **params) if key else None
     return RedirectResponse(url + (f"{sep}msg={quote(msg)}&kind={kind}" if msg else ""), status_code=303)
+
+
+# ---------------------------------------------------------------- login, account, users
+def _safe_next(url: str, role: str = "superadmin") -> str:
+    ok = url.startswith("/") and not url.startswith("//") and not url.startswith("/login")
+    return url if ok and auth.allowed(role, url.split("?")[0]) else auth.HOME[role]
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request, next: str = "/", s: Session = Depends(db)):
+    return page(request, s, "login.html", "login", title="auth.login_title", next=next, export=True, error=request.query_params.get("error"))
+
+
+@app.post("/login")
+def login(request: Request, username: str = Form(...), password: str = Form(...), next: str = Form("/"), s: Session = Depends(db)):
+    user = auth.authenticate(s, username, password)
+    if user is None:
+        return RedirectResponse(f"/login?error=1&next={quote(next)}", status_code=303)
+    token = auth.start_session(s, user)
+    r = RedirectResponse(_safe_next(next, user.role), status_code=303)
+    r.set_cookie(auth.COOKIE, token, max_age=auth.SESSION_DAYS * 86400, httponly=True, samesite="lax", secure=request.url.scheme == "https")
+    return r
+
+
+@app.post("/logout")
+def logout(request: Request, s: Session = Depends(db)):
+    auth.end_session(s, request.cookies.get(auth.COOKIE))
+    r = RedirectResponse("/login", status_code=303)
+    r.delete_cookie(auth.COOKIE)
+    return r
+
+
+@app.get("/account", response_class=HTMLResponse)
+def account_page(request: Request, s: Session = Depends(db)):
+    return page(request, s, "account.html", "account", title="auth.account")
+
+
+@app.post("/account/password")
+def account_password(request: Request, current: str = Form(...), new: str = Form(...), again: str = Form(...), s: Session = Depends(db)):
+    user = s.get(User, request.state.user["id"])
+    if not auth.verify_password(user.password_hash, current):
+        return back(request, "/account", "pw_wrong", "warn")
+    if new != again:
+        return back(request, "/account", "pw_mismatch", "warn")
+    if (why := auth.validate_password(new)):
+        return back(request, "/account", f"pw_{why}", "warn")
+    auth.set_password(s, user, new)
+    token = auth.start_session(s, user)                      # the change signed everyone out: keep this one in
+    r = back(request, "/account", "pw_changed")
+    r.set_cookie(auth.COOKIE, token, max_age=auth.SESSION_DAYS * 86400, httponly=True, samesite="lax", secure=request.url.scheme == "https")
+    return r
+
+
+def _superadmin(request: Request) -> None:
+    if request.state.user["role"] != "superadmin":
+        raise HTTPException(403)
+
+
+@app.get("/admin/users", response_class=HTMLResponse)
+def users_page(request: Request, s: Session = Depends(db)):
+    _superadmin(request)
+    return page(request, s, "admin_users.html", "users", title="nav.users", users=list(s.scalars(select(User).order_by(User.id))), roles=auth.ROLES)
+
+
+@app.post("/admin/users")
+def users_add(request: Request, username: str = Form(...), display_name: str = Form(""), role: str = Form("administrator"), password: str = Form(...), s: Session = Depends(db)):
+    _superadmin(request)
+    name = username.strip().lower()
+    if not name or role not in auth.ROLES or s.scalar(select(User.id).where(User.username == name)):
+        return back(request, "/admin/users", "user_bad", "warn")
+    if (why := auth.validate_password(password)):
+        return back(request, "/admin/users", f"pw_{why}", "warn")
+    s.add(User(username=name, display_name=display_name.strip()[:80], role=role, password_hash=auth.hash_password(password), active=True))
+    return back(request, "/admin/users", "user_added")
+
+
+@app.post("/admin/users/{uid}")
+def users_update(request: Request, uid: int, role: str = Form(""), active: str = Form(""), password: str = Form(""), s: Session = Depends(db)):
+    _superadmin(request)
+    u = s.get(User, uid)
+    if u is None:
+        raise HTTPException(404)
+    supers = s.scalars(select(User).where(User.role == "superadmin", User.active.is_(True))).all()
+    new_role = role if role in auth.ROLES else u.role
+    new_active = (active == "on") if active in ("on", "off") else u.active
+    if u.role == "superadmin" and u.active and len(supers) == 1 and (new_role != "superadmin" or not new_active):
+        return back(request, "/admin/users", "user_last_super", "warn")
+    u.role, u.active = new_role, new_active
+    if password:
+        if (why := auth.validate_password(password)):
+            return back(request, "/admin/users", f"pw_{why}", "warn")
+        auth.set_password(s, u, password)
+        u.must_change_password = False
+    if not u.active:
+        s.execute(auth.delete(auth.UserSession).where(auth.UserSession.user_id == u.id))
+    return back(request, "/admin/users", "user_saved")
 
 
 @app.get("/lang/{code}")

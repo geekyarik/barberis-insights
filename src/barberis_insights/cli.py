@@ -30,6 +30,11 @@ def init() -> None:
     from .db.session import engine, ensure_fts
     command.upgrade(Config(str(ROOT / "alembic.ini")), "head")
     ensure_fts(engine())
+    from .db.session import session_scope
+    from .web import auth
+    with session_scope() as s:
+        if auth.ensure_admin(s):
+            typer.echo("created the super-admin user admin / admin: change its password after the first login")
     typer.echo(f"database ready: {settings.db_url}")
 
 

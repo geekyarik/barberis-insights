@@ -18,8 +18,10 @@ def web():
         pytest.skip("local data not imported")
     from fastapi.testclient import TestClient
 
+    from conftest import sign_in
+
     from barberis_insights.web.app import app
-    return TestClient(app, base_url="http://127.0.0.1:8765")
+    return sign_in(TestClient(app, base_url="http://127.0.0.1:8765"))
 
 
 def test_same_keys_and_placeholders():
@@ -70,5 +72,6 @@ def test_language_switch(web):
     r = web.get("/lang/en?next=/goals", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/goals" and "lang=en" in r.headers["set-cookie"]
     assert web.get("/lang/en?next=//evil.example", follow_redirects=False).headers["location"] == "/"
-    web.cookies.clear()
+    from barberis_insights.web.app import LANG_COOKIE
+    web.cookies.delete(LANG_COOKIE)                              # keep the login, drop the language choice
     assert "Цілі" in web.get("/goals").text                      # default: Ukrainian

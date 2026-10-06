@@ -40,3 +40,16 @@ def client(s, cid, phone="+380000000000", **kw):
     c = Client(altegio_id=cid, name=f"Client {cid}", phone=phone, **kw)
     s.add(c)
     return c
+
+
+def sign_in(test_client, username="admin"):
+    """Give a TestClient a login for a user of the real local database (the auth gate checks that database, whatever the page uses)."""
+    from barberis_insights.db.models import User
+    from barberis_insights.db.session import session_scope
+    from barberis_insights.web import auth
+    with session_scope() as sess:
+        auth.ensure_admin(sess)
+        user = sess.scalar(__import__("sqlalchemy").select(User).where(User.username == username))
+        token = auth.start_session(sess, user)
+    test_client.cookies.set(auth.COOKIE, token)
+    return test_client

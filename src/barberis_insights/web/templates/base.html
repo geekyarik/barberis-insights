@@ -118,6 +118,8 @@ dialog.note{border:1px solid var(--rule);border-radius:10px;background:var(--pan
 .note-lift{padding:12px 16px;border-top:1px solid var(--rule);background:var(--soft);border-radius:0 0 10px 10px}.note-lift[hidden]{display:none}.note-lift .linkbtn{color:var(--bad);font-size:13px}
 @media (max-width:640px){.note-actions button{flex:1}}
 table td.tl,table th.tl{text-align:left}
+.userbox{display:flex;flex-direction:column;gap:2px;padding:4px 10px 8px;font-size:13px}.userbox a{padding:2px 0;min-height:24px;color:var(--accent)}
+.loginbox{max-width:360px;margin:12vh auto 0;display:grid;gap:14px}.loginbox .brand{padding:0}
 .backlink{display:inline-block;color:var(--ink-2);text-decoration:none;font-size:13px;margin-bottom:-8px}.backlink:hover{color:var(--accent);text-decoration:underline}
 .stateline{margin:0 0 10px}.stateline.ok{color:var(--good)}details.markbox{margin-top:12px;border-top:1px solid var(--rule);padding-top:10px}details.markbox>summary{cursor:pointer;color:var(--accent);font-weight:600;min-height:32px;display:flex;align-items:center}details.markbox .note-f{padding:10px 0 0;border:0}
 .caseblock{border-top:1px solid var(--rule);padding-top:10px;margin-top:10px}.caseblock:first-of-type{border-top:0;margin-top:0;padding-top:0}ul.events{margin:8px 0;padding-left:18px;font-size:13px;color:var(--ink-2)}
@@ -270,26 +272,34 @@ fieldset{border:1px solid var(--rule);border-radius:var(--r);padding:8px 12px}le
   <div class="brand">BARBERIS<small>{{ t("app.tagline") }}</small></div>
   <input type="checkbox" id="navtoggle" class="navtoggle" aria-label="{{ t('nav.menu') }}"><label for="navtoggle" class="burger">☰ {{ t("nav.menu") }}</label>
   <div class="navlinks">
-    <a href="/"{% if nav=='overview' %} aria-current="page"{% endif %}>{{ icon('home') }}{{ t("nav.overview") }}</a>
+    {% set sa = (not user) or user.role == 'superadmin' %}
+    {% if sa %}<a href="/"{% if nav=='overview' %} aria-current="page"{% endif %}>{{ icon('home') }}{{ t("nav.overview") }}</a>
     <div class="group">{{ t("nav.barbers") }}</div>
     {% for b in all_barbers %}<a href="/barber/{{ b.key }}"{% if nav==b.key %} aria-current="page"{% endif %}>{{ icon('user') }}{{ b.name }}</a>{% endfor %}
     <div class="group">{{ t("nav.group.analyze") }}</div>
     <a href="/team"{% if nav=='team' %} aria-current="page"{% endif %}>{{ icon('team') }}{{ t("nav.team") }}</a>
+    {% endif %}
     <div class="group">{{ t("nav.group.clients") }}</div>
     <a href="/risk"{% if nav=='risk' %} aria-current="page"{% endif %}>{{ icon('alert') }}{{ t("nav.risk") }}</a>
     <a href="/outreach"{% if nav=='outreach' %} aria-current="page"{% endif %}>{{ icon('phone') }}{{ t("nav.outreach") }}</a>
-    <div class="group">{{ t("nav.group.plan") }}</div>
+    {% if sa %}<div class="group">{{ t("nav.group.plan") }}</div>
     <a href="/goals"{% if nav=='goals' %} aria-current="page"{% endif %}>{{ icon('target') }}{{ t("nav.goals") }}</a>
     <a href="/context"{% if nav=='context' %} aria-current="page"{% endif %}>{{ icon('layers') }}{{ t("nav.context") }}</a>
     <a href="/hypotheses"{% if nav=='hypotheses' %} aria-current="page"{% endif %}>{{ icon('flask') }}{{ t("nav.hypotheses") }}</a>
     <a href="/playbook"{% if nav=='playbook' %} aria-current="page"{% endif %}>{{ icon('book') }}{{ t("nav.playbook") }}</a>
     <div class="group">{{ t("nav.group.system") }}</div>
     <a href="/data"{% if nav=='data' %} aria-current="page"{% endif %}>{{ icon('db') }}{{ t("nav.data") }}</a>
+    <a href="/admin/users"{% if nav=='users' %} aria-current="page"{% endif %}>{{ icon('user') }}{{ t("nav.users") }}</a>{% endif %}
+    {% if user %}<div class="group">{{ t("auth.account") }}</div>
+    <div class="userbox"><b>{{ user.name }}</b><span class="muted">{{ t("role." ~ user.role) }}</span>
+      <a href="/account"{% if nav=='account' %} aria-current="page"{% endif %}>{{ t("auth.change_password") }}</a>
+      <form method="post" action="/logout"><button class="linkbtn">{{ t("auth.logout") }}</button></form></div>{% endif %}
     <div class="group">{{ t("nav.language") }}</div>
     <div class="langs">{% for code, name in languages.items() %}<a href="/lang/{{ code }}?next={{ request.url.path | urlencode }}"{% if lang==code %} aria-current="true"{% endif %} hreflang="{{ code }}" lang="{{ code }}">{{ name }}</a>{% endfor %}</div>
   </div>
 </nav>{% endif %}
 <main id="main" tabindex="-1">
+{% if user and user.must_change_password %}<div class="flash warn" role="alert">{{ t("auth.default_password") }} <a href="/account">{{ t("auth.change_password") }}</a></div>{% endif %}
 {% if flash %}<div class="flash {{ flash_kind or '' }}" role="status">{{ flash }}</div>{% endif %}
 {% block content %}{% endblock %}
 </main>

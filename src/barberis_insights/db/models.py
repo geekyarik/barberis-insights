@@ -43,6 +43,29 @@ class Client(Base):
     updated_from_altegio_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class User(Base):
+    """Someone who may log in. Roles: superadmin (everything, manages users) and administrator (front desk: the Clients section)."""
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(50), unique=True)
+    display_name: Mapped[str] = mapped_column(String(80), default="")
+    password_hash: Mapped[str] = mapped_column(String(200))
+    role: Mapped[str] = mapped_column(String(20), default="administrator")
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
+    created: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now)
+    last_login: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    created: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=now)
+    expires: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True))
+
+
 class ClientFlag(Base):
     """Why a client is not to be called, as told by someone who knows them (abroad, mobilised, ...). Optionally ends on a date."""
     __tablename__ = "client_flags"

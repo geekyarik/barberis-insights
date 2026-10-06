@@ -14,7 +14,8 @@ def client(s):
     shop(s)
     s.commit()
     app.dependency_overrides[db] = lambda: s
-    yield TestClient(app, base_url="http://127.0.0.1:8765")
+    from conftest import sign_in
+    yield sign_in(TestClient(app, base_url="http://127.0.0.1:8765"))
     app.dependency_overrides.clear()
 
 
