@@ -59,12 +59,12 @@ class Settings(BaseSettings):
     telegram_owner_chat_id: int | None = None  # a private chat or a group with only the owner in it: the weekly message carries client names
     owner_lang: str = "uk"
     timezone: str = "Europe/Kyiv"  # the shop's local time: jobs run on its clock
-    # the weekly job's fresh-data step: a headless Claude with the Altegio connector (the only way in until the REST token works)
-    weekly_fetch: bool = True
-    fetch_claude_bin: str | None = None  # default: `claude` on the PATH, then ~/.local/bin/claude
-    fetch_claude_config_dir: Path | None = None  # the Claude profile that has the Altegio connector signed in
-    fetch_timeout: int = 1200
-    fetch_max_turns: int = 60
+    # Altegio REST API (credentials in .env; docs/adr/0013): the jobs fetch fresh data from it
+    weekly_fetch: bool = True  # switch the jobs' fresh-data step off (tests, or a manual import)
+    altegio_base_url: str = "https://api.alteg.io/api/v1"
+    altegio_partner_token: str | None = None
+    altegio_login: str | None = None
+    altegio_password: str | None = None
     data_stale_days: int = 3  # an Alert when the newest completed visit is older than this
     host: str = "127.0.0.1"
     port: int = 8765

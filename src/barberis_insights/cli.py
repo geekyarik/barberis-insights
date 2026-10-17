@@ -242,6 +242,18 @@ def jobs_plist() -> None:
 </dict></plist>""")
 
 
+@app.command("altegio-check")
+def altegio_check() -> None:
+    """Prove the Altegio API credentials in .env work (logs in, counts the locations and staff the user can see). Prints no secret."""
+    from .ingest.altegio_api import AltegioApi, AltegioError
+    try:
+        out = AltegioApi().check()
+    except AltegioError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1)
+    typer.echo(json.dumps(out | {"location": settings.location_id}))
+
+
 @app.command("serve-plist")
 def serve_plist() -> None:
     """Print the launchd agent that keeps the dashboard running (started at login, restarted if it stops). Save it to ~/Library/LaunchAgents/ and load it yourself."""

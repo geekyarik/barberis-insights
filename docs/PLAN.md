@@ -117,7 +117,7 @@ The second source of truth, built into the analyses. Use `wayfinder`:
 **Done when** the owner gets the daily digest in Telegram every morning without doing anything, sees each run in *Data & sync*, and gets an alert when data is older than the agreed limit.
 
 ### Phase 6 — Automation and new data *(blocked or optional)*
-- **Altegio REST adapter:** lets the scheduled jobs fetch new data by themselves. Blocked until Altegio issues a working partner token (ADR-0002).
+- **Altegio REST adapter:** *(built 2026-10-17, ADR-0013)* the scheduled jobs fetch appointments, shifts and client contacts by themselves. Still open: the full client list from the API (phones, comments, consent).
 - **Factor feeds:** whichever ones Phase 4 recommended.
 - **Finance module:** product sales, costs, payroll, if Altegio access allows.
 

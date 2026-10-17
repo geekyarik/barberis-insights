@@ -94,7 +94,7 @@ All visible text lives in `src/barberis_insights/i18n/uk.json` and `en.json`, ke
   - `ingest_files`
   - `sql_readonly` for ad-hoc analysis
 - **Skill:** `.claude/skills/barberis-goals-refresh/` in this repo runs the monthly refresh against this service. It loads when Claude Code runs in this folder; from other projects, link it into your personal skills folder.
-- **Altegio data:** it arrives through the claude.ai **Altegio Pro** connector, because Altegio rejects the REST partner token (see note "Altegio partner token rejected"). Once a working token exists, add a REST source next to `ingest/connector_files.py` and schedule it with launchd.
+- **Altegio data:** the scheduled jobs fetch appointments, shifts and client contacts straight from Altegio's REST API (`ingest/altegio_api.py`, ADR-0013). Put the partner token and the user's login and password in `.env` (`INSIGHTS_ALTEGIO_PARTNER_TOKEN`, `INSIGHTS_ALTEGIO_LOGIN`, `INSIGHTS_ALTEGIO_PASSWORD`) and check them with `uv run insights altegio-check`. Files saved from the claude.ai connector can still be imported by hand with `insights ingest`.
 
 ## Architecture
 

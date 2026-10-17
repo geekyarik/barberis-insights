@@ -151,7 +151,7 @@ Dependencies point **one way**, from left to right. Mirror and Context depend on
 ### 6.1 CRM Mirror
 - **Adapters** implement one contract: *give me canonical rows for a window* (`ingest/base.py`: `upsert_appointments`, `replace_schedule`, `sync_run`).
   - **Today:** files saved from the Altegio Pro connector (`connector_files.py`) and the Altegio client export, matched to client IDs by visit time (`client_export.py`, `client_match.py`).
-  - **Later:** an Altegio REST adapter, once the partner token works (ADR-0002).
+  - **REST adapter (ADR-0013, built 2026-10-17):** `ingest/altegio_api.py` logs in with the user's login and password, sends `Authorization: Bearer <partner token>, User <user token>`, pages the appointments, and reads the shifts; the jobs' fresh-data step (`jobs/fetch.py`) uses it.
 - **Rules:**
   - Idempotent upserts keyed by Altegio IDs; the newest copy wins.
   - Each import is a `sync_run` with counts and a log.
@@ -406,7 +406,7 @@ We don't use an external BI tool (ADR-0009); quick "slice it differently" questi
 | Owner context | done 2026-10-04: `factors` with effects, treatments, recurrence, lenses and belief status; notes migrated | feeds that create factors (research under way); lens support in the other analyses |
 | Analysis lens | runs record their lens and the factors it resolved to; only `barber_scorecard` honours one | the other analyses; measurements and hypotheses record their lens |
 | Module boundaries | services take a database session and read any table; `web/app.py` queries tables | each module exposes a service; cross-module reads go through it |
-| Altegio access | connector files plus a manual export; read-only | plus a REST adapter (blocked on the partner token); Outreach may write tagged lines to client descriptions (ADR-0010) |
+| Altegio access | the REST API for appointments, shifts and client contacts (ADR-0013); connector files and the client export by hand; read-only | the full client list from the API (phones, comments, consent); Outreach may write tagged lines to client descriptions (ADR-0010) |
 | Ad-hoc exploration | asking Claude in chat; fixed dashboard pages | an Explorer page with saved views on the metric registry (ADR-0009) |
 | Scheduling and delivery | built 2026-10-04: Scheduler (`jobs/`), Notifications with a Telegram channel and recorded deliveries; waiting for the owner to press Start in the bot and load the launchd agent | a Run-now button and job list on *Data & sync*; the visits-drop alert; email |
 
