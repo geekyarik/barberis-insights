@@ -141,7 +141,7 @@ def fetcher(s, monkeypatch):
     monkeypatch.setattr(settings, "weekly_fetch", True)
     calls = {"asked": [], "arrive": None, "ok": True}
 
-    def fake(f, t, staff_ids):
+    def fake(f, t, staff_ids, clients=False):
         calls["asked"].append((f, t, staff_ids))
         if calls["arrive"]:
             calls["arrive"]()
@@ -202,7 +202,7 @@ def _rec(i, attendance=1, day="2026-03-10", staff=1, client=7, cost=500, phone="
 def test_fetch_fresh_imports_appointments_clients_and_shifts_in_this_process(s, monkeypatch):
     from barberis_insights.db.models import Appointment, Client, ScheduleSlot
     from barberis_insights.jobs import fetch
-    monkeypatch.setattr(fetch, "_fetch", lambda f, t, staff: {"ok": True, "records": [_rec(601), _rec(602, attendance=-1)],
+    monkeypatch.setattr(fetch, "_fetch", lambda f, t, staff, clients=False: {"ok": True, "records": [_rec(601), _rec(602, attendance=-1)],
                                                               "schedules": {1: [{"date": "2026-03-16", "is_working": 1, "slots": [{"from": "10:00", "to": "20:00"}]}]}})
     res = fetch.fetch_fresh(s, D("2026-03-15"))
     assert res["ok"] is True and res["imported"] is True and res["appointments_added"] == 2
@@ -213,6 +213,17 @@ def test_fetch_fresh_imports_appointments_clients_and_shifts_in_this_process(s, 
 
 def test_fetch_fresh_reports_a_failure_without_a_credential(s, monkeypatch):
     from barberis_insights.jobs import fetch
-    monkeypatch.setattr(fetch, "_fetch", lambda f, t, staff: {"ok": False, "error": "Altegio login failed (HTTP 401): check the partner token, login and password"})
+    monkeypatch.setattr(fetch, "_fetch", lambda f, t, staff, clients=False: {"ok": False, "error": "Altegio login failed (HTTP 401): check the partner token, login and password"})
     res = fetch.fetch_fresh(s, D("2026-03-15"))
     assert res["ok"] is False and "partner token" in res["error"] and res["imported"] is False
+
+
+def test_the_weekly_fetch_also_refreshes_the_client_list(s, monkeypatch):
+    from barberis_insights.db.models import Client
+    from barberis_insights.jobs import fetch
+    from conftest import client as make_client
+    make_client(s, 7, phone=None)
+    seen = {}
+    monkeypatch.setattr(fetch, "_fetch", lambda f, t, staff, clients=False: seen.update(clients=clients) or {"ok": True, "records": [_rec(701)], "schedules": {}, "client_list": [{"id": 7, "phone": "380509998877", "comment": "", "sms_not": 0}]})
+    res = fetch.fetch_fresh(s, D("2026-03-15"), clients=True)
+    assert seen["clients"] is True and res["ok"] and s.get(Client, 7).phone == "+380509998877"

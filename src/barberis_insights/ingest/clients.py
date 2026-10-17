@@ -43,3 +43,38 @@ def upsert_clients(s: Session, items: list[dict]) -> int:
         c.updated_from_altegio_at = now()
         n += 1
     return n
+
+
+def sync_client_list(s: Session, items: list[dict]) -> dict:
+    """Refresh the clients we already know from Altegio's full client list: phone, email, the staff comment, the do-not-send-SMS flag, and the
+    do-not-contact mark when the comment says so (words in `client_export.DNC_WORDS`). Clients with no visit in our data are not added.
+    A do-not-contact mark is set only when the comment changed, so lifting it by hand lasts until someone edits the comment again."""
+    from sqlalchemy import select
+
+    from .altegio_api import norm_phone
+    from .client_export import DNC_WORDS
+    known = {c.altegio_id: c for c in s.scalars(select(Client))}
+    out = {"seen": len(items), "known": 0, "skipped_unknown": 0, "phones_added": 0, "phones_changed": 0, "comments_changed": 0, "do_not_contact_set": 0}
+    for it in items:
+        c = known.get(it.get("id"))
+        if c is None:
+            out["skipped_unknown"] += 1
+            continue
+        out["known"] += 1
+        phone = norm_phone(it.get("phone"))
+        if phone and phone != c.phone:
+            out["phones_added" if not c.phone else "phones_changed"] += 1
+            c.phone = phone
+        if (it.get("email") or "").strip():
+            c.email = it["email"].strip()
+        comment = (it.get("comment") or "").strip() or None
+        if comment != c.altegio_comment:
+            out["comments_changed"] += 1
+            if comment and any(w in comment.lower() for w in DNC_WORDS) and not c.do_not_contact:
+                c.do_not_contact = True
+                out["do_not_contact_set"] += 1
+            c.altegio_comment = comment
+        c.mass_notification_allowed = not bool(it.get("sms_not"))
+        c.updated_from_altegio_at = now()
+    return out
+

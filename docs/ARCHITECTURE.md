@@ -406,7 +406,7 @@ We don't use an external BI tool (ADR-0009); quick "slice it differently" questi
 | Owner context | done 2026-10-04: `factors` with effects, treatments, recurrence, lenses and belief status; notes migrated | feeds that create factors (research under way); lens support in the other analyses |
 | Analysis lens | runs record their lens and the factors it resolved to; only `barber_scorecard` honours one | the other analyses; measurements and hypotheses record their lens |
 | Module boundaries | services take a database session and read any table; `web/app.py` queries tables | each module exposes a service; cross-module reads go through it |
-| Altegio access | the REST API for appointments, shifts and client contacts (ADR-0013); connector files and the client export by hand; read-only | the full client list from the API (phones, comments, consent); Outreach may write tagged lines to client descriptions (ADR-0010) |
+| Altegio access | the REST API for appointments, shifts and client contacts (ADR-0013); connector files and the client export by hand; read-only | consent to data processing (not in the API's client card); Outreach may write tagged lines to client descriptions (ADR-0010) |
 | Ad-hoc exploration | asking Claude in chat; fixed dashboard pages | an Explorer page with saved views on the metric registry (ADR-0009) |
 | Scheduling and delivery | built 2026-10-04: Scheduler (`jobs/`), Notifications with a Telegram channel and recorded deliveries; waiting for the owner to press Start in the bot and load the launchd agent | a Run-now button and job list on *Data & sync*; the visits-drop alert; email |
 

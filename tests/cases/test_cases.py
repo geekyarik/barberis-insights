@@ -238,3 +238,18 @@ def test_calibration_waits_for_ninety_days_then_compares_what_happened_with_what
     out = calibration.calibration(s, later)
     assert out["ripe"] == 1 and sum(b["n"] for b in out["bands"]) == 1
     assert all(b["uplift"] is None for b in out["bands"])                       # one call is far too few to judge
+
+
+def test_the_daily_follow_up_withdraws_a_case_whose_client_may_no_longer_be_called(s):
+    from barberis_insights.db.models import Client
+    for cid in (10, 11, 12, 13):
+        regular(s, cid, "2026-07-20"); client(s, cid)
+    build(s); cases.detect(s, TODAY)
+    s.get(Client, 10).do_not_contact = True                       # a staff comment in Altegio now says so
+    s.get(Client, 11).data_processing_allowed = False
+    contact.add_flag(s, 12, "abroad")                             # someone flagged the client on the client card
+    out = cases.refresh(s, TODAY)
+    assert out["withdrawn"] == 3
+    got = {c.client_id: (c.status, c.outcome, c.reason, c.contacted, c.processed_by) for c in s.query(RiskCase)}
+    assert got[10] == ("closed", "rejected", "do_not_contact", False, None) and got[11][2] == "no_consent" and got[12][2] == "abroad"
+    assert got[13][0] == "open"                                   # nobody else is touched

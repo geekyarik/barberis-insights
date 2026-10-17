@@ -55,7 +55,7 @@ def weekly_review(ctx: JobContext) -> dict:
     f, t = monday - dt.timedelta(days=7), monday - dt.timedelta(days=1)
     got = None
     if settings.weekly_fetch and not ctx.dry_run:                       # 1. fresh data from the CRM into the local database
-        got = fetch.fetch_fresh(ctx.s, t, ctx.now)
+        got = fetch.fetch_fresh(ctx.s, t, ctx.now, clients=True)
         if not got["ok"]:
             notify.send_alert(ctx.s, "job_failed", ctx.now.date().isoformat(), job="weekly_review: fetch", error=got.get("error", "")[:200])
     if not complete_through(ctx.s, t):                                  # never report on a week the database does not hold yet

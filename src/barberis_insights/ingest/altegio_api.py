@@ -15,7 +15,7 @@ from typing import Iterator
 import httpx
 
 from ..config import settings
-from .client_match import norm_phone
+from .client_match import norm_phone  # noqa: F401  (re-exported for the client sync)
 
 ATTENDANCE = {1: "arrived", -1: "no_show", 2: "confirmed", 0: "waiting"}     # what Altegio's `attendance` means in our statuses
 PAGE = 200
@@ -109,6 +109,10 @@ class AltegioApi:
     # ---------------------------------------------------------------- what we read
     def records(self, date_from: dt.date, date_to: dt.date) -> list[dict]:
         return list(self.pages(f"/records/{settings.location_id}", start_date=str(date_from), end_date=str(date_to)))
+
+    def clients(self) -> list[dict]:
+        """Every client card of the location (name, phone, email, comment, flags)."""
+        return list(self.pages(f"/clients/{settings.location_id}"))
 
     def schedule(self, staff_id: int, date_from: dt.date, date_to: dt.date) -> list[dict]:
         return self.get(f"/schedule/{settings.location_id}/{staff_id}/{date_from}/{date_to}").get("data") or []

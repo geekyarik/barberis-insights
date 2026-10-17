@@ -828,5 +828,7 @@
   "calib.few": "too few ({n} needed)",
   "calib.worth": "worth calling",
   "calib.not_worth": "does not pay",
-  "calib.how": "Effect = how many came after the call minus how many the history says would have come anyway. Gain = effect × the client's yearly value × {margin}% margin. Raise the floor in the settings if the lower bands do not pay, lower it if they do."
+  "calib.how": "Effect = how many came after the call minus how many the history says would have come anyway. Gain = effect × the client's yearly value × {margin}% margin. Raise the floor in the settings if the lower bands do not pay, lower it if they do.",
+  "case.reason.do_not_contact": "the client must not be contacted",
+  "case.reason.no_consent": "no consent to data processing"
 }

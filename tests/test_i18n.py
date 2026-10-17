@@ -42,8 +42,8 @@ def test_every_key_used_exists():
 
 def test_every_metric_and_code_has_a_label():
     from barberis_insights.clients.risk import CALLABLE
-    from barberis_insights.cases.service import ACTIVE, REJECT_REASONS, TRIGGER_OF
-    need = {f"metric.{m}" for m in REGISTRY} | {f"case.status.{s}" for s in ACTIVE + ("closed",)} | {f"case.reason.{r}" for r in REJECT_REASONS}
+    from barberis_insights.cases.service import ACTIVE, REJECT_REASONS, SYSTEM_REASONS, TRIGGER_OF
+    need = {f"metric.{m}" for m in REGISTRY} | {f"case.status.{s}" for s in ACTIVE + ("closed",)} | {f"case.reason.{r}" for r in REJECT_REASONS + SYSTEM_REASONS}
     need |= {f"case.trigger.{t}" for t in TRIGGER_OF.values()} | {f"case.outcome.{o}" for o in ("visited", "rejected", "no_answer", "expired")}
     need |= {f"segment.{s}" for s in CALLABLE + ("slipping", "switched", "active")}
     need |= {f"goal.state.{s}" for s in ("done", "dropped", "no_data", "reached", "waiting", "on_track", "behind")}

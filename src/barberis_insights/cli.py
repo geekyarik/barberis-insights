@@ -242,6 +242,24 @@ def jobs_plist() -> None:
 </dict></plist>""")
 
 
+@app.command("sync-clients")
+def sync_clients() -> None:
+    """Refresh phones, emails, staff comments and the do-not-contact marks of the clients we know, from Altegio's full client list."""
+    from .db.session import session_scope
+    from .ingest.altegio_api import AltegioApi, AltegioError
+    from .ingest.base import sync_run
+    from .ingest.clients import sync_client_list
+    try:
+        items = AltegioApi().clients()
+    except AltegioError as e:
+        typer.echo(str(e), err=True)
+        raise typer.Exit(1)
+    with session_scope() as s, sync_run(s, "altegio_clients") as run:
+        out = sync_client_list(s, items)
+        run.counts = out
+    typer.echo(json.dumps(out, indent=1))
+
+
 @app.command("altegio-check")
 def altegio_check() -> None:
     """Prove the Altegio API credentials in .env work (logs in, counts the locations and staff the user can see). Prints no secret."""

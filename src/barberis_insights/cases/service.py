@@ -30,6 +30,7 @@ TRIGGER_OF = {"overdue": "overdue", "lapsed": "lapsed", "one_time": "first_timer
 REJECT_REASONS = contact.REASONS + ("declined_offer", "wrong_number")   # the flag reasons, plus two that concern only this call
 FLAGS_THE_CLIENT = contact.REASONS                                     # these also take the client off future lists
 BOOKING_STATUSES = ("waiting", "confirmed")
+SYSTEM_REASONS = ("do_not_contact", "no_consent")       # why the daily follow-up closes a case by itself: the client may no longer be called
 
 
 def _event(case: RiskCase, kind: str, by: str = "job", note: str = "") -> None:
@@ -137,8 +138,18 @@ def _close(case: RiskCase, outcome: str, by: str, reason: str | None = None, com
 def refresh(s: Session, today: dt.date | None = None) -> dict:
     """Follow the active cases up against the appointments: a visit closes a case, a future booking marks it, silence expires it."""
     today = today or dt.date.today()
-    visited = booked = lost = expired = 0
-    for case in list(s.scalars(select(RiskCase).where(RiskCase.status.in_(ACTIVE)))):
+    visited = booked = lost = expired = withdrawn = 0
+    active = list(s.scalars(select(RiskCase).where(RiskCase.status.in_(ACTIVE))))
+    clients = {c.altegio_id: c for c in s.scalars(select(Client).where(Client.altegio_id.in_([c.client_id for c in active])))}
+    flags = contact.active_flags(s, [c.client_id for c in active], today)
+    for case in active:
+        cl, flag = clients.get(case.client_id), flags.get(case.client_id)
+        why = flag.reason if flag else "do_not_contact" if cl and cl.do_not_contact else "no_consent" if cl and cl.data_processing_allowed is False else None
+        if why:                                                       # someone said not to call this client after the case opened
+            _close(case, "rejected", "job", why)
+            _event(case, "rejected", "job", f"{why}: no longer to be called")
+            withdrawn += 1
+            continue
         appts = list(s.scalars(select(Appointment).where(Appointment.client_id == case.client_id, Appointment.deleted.is_(False),
                                                          Appointment.date > case.last_visit).order_by(Appointment.date)))
         visit = next((a for a in appts if a.status == "arrived"), None)
@@ -169,7 +180,7 @@ def refresh(s: Session, today: dt.date | None = None) -> dict:
             _event(case, "expired", "job", f"not processed by {case.expires_on}")
             expired += 1
     s.flush()
-    return {"visited": visited, "booking_exists": booked, "booking_lost": lost, "expired": expired}
+    return {"visited": visited, "booking_exists": booked, "booking_lost": lost, "expired": expired, "withdrawn": withdrawn}
 
 
 # ---------------------------------------------------------------- what an administrator does
