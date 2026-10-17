@@ -19,7 +19,7 @@ def upsert_appointments(s: Session, items: Iterable[dict]) -> dict:
     """Insert or replace appointments (newest copy wins). Accepts curated `appointments_list` items or cache rows."""
     added = updated = 0
     for a in items:
-        date = a["date"]  # "YYYY-MM-DD HH:MM:SS"
+        date = a.get("date") or a["datetime"]  # "YYYY-MM-DD HH:MM:SS", or (since October 2026) "YYYY-MM-DDTHH:MM:SS+03:00": either way the shop-local wall clock comes first
         row = s.get(Appointment, a["id"])
         if row is None:
             row = Appointment(id=a["id"]); s.add(row); added += 1

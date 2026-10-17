@@ -26,18 +26,18 @@ def detect(payload) -> str:
     items = payload.get("items") or []
     if "team_member_id" in payload and items and "is_working" in items[0]:
         return "schedule"
-    if items and "team_member_id" in items[0] and "date" in items[0]:
+    if items and "team_member_id" in items[0] and ("date" in items[0] or "datetime" in items[0]):
         return "appointments"
     if items and ("phone" in items[0] or "first_visit_date" in items[0] or "visits_count" in items[0] or "name" in items[0]):
         return "clients"
     return "unknown"
 
 
-def ingest_files(s: Session, paths: list[str | Path]) -> dict:
+def ingest_payloads(s: Session, payloads: list) -> dict:
+    """Import connector results that are already in memory (the daily fetch reads them straight from the headless Claude, so nothing is retyped)."""
     totals: dict[str, int] = {"appointments_added": 0, "appointments_updated": 0, "schedule_slots": 0, "clients": 0, "skipped_files": 0}
     with sync_run(s, "connector_files") as run:
-        for p in paths:
-            payload = json.loads(Path(p).read_text())
+        for payload in payloads:
             kind = detect(payload)
             if kind == "appointments":
                 items = payload if isinstance(payload, list) else payload["items"]
@@ -54,3 +54,7 @@ def ingest_files(s: Session, paths: list[str | Path]) -> dict:
                 totals["skipped_files"] += 1
         run.counts = totals
     return totals
+
+
+def ingest_files(s: Session, paths: list[str | Path]) -> dict:
+    return ingest_payloads(s, [json.loads(Path(p).read_text()) for p in paths])

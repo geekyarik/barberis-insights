@@ -141,7 +141,7 @@ def fetcher(s, monkeypatch):
     monkeypatch.setattr(settings, "weekly_fetch", True)
     calls = {"prompts": [], "arrive": None, "ok": True}
 
-    def run(prompt, out):
+    def run(prompt, out=None):
         calls["prompts"].append(prompt)
         if calls["arrive"]:
             calls["arrive"]()
@@ -192,7 +192,71 @@ def test_a_fetch_that_imported_nothing_is_a_failure_even_if_claude_says_it_is_do
     assert any("nothing was imported" in m[1] for m in owner.sent)         # the owner is told
 
 
-def test_the_fetch_prompt_uses_the_absolute_ingest_program(s):
+def test_the_fetch_prompt_only_allows_the_two_read_tools_and_no_files_or_shell(s):
     from barberis_insights.jobs import fetch
-    prompt = fetch.build_prompt(s, dt.date(2026, 3, 1), dt.date(2026, 3, 15), __import__("pathlib").Path("/tmp/x"))
-    assert fetch.INSIGHTS in prompt and "uv run" not in prompt and fetch.INSIGHTS in fetch.ALLOWED
+    prompt = fetch.build_prompt(s, dt.date(2026, 3, 1), dt.date(2026, 3, 15), None)
+    assert "appointments_list" in prompt and "team_member_id=1" in prompt and "Do not write files" in prompt
+    assert fetch.ALLOWED.count("mcp__") == 2 and "Bash" not in fetch.ALLOWED and "Write" not in fetch.ALLOWED
+
+
+# ---- reading what the headless Claude fetched
+def _stream(*events):
+    import json
+    return "\n".join(json.dumps(e) for e in events)
+
+
+def _call(tid, name="mcp__claude_ai_Altegio_Pro__appointments_list"):
+    return {"type": "assistant", "message": {"content": [{"type": "tool_use", "id": tid, "name": name, "input": {}}]}}
+
+
+def _result(tid, payload, error=False):
+    import json
+    return {"type": "user", "message": {"content": [{"type": "tool_result", "tool_use_id": tid, "is_error": error, "content": [{"type": "text", "text": payload if isinstance(payload, str) else json.dumps(payload)}]}]}}
+
+
+def _page(ids, more=False, key="datetime", stamp="2026-03-10T18:20:00+03:00"):
+    return {"items": [{"id": i, key: stamp, "status": "arrived", "team_member_id": 1, "client_id": 7, "total_cost": 500, "services": []} for i in ids],
+            "pagination": {"page": 1, "has_more": more, "next_page": 2 if more else None}}
+
+
+def test_the_stream_parser_collects_every_page_in_the_shape_the_connector_returns():
+    from barberis_insights.jobs.fetch import parse_stream
+    got = parse_stream(_stream(_call("a"), _result("a", _page([1, 2], more=True)), _call("b"), _result("b", _page([3])), {"type": "result", "result": "done"}))
+    assert len(got["payloads"]) == 2 and got["problems"] == [] and got["reply"] == "done"
+
+
+def test_an_unfinished_pagination_or_a_failed_call_is_a_problem():
+    from barberis_insights.jobs.fetch import parse_stream
+    cut = parse_stream(_stream(_call("a"), _result("a", _page([1], more=True))))
+    assert any("stopped before the last" in p for p in cut["problems"])
+    failed = parse_stream(_stream(_call("a"), _result("a", "boom", error=True)))
+    assert failed["payloads"] == [] and failed["problems"]
+    nothing = parse_stream(_stream({"type": "result", "result": "done"}))
+    assert any("no appointment result" in p for p in nothing["problems"])
+
+
+def test_results_of_other_tools_are_ignored():
+    from barberis_insights.jobs.fetch import parse_stream
+    got = parse_stream(_stream(_call("x", "ToolSearch"), _result("x", {"items": [{"id": 9}]}), _call("a"), _result("a", _page([1]))))
+    assert len(got["payloads"]) == 1
+
+
+def test_the_importer_reads_both_the_old_date_and_the_new_datetime_shape(s):
+    from barberis_insights.db.models import Appointment
+    from barberis_insights.ingest.connector_files import detect, ingest_payloads
+    new, old = _page([501]), _page([502], key="date", stamp="2026-03-11 09:30:00")
+    assert detect(new) == "appointments" and detect(old) == "appointments"
+    out = ingest_payloads(s, [new, old])
+    assert out["appointments_added"] == 2 and out["skipped_files"] == 0
+    a, b = s.get(Appointment, 501), s.get(Appointment, 502)
+    assert (a.date, a.start) == (D("2026-03-10"), "18:20") and (b.date, b.start) == (D("2026-03-11"), "09:30")
+
+
+def test_fetch_fresh_imports_what_the_runner_returns_and_fails_on_a_shape_it_does_not_know(s, monkeypatch):
+    from barberis_insights.jobs import fetch
+    monkeypatch.setattr(fetch, "_runner", lambda prompt, out=None: {"ok": True, "payloads": [_page([601, 602])], "reply": "done"})
+    res = fetch.fetch_fresh(s, D("2026-03-15"))
+    assert res["ok"] is True and res["imported"] is True and res["appointments_added"] == 2
+    monkeypatch.setattr(fetch, "_runner", lambda prompt, out=None: {"ok": True, "payloads": [{"items": [{"id": 1, "what": "?"}]}], "reply": "done"})
+    bad = fetch.fetch_fresh(s, D("2026-03-15"))
+    assert bad["ok"] is False and "shape" in bad["error"]

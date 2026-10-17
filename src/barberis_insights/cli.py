@@ -242,6 +242,24 @@ def jobs_plist() -> None:
 </dict></plist>""")
 
 
+@app.command("serve-plist")
+def serve_plist() -> None:
+    """Print the launchd agent that keeps the dashboard running (started at login, restarted if it stops). Save it to ~/Library/LaunchAgents/ and load it yourself."""
+    import shutil
+    uv = shutil.which("uv") or "uv"
+    typer.echo(f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+  <key>Label</key><string>com.barberis.insights.serve</string>
+  <key>ProgramArguments</key><array><string>{uv}</string><string>--directory</string><string>{ROOT}</string><string>run</string><string>insights</string><string>serve</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>StandardOutPath</key><string>{ROOT}/var/serve.log</string>
+  <key>StandardErrorPath</key><string>{ROOT}/var/serve.log</string>
+</dict></plist>""")
+
+
 @notify_app.command("discover")
 def notify_discover(save: bool = typer.Option(False, "--save", help="Write the chat id to .env as INSIGHTS_TELEGRAM_OWNER_CHAT_ID")) -> None:
     """After pressing Start in the bot, show the chats that wrote to it (and optionally save yours)."""
