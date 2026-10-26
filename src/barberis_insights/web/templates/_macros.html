@@ -1,7 +1,7 @@
 {# Import with context so the macros can use the page's language: {% from "_macros.html" import goal_card with context %} #}
 {% macro goal_card(g, catalog, scope_names, next_url) %}
 <article class="card" style="display:flex;flex-direction:column;gap:8px">
-  <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+  <div style="display:flex;justify-content:space-between;gap:6px 8px;align-items:center;flex-wrap:wrap">
     <span class="eyebrow">{{ mlabel(g.metric) if g.metric in REGISTRY else t("goal.custom") }}</span>
     <span class="pill {{ g.state }}">{{ t(g.label_key) }}</span>
   </div>

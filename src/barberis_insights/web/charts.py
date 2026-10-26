@@ -57,7 +57,8 @@ def spark(values: Sequence[Num], *, w: int = 96, h: int = 28, cls: str = "s1", l
 
 
 def line_chart(x_labels: Sequence[str], series: Sequence[dict], *, title: str, y_fmt: Callable = lambda v: f"{v:g}", height: int = 240,
-               markers: Sequence[dict] = (), goal: Num = None, goal_label: str = "", table_label: str = "Table", y_zero: bool = False) -> Markup:
+               markers: Sequence[dict] = (), goal: Num = None, goal_label: str = "", table_label: str = "Table", y_zero: bool = False,
+               axis_labels: Sequence[str] | None = None) -> Markup:
     """Weekly trends. series: {"name", "values", "style": "solid"|"dash", "cls": "s1".."s6"}. markers: {"i", "label"} (context on the axis)."""
     vals = [v for s in series for v in s["values"] if v is not None]
     if not vals:
@@ -69,7 +70,7 @@ def line_chart(x_labels: Sequence[str], series: Sequence[dict], *, title: str, y
     n = max(len(x_labels) - 1, 1)
     X = lambda i: 100 * i / n
     Y = lambda v: 100 - 100 * (v - ylo) / ((yhi - ylo) or 1)
-    out = [f'<figure class="chart" role="group" aria-label="{_esc(title)}"><figcaption class="sr-only">{_esc(title)}</figcaption>'
+    out = [f'<figure class="chart" aria-label="{_esc(title)}"><figcaption class="sr-only">{_esc(title)}</figcaption>'
            f'<div class="plot" style="height:{height}px">']
     out.append('<svg viewBox="0 0 100 100" preserveAspectRatio="none" class="plot-svg" aria-hidden="true">')
     for t in ticks:
@@ -96,7 +97,13 @@ def line_chart(x_labels: Sequence[str], series: Sequence[dict], *, title: str, y
         out.append(f'<span class="ylab" style="top:{Y(t):.2f}%">{_esc(y_fmt(t))}</span>')
     step = max(1, round(len(x_labels) / 6))
     last_i = len(x_labels) - 1
+    shown = 0
     for i, lab in enumerate(x_labels):
+        if axis_labels is not None:                               # the caller chose where axis labels go (a month name at each new month); tooltips and the table keep x_labels
+            if axis_labels[i]:
+                out.append(f'<span class="xlab{" alt" if shown % 2 else ""}" style="left:{X(i):.2f}%">{_esc(axis_labels[i])}</span>')   # "alt" ones drop out on narrow screens
+                shown += 1
+            continue
         if (i % step == 0 and (last_i - i >= step * 0.6 or i == last_i)) or i == last_i:
             out.append(f'<span class="xlab" style="left:{X(i):.2f}%">{_esc(lab)}</span>')
     for k, m in enumerate(markers, 1):
@@ -122,7 +129,7 @@ def line_chart(x_labels: Sequence[str], series: Sequence[dict], *, title: str, y
     out.append("</div>")
     if markers:
         out.append('<ol class="marker-legend">' + "".join(f'<li value="{k}">{_esc(m["label"])}</li>' for k, m in enumerate(markers, 1)) + "</ol>")
-    out.append(f'<details class="chart-table"><summary>{_esc(table_label)}</summary><div class="tablebox"><table><thead><tr><th scope="col" class="l"></th>'
+    out.append(f'<details class="chart-table"><summary>{_esc(table_label)}</summary><div class="tablebox"><table><thead><tr><th scope="col" class="l"><span class="sr-only">{_esc(title)}</span></th>'
                + "".join(f'<th scope="col">{_esc(s["name"])}</th>' for s in series) + "</tr></thead><tbody>"
                + "".join(f'<tr><td class="l">{_esc(lab)}</td>' + "".join(f'<td>{_esc(y_fmt(s["values"][i])) if s["values"][i] is not None else "—"}</td>' for s in series) + "</tr>"
                          for i, lab in enumerate(x_labels)) + "</tbody></table></div></details></figure>")
@@ -190,7 +197,7 @@ def stacked_columns(x_labels: Sequence[str], series: Sequence[dict], *, title: s
     step = max(1, round(n / 8))
     axis = "".join(f'<span style="left:{100 * (i + .5) / n:.2f}%">{_esc(x_labels[i])}</span>' for i in range(n) if i % step == 0)
     legend = "".join(f'<li><i class="sw {_esc(s["cls"])}"></i>{_esc(s["name"])}</li>' for s in series)
-    return Markup(f'<figure class="chart" role="group" aria-label="{_esc(title)}"><figcaption class="sr-only">{_esc(title)}</figcaption>'
+    return Markup(f'<figure class="chart" aria-label="{_esc(title)}"><figcaption class="sr-only">{_esc(title)}</figcaption>'
                   f'<div class="cols" style="height:{height}px">{"".join(cols)}</div><div class="cols-axis">{axis}</div><ul class="stack-legend">{legend}</ul></figure>')
 
 

@@ -17,8 +17,8 @@
 {%- endif %}</svg>{% endmacro %}
 
 {# A headline number with its change, its comparison in words and a trend. `delta` is already formatted (+1.5); `verdict` better|worse|same. #}
-{% macro stat(label, value, delta=none, verdict=none, vs=none, trend=none, href=none, note=none) %}
-<div class="stat">
+{% macro stat(label, value, delta=none, verdict=none, vs=none, trend=none, href=none, note=none, hero=false) %}
+<div class="stat{{ " hero" if hero }}">
   <span class="stat-l">{% if href %}<a href="{{ href }}">{{ label }}</a>{% else %}{{ label }}{% endif %}</span>
   <span class="stat-v">{{ value }}</span>
   <span class="stat-d">{% if delta %}{{ delta_chip(delta, verdict) }}{% if vs %} <span class="muted">{{ vs }}</span>{% endif %}{% elif vs %}<span class="muted">{{ vs }}</span>{% else %}&nbsp;{% endif %}</span>

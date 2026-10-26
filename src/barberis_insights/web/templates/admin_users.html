@@ -1,27 +1,79 @@
 {% extends "base.html" %}
-{% from "_ui.html" import panel, chip, page_head with context %}
+{% from "_ui.html" import page_head with context %}
 {% block content %}
+{% macro roles_field(name, current) %}
+<fieldset class="rolecards"><legend>{{ t("auth.role") }}</legend>
+  {% for r in roles %}<label class="rolecard"><input type="radio" name="{{ name }}" value="{{ r }}" {{ 'checked' if r == current }}><span><b>{{ t("role." ~ r) }}</b><small>{{ label("auth.role_help.", r) }}</small></span></label>{% endfor %}
+</fieldset>
+{% endmacro %}
+{% macro pw_field(label_text, required, hint=none) %}
+<label class="udlg-field"><span>{{ label_text }}{% if required %}<span class="req" aria-hidden="true"> *</span>{% endif %}</span>
+  <span class="pw"><input name="password" type="password" autocomplete="new-password" minlength="6" {{ 'required' if required }}>
+    <button type="button" class="pw-toggle" onclick="pwToggle(this)" aria-pressed="false" data-show="{{ t('auth.show_password') }}" data-hide="{{ t('auth.hide_password') }}" aria-label="{{ t('auth.show_password') }}"><svg class="eye" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><svg class="eye-off" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" hidden><path d="M3 3l18 18M10.6 5.1A9.7 9.7 0 0 1 12 5c6.4 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.5 6.6A17 17 0 0 0 2 12s3.6 7 10 7a9.6 9.6 0 0 0 4.1-.9M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg></button></span>
+  <span class="udlg-row"><small>{{ hint or t("auth.pw_rules") }}</small><button type="button" class="linkbtn" onclick="pwGen(this)">{{ t("auth.pw_generate") }}</button></span></label>
+{% endmacro %}
+{% set n_total = users|length %}{% set n_active = users|selectattr("active")|list|length %}{% set n_super = users|selectattr("role", "equalto", "superadmin")|list|length %}
 {{ page_head(t("nav.users"), t("auth.users_sub")) }}
-{% call panel(t("auth.users_list"), none, "nopad") %}
-<div class="tablebox" style="border:0"><table class="cards"><thead><tr><th scope="col" class="l">{{ t("auth.username") }}</th><th scope="col" class="tl">{{ t("auth.role") }}</th><th scope="col" class="tl">{{ t("auth.last_login") }}</th><th scope="col" class="tl">{{ t("auth.status") }}</th><th scope="col" class="tl">{{ t("auth.edit") }}</th></tr></thead>
-<tbody>{% for u in users %}<tr><td class="l"><b>{{ u.username }}</b>{% if u.display_name %} <span class="muted">{{ u.display_name }}</span>{% endif %}</td>
-  <td class="tl" data-label="{{ t('auth.role') }}">{{ t("role." ~ u.role) }}</td>
-  <td class="tl" data-label="{{ t('auth.last_login') }}">{{ u.last_login.strftime('%Y-%m-%d %H:%M') if u.last_login else '—' }}</td>
-  <td class="tl" data-label="{{ t('auth.status') }}">{{ chip(t('auth.active') if u.active else t('auth.inactive'), 'ok' if u.active else 'behind') }}</td>
-  <td class="tl" data-label="{{ t('auth.edit') }}"><form method="post" action="/admin/users/{{ u.id }}" class="inline">
-    <select name="role" aria-label="{{ t('auth.role') }}">{% for r in roles %}<option value="{{ r }}" {{ 'selected' if r == u.role }}>{{ t("role." ~ r) }}</option>{% endfor %}</select>
-    <select name="active" aria-label="{{ t('auth.status') }}"><option value="on" {{ 'selected' if u.active }}>{{ t("auth.active") }}</option><option value="off" {{ 'selected' if not u.active }}>{{ t("auth.inactive") }}</option></select>
-    <input name="password" type="password" autocomplete="new-password" placeholder="{{ t('auth.new_password') }}" aria-label="{{ t('auth.reset_password') }}">
-    <button class="ghost">{{ t("common.save") }}</button></form></td></tr>{% endfor %}</tbody></table></div>
-{% endcall %}
-{% call panel(t("auth.add_user"), none) %}
-<form method="post" action="/admin/users" class="note-f" style="border:0;padding:0;max-width:420px">
-  <label>{{ t("auth.username") }}<input name="username" required maxlength="50" autocomplete="off"></label>
-  <label>{{ t("auth.display_name") }}<input name="display_name" maxlength="80" placeholder="{{ t('auth.display_name_ph') }}"></label>
-  <label>{{ t("auth.role") }}<select name="role">{% for r in roles %}<option value="{{ r }}" {{ 'selected' if r == 'administrator' }}>{{ t("role." ~ r) }}</option>{% endfor %}</select></label>
-  <label>{{ t("auth.password") }}<input name="password" type="password" required minlength="6" autocomplete="new-password"></label>
-  <p class="muted sm">{{ t("auth.roles_help") }}</p>
-  <div><button>{{ t("auth.add_user") }}</button></div>
-</form>
-{% endcall %}
+<div class="users-bar">
+  <ul class="ustats" role="list" aria-label="{{ t('auth.users_list') }}">
+    <li><b>{{ n_total }}</b><span>{{ t("auth.stat_total") }}</span></li>
+    <li><b>{{ n_active }}</b><span>{{ t("auth.stat_active") }}</span></li>
+    <li><b>{{ n_super }}</b><span>{{ t("auth.stat_super") }}</span></li>
+  </ul>
+  <button type="button" class="btn-add" onclick="document.getElementById('user-add').showModal()"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>{{ t("auth.add_user") }}</button>
+</div>
+<section class="panel nopad" aria-labelledby="ulist-h">
+  <header class="panel-h"><div><h2 id="ulist-h">{{ t("auth.users_list") }}</h2></div></header>
+  <ul class="ulist" role="list">
+  {% for u in users %}{% set shown = u.display_name or u.username %}
+    <li class="urow{{ ' off' if not u.active }}">
+      <span class="avatar av{{ u.id % 6 }}" aria-hidden="true">{{ shown[:1]|upper }}</span>
+      <div class="uwho"><b>{{ shown }}</b>{% if user and user.id == u.id %} <span class="chip you"><i></i>{{ t("auth.you") }}</span>{% endif %}
+        <span class="muted sm">@{{ u.username }}</span></div>
+      <span class="urole role-{{ u.role }}">{{ t("role." ~ u.role) }}</span>
+      <span class="ustate {{ 'on' if u.active else 'off' }}"><i aria-hidden="true"></i>{{ t("auth.active") if u.active else t("auth.inactive") }}</span>
+      <span class="ulast"><span class="muted sm">{{ t("auth.last_login") }}</span>{{ u.last_login.strftime('%d.%m.%Y %H:%M') if u.last_login else t("auth.never_logged") }}</span>
+      <button type="button" class="ghost uedit" data-id="{{ u.id }}" data-name="{{ shown }}" data-username="{{ u.username }}" data-role="{{ u.role }}" data-active="{{ 'on' if u.active else 'off' }}" data-self="{{ '1' if user and user.id == u.id else '' }}" onclick="userEdit(this)" aria-label="{{ t('auth.edit') }}: {{ shown }}"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>{{ t("auth.edit") }}</button>
+    </li>{% endfor %}
+  </ul>
+</section>
+
+<dialog id="user-edit" class="note udlg" aria-labelledby="ue-title">
+  <header class="note-h"><div><h2 id="ue-title">{{ t("auth.edit_user") }}</h2><p class="note-who" id="ue-who"></p></div>
+    <form method="dialog"><button class="iconbtn" aria-label="{{ t('common.close') }}"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></form></header>
+  <form method="post" id="ue-form" class="note-f">
+    <p class="note-help" id="ue-self" hidden>{{ t("auth.self_note") }}</p>
+    <div id="ue-role">{{ roles_field("role", "") }}</div>
+    <fieldset class="rolecards" id="ue-status"><legend>{{ t("auth.status") }}</legend>
+      <label class="rolecard"><input type="radio" name="active" value="on"><span><b>{{ t("auth.active") }}</b><small>{{ t("auth.active_help") }}</small></span></label>
+      <label class="rolecard"><input type="radio" name="active" value="off"><span><b>{{ t("auth.inactive") }}</b><small>{{ t("auth.inactive_help") }}</small></span></label>
+    </fieldset>
+    {{ pw_field(t("auth.reset_password"), false, t("auth.pw_keep")) }}
+    <div class="note-actions"><button type="button" class="ghost" onclick="this.closest('dialog').close()">{{ t("common.cancel") }}</button><button>{{ t("common.save") }}</button></div>
+  </form>
+</dialog>
+
+<dialog id="user-add" class="note udlg" aria-labelledby="ua-title">
+  <header class="note-h"><div><h2 id="ua-title">{{ t("auth.add_user") }}</h2><p class="note-who">{{ t("auth.roles_help") }}</p></div>
+    <form method="dialog"><button class="iconbtn" aria-label="{{ t('common.close') }}"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg></button></form></header>
+  <form method="post" action="/admin/users" class="note-f">
+    <label class="udlg-field"><span>{{ t("auth.username") }}<span class="req" aria-hidden="true"> *</span></span><input name="username" required maxlength="50" autocomplete="off" autocapitalize="none" spellcheck="false"></label>
+    <label class="udlg-field"><span>{{ t("auth.display_name") }}</span><input name="display_name" maxlength="80" placeholder="{{ t('auth.display_name_ph') }}"></label>
+    {{ roles_field("role", "administrator") }}
+    {{ pw_field(t("auth.password"), true) }}
+    <div class="note-actions"><button type="button" class="ghost" onclick="this.closest('dialog').close()">{{ t("common.cancel") }}</button><button>{{ t("auth.add_user") }}</button></div>
+  </form>
+</dialog>
 {% endblock %}
+{% block scripts %}<script>
+function pwToggle(b){var i=b.closest('.pw').querySelector('input'),s=i.type==='password';i.type=s?'text':'password';b.setAttribute('aria-pressed',s);b.setAttribute('aria-label',s?b.dataset.hide:b.dataset.show);
+b.querySelector('.eye').toggleAttribute('hidden',s);b.querySelector('.eye-off').toggleAttribute('hidden',!s);i.focus()}
+function pwGen(b){var i=b.closest('.udlg-field').querySelector('input[name=password]'),a='abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789',r=new Uint32Array(12);crypto.getRandomValues(r);
+i.value=Array.from(r,function(x){return a[x%a.length]}).join('');i.type='text';var t=i.closest('.pw').querySelector('.pw-toggle');t.setAttribute('aria-pressed','true');t.setAttribute('aria-label',t.dataset.hide);t.querySelector('.eye').toggleAttribute('hidden',true);t.querySelector('.eye-off').toggleAttribute('hidden',false);i.select()}
+function userEdit(b){var d=document.getElementById('user-edit'),f=document.getElementById('ue-form'),self=!!b.dataset.self;
+f.action='/admin/users/'+b.dataset.id;document.getElementById('ue-who').textContent=b.dataset.name+' · @'+b.dataset.username;
+f.querySelectorAll('input[name=role]').forEach(function(r){r.checked=r.value===b.dataset.role;r.disabled=self});
+f.querySelectorAll('input[name=active]').forEach(function(r){r.checked=r.value===b.dataset.active;r.disabled=self});
+document.getElementById('ue-self').hidden=!self;f.password.value='';f.password.type='password';
+d.showModal();(self?f.password:f.querySelector('input[name=role]:checked')).focus()}
+</script>{% endblock %}

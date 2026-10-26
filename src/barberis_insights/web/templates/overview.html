@@ -10,8 +10,19 @@
 </div>
 {% endif %}
 
-<div class="stats" aria-label="{{ t('overview.week_sub', week=week_label) }}">
-  {% for x in tiles %}{{ stat(x.label, x.value, x.delta, x.verdict, x.vs, x.trend, x.href, x.note) }}{% endfor %}
+<section class="today" aria-labelledby="today-h">
+  <div class="today-t"><h2 id="today-h">{{ t("overview.today") }}</h2><p class="sub">{{ t("overview.today_sub") }}</p></div>
+  <ul class="today-n" role="list">
+    <li><b>{{ case_counts.open }}</b><span>{{ t("overview.today_open") }}</span></li>
+    <li><b>{{ case_counts.booking }}</b><span>{{ t("overview.today_booking") }}</span></li>
+    <li><b>{{ case_counts.processed }}</b><span>{{ t("overview.today_done") }}</span></li>
+    <li class="val"><b>{{ kfmt("value_at_stake", stake) }}</b><span>{{ t("overview.today_value") }}</span></li>
+  </ul>
+  <a class="btn-add" href="/risk">{{ t("overview.open_cases") }}<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+</section>
+
+<div class="stats bento" aria-label="{{ t('overview.week_sub', week=week_label) }}">
+  {% for x in tiles %}{{ stat(x.label, x.value, x.delta, x.verdict, x.vs, x.trend, x.href, x.note, x.hero) }}{% endfor %}
 </div>
 
 {% call panel(t("overview.trend_title"), t("overview.trend_sub", n=factors_n)) %}
@@ -19,58 +30,76 @@
 {% endcall %}
 
 <div class="split">
-  {% call panel(t("overview.barbers_title"), t("overview.barbers_sub"), "nopad") %}
-  <div class="tablebox" style="border:0"><table class="cards">
-    <thead><tr><th scope="col" class="l">{{ t("common.barber") }}</th><th scope="col">{{ mlabel("util") }}</th><th scope="col">{{ mlabel("rph") }}</th><th scope="col">{{ mlabel("visits") }}</th><th scope="col" class="hide-sm">{{ mlabel("check") }}</th><th scope="col">{{ t("overview.revenue_26") }}</th></tr></thead>
-    <tbody>{% for r in rows %}<tr>
-      <td class="l"><a href="/barber/{{ r.key }}">{{ r.name }}</a> <span class="muted">{{ r.tier }}</span></td>
-      <td data-label="{{ mlabel('util') }}"><span class="cell-bar"><span class="rank-track" aria-hidden="true"><b style="width:{{ [r.util or 0, 100]|min }}%"></b></span>{{ fmt('util', r.util) }}</span></td>
-      <td data-label="{{ mlabel('rph') }}">{{ fmt('rph', r.rph) }}</td>
-      <td data-label="{{ mlabel('visits') }}">{{ r.visits }} {% if r.visits_d[0] %}<span class="delta {{ {'better': 'good', 'worse': 'bad'}.get(r.visits_d[1], 'same') }}">{{ r.visits_d[0] }}</span>{% endif %}</td>
-      <td data-label="{{ mlabel('check') }}" class="hide-sm">{{ fmt('check', r.check) }}</td>
-      <td data-label="{{ t('overview.revenue_26') }}">{{ r.trend }}</td></tr>{% endfor %}</tbody>
-  </table></div>
+  {% call panel(t("overview.todo"), t("overview.todo_sub"), "nopad") %}
+  {% if calls %}<ul class="calls" role="list">
+    {% for r in calls %}<li>
+      <span class="avatar av{{ r.client_id % 6 }}" aria-hidden="true">{{ (r.name or '#')[:1]|upper }}</span>
+      <div class="calls-who"><a href="/cases/{{ r.id }}">{{ r.name or t('client.fallback', id=r.client_id) }}</a>
+        <span class="muted sm">{{ bnames.get(r.barber_id, '') }}{% if bnames.get(r.barber_id) %} · {% endif %}{{ t("risk.days_n", n=r.days_since) }} · {{ kfmt('spend', r.lifetime_spend) }}</span></div>
+      <span class="calls-offer">{{ label('offer_short.', r.offer, label('offer.', r.offer)) if r.offer else '—' }}{% if r.chance is not none %}<span class="muted sm">{{ t("overview.chance", value=(100 * r.chance)|round|int) }}</span>{% endif %}</span>
+      <a class="btn ghost btn-sm" href="/cases/{{ r.id }}" aria-label="{{ t('case.open') }}: {{ r.name or r.client_id }}">{{ t("case.open") }}</a></li>{% endfor %}
+  </ul>
+  <p class="panel-more"><a href="/risk">{{ t("overview.todo_more", n=case_counts.open) }} →</a></p>
+  {% else %}<div style="padding:16px">{{ empty(t("overview.todo_none")) }}</div>{% endif %}
   {% endcall %}
 
-  {% call panel(t("overview.client_health"), t("overview.client_health_sub", date=seg_asof or "—")) %}
-    {{ health }}
-    {% if overdue_run %}{% set k = overdue_run.result.kpis.team %}
-    <p style="margin:12px 0 0">{{ t("overview.overdue_summary", n=k.overdue, value=kfmt("value_at_stake", k.value_at_stake), window=overdue_run.window_to) }}</p>{% endif %}
+  {% call panel(t("overview.cases_by_trigger"), t("overview.cases_by_trigger_sub")) %}
+    {% if trig_total %}{{ health }}
+    <p style="margin:12px 0 0">{{ t("overview.cases_summary", n=case_counts.open, value=kfmt("value_at_stake", stake)) }}</p>
+    {% else %}{{ empty(t("overview.cases_none")) }}{% endif %}
     <p style="margin:8px 0 0"><a href="/risk">{{ t("overview.review_calls") }} →</a></p>
   {% endcall %}
 </div>
 
+{% call panel(t("overview.barbers_title"), t("overview.barbers_sub"), "nopad") %}
+<div class="tablebox" style="border:0"><table class="cards barbers">
+  <thead><tr><th scope="col" class="l">{{ t("common.barber") }}</th><th scope="col">{{ mlabel("util") }}</th><th scope="col" class="hide-sm">{{ mlabel("rph") }}</th><th scope="col">{{ mlabel("visits") }}</th><th scope="col" class="hide-sm">{{ mlabel("check") }}</th><th scope="col">{{ t("overview.revenue_26") }}</th></tr></thead>
+  <tbody>{% for r in rows %}<tr>
+    <td class="l bname"><span class="avatar av{{ loop.index0 % 6 }}" aria-hidden="true">{{ r.name[:1]|upper }}</span><span><a href="/barber/{{ r.key }}">{{ r.name }}</a><span class="muted sm">{{ r.tier }}</span></span></td>
+    <td data-label="{{ mlabel('util') }}"><div class="v"><span class="cell-bar"><span class="rank-track" aria-hidden="true"><b style="width:{{ [r.util or 0, 100]|min }}%"></b></span>{{ fmt('util', r.util) }}</span></div></td>
+    <td data-label="{{ mlabel('rph') }}" class="hide-sm">{{ fmt('rph', r.rph) }}</td>
+    <td data-label="{{ mlabel('visits') }}"><div class="v">{{ r.visits }}{% if r.visits_d[0] %}<span class="delta {{ {'better': 'good', 'worse': 'bad'}.get(r.visits_d[1], 'same') }}">{{ r.visits_d[0] }}</span>{% endif %}</div></td>
+    <td data-label="{{ mlabel('check') }}" class="hide-sm">{{ fmt('check', r.check) }}</td>
+    <td data-label="{{ t('overview.revenue_26') }}"><div class="v">{{ r.trend }}</div></td></tr>{% endfor %}</tbody>
+</table></div>
+{% endcall %}
+
 <div class="split">
   {% call panel(t("overview.weekday_heat"), t("overview.heat_window", date=latest or "—"), "nopad") %}
+  <details class="fold" open><summary>{{ t("overview.fold") }}</summary>
   <div class="tablebox" style="border:0"><table class="heat">
-    <thead><tr><th scope="col" class="l"></th>{% for i in range(7) %}<th scope="col">{{ t('day.short.' ~ i) }}</th>{% endfor %}</tr></thead>
+    <thead><tr><th scope="col" class="l"><span class="sr-only">{{ t("col.barber") }}</span></th>{% for i in range(7) %}<th scope="col">{{ t('day.short.' ~ i) }}</th>{% endfor %}<th scope="col">{{ t("overview.avg") }}</th></tr></thead>
     <tbody>{% for b in all_barbers %}<tr><td class="l">{{ b.name }}</td>{% for i in range(7) %}{% set u = cur.get(b.key, {}).get('util_d' ~ i) %}
-      {% if u is none %}<td class="muted">·</td>{% else %}{% set lvl = 1 if u < 40 else 2 if u < 50 else 3 if u < 60 else 4 if u < 75 else 5 %}
-      <td style="background:var(--h{{ lvl }});color:var({{ '--hd' if lvl >= 5 else '--h4t' if lvl == 4 else '--hl' }})">{{ u|round|int }}%</td>{% endif %}{% endfor %}</tr>{% endfor %}</tbody>
+      {% if u is none %}<td class="off" title="{{ t('overview.day_off') }}"><span aria-hidden="true">–</span><span class="sr-only">{{ t("overview.day_off") }}</span></td>{% else %}{% set lvl = 1 if u < 40 else 2 if u < 50 else 3 if u < 60 else 4 if u < 75 else 5 %}
+      <td style="background:var(--h{{ lvl }});color:var({{ '--hd' if lvl >= 5 else '--h4t' if lvl == 4 else '--hl' }})">{{ u|round|int }}%</td>{% endif %}{% endfor %}
+      <td class="avg">{{ (heat_avg[b.key]|round|int ~ "%") if heat_avg[b.key] is not none else "—" }}</td></tr>{% endfor %}</tbody>
   </table></div>
   <div class="legend" style="padding:0 16px 14px"><span>{{ t('overview.heat_legend') }}:</span>
     {% for lvl, txt in [(1, '< 40%'), (2, '40–50%'), (3, '50–60%'), (4, '60–75%'), (5, '≥ 75%')] %}<span><i style="background:var(--h{{ lvl }})"></i>{{ txt }}</span>{% endfor %}</div>
+  </details>
   {% endcall %}
 
   {% call panel(t("overview.goals_title"), t("overview.goals_sub")) %}
-    {% for g in top_goals %}
+  <details class="fold" open><summary>{{ t("overview.fold") }}</summary>
+    {% for metric, items in goal_groups %}
     <div class="goal">
-      <div class="goal-top"><b>{{ g.title }}</b>{{ chip(t(g.label_key), {'ok': 'ok', 'behind': 'behind', 'done': 'ok'}.get(g.state, '')) }}</div>
-      <div class="muted">{{ scope_names.get(g.scope, g.scope) }} · {{ mlabel(g.metric) if g.metric in REGISTRY else t("goal.custom") }}</div>
-      {{ goal_bullet(g) }}
-      <div class="goal-nums"><span>{{ t("goal.start") }} <b>{{ fmt(g.metric, g.baseline) }}</b></span><span>{{ t("goal.now") }} <b>{{ fmt(g.metric, g.current) }}</b></span><span>{{ t("goal.target") }} <b>{{ fmt(g.metric, g.target) }}</b></span></div>
+      <div class="goal-top"><b>{{ mlabel(metric) if metric in REGISTRY else t("goal.custom") }}</b>
+        {% if items|selectattr("state", "equalto", "new")|list|length == items|length %}{{ chip(t("overview.goals_waiting"), '') }}{% endif %}</div>
+      {% if items|selectattr("state", "equalto", "new")|list|length == items|length %}
+        <div class="muted">{% for g in items %}{{ scope_names.get(g.scope, g.scope) }}{{ ", " if not loop.last }}{% endfor %}</div>
+      {% else %}{% for g in items %}
+        <div class="goal-row"><div class="goal-top"><span>{{ scope_names.get(g.scope, g.scope) }}</span>{{ chip(t(g.label_key), {'ok': 'ok', 'behind': 'behind', 'done': 'ok'}.get(g.state, '')) }}</div>
+          {{ goal_bullet(g) }}
+          <div class="goal-nums"><span>{{ t("goal.start") }} <b>{{ fmt(g.metric, g.baseline) }}</b></span><span>{{ t("goal.now") }} <b>{{ fmt(g.metric, g.current) }}</b></span><span>{{ t("goal.target") }} <b>{{ fmt(g.metric, g.target) }}</b></span></div></div>
+      {% endfor %}{% endif %}
     </div>
     {% else %}{{ empty(t("goals.empty")) }}{% endfor %}
-    <a href="/goals">{{ t("overview.all_goals") }} →</a>
+    <a href="/goals">{{ t("overview.goals_more", n=goal_total) }} →</a>
+  </details>
   {% endcall %}
 </div>
-
-{% call panel(t("overview.todo"), t("overview.todo_sub")) %}
-  {% if calls %}<div class="tablebox" style="margin:0 -16px -16px;border:0"><table class="cards">
-    <thead><tr><th scope="col" class="l">{{ t("col.client") }}</th><th scope="col" class="l">{{ t("col.usual_barber") }}</th><th scope="col">{{ t("col.days") }}</th><th scope="col">{{ t("col.spent") }}</th><th scope="col" class="l">{{ t("col.offer") }}</th></tr></thead>
-    <tbody>{% for r in calls %}<tr><td class="l"><a href="/cases/{{ r.id }}">{{ r.name or t('client.fallback', id=r.client_id) }}</a> <span class="muted">#{{ r.client_id }}</span></td>
-      <td class="l" data-label="{{ t('col.usual_barber') }}">{{ bnames.get(r.barber_id, '') }}</td><td data-label="{{ t('col.days') }}">{{ r.days_since }}</td>
-      <td data-label="{{ t('col.spent') }}">{{ kfmt('spend', r.lifetime_spend) }}</td><td class="l" data-label="{{ t('col.offer') }}">{{ label('offer_short.', r.offer, label('offer.', r.offer)) if r.offer else '' }}</td></tr>{% endfor %}</tbody></table></div>
-  {% else %}{{ empty(t("overview.todo_none")) }}{% endif %}
-{% endcall %}
 {% endblock %}
+{% block scripts %}<script>
+/* on a phone the secondary panels start folded so the page is not six screens long */
+if(matchMedia('(max-width:640px)').matches)document.querySelectorAll('details.fold').forEach(function(d){d.removeAttribute('open')});
+</script>{% endblock %}

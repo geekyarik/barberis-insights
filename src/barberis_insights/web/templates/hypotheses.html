@@ -29,7 +29,7 @@
   {% for h in hs %}
   <article class="card" style="display:flex;flex-direction:column;gap:6px">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span class="eyebrow">{{ mlabel(h.metric) }} · {{ t('hyp.kind.' ~ h.kind) }} · {{ t('hyp.expected.' ~ h.expected) }}</span><span class="pill {{ h.status }}">{{ label('hyp.status.', h.status) }}</span></div>
-    <h3>{{ h.title }}</h3>
+    <h2 class="item-h">{{ h.title }}</h2>
     {% if h.statement %}<p class="sub" style="margin:0">{{ h.statement }}</p>{% endif %}
     <div class="muted" style="font-size:13px">{% if h.treatment %}{{ t("hyp.changed_for") }}: {{ h.treatment|join(', ') }}{% endif %}{% if h.control %} · {{ t("hyp.control") }}: {{ h.control|join(', ') }}{% endif %}{% if h.intervention_date %} · {{ t("hyp.change_on", date=h.intervention_date) }}{% endif %}{% if h.evaluated %} · {{ t("hyp.evaluated", date=h.evaluated.strftime('%Y-%m-%d')) }}{% endif %}</div>
     {% if h.result %}

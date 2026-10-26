@@ -3,7 +3,7 @@
 {% from "_macros.html" import goal_card, goal_form with context %}
 {% block content %}
 {{ page_head(t("nav.goals"), t("goals.sub")) }}
-{% call panel(t("goals.add"), none) %}<details><summary>{{ t("goals.add") }}</summary>{{ goal_form(none, catalog, scope_names, '/goals') }}</details>{% endcall %}
+{% call panel(t("goals.add"), none) %}<details><summary>{{ t("goals.add_open") }}</summary>{{ goal_form(none, catalog, scope_names, '/goals') }}</details>{% endcall %}
 {% for sc in order if by_scope.get(sc) %}
 <section>
   <h2 class="group-h">{{ scope_names.get(sc, sc) }}</h2>

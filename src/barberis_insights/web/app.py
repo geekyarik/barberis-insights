@@ -319,6 +319,10 @@ def overview(request: Request, s: Session = Depends(db)):
              (slast["new_clients"], slast["new_ly"]), rows=shop),
     ]
     tiles[5]["label"] = t("overview.new_clients")
+    tiles[0]["hero"] = True
+    tiles[0]["trend"] = charts.spark(tr26("revenue", shop), w=300, h=76, label=h["mlabel"]("revenue"), fmt=lambda x: f"{x:,.0f}".replace(",", " "))
+    start = dt.date.fromisoformat(last["start"])
+    week_range = f"{start:%d.%m} – {start + dt.timedelta(days=6):%d.%m.%Y}"
 
     # revenue against last year, with the context that explains the dips and jumps
     first, lastd = m["starts"][0], m["end"]
@@ -327,9 +331,18 @@ def overview(request: Request, s: Session = Depends(db)):
                                   .order_by(factors.Factor.date_from)) if x.category not in ("observation",)]
     markers = [{"i": (x.date_from - dt.date.fromisoformat(first)).days // 7, "label": f"{x.title} ({x.date_from.strftime('%d.%m.%Y')})"} for x in dated][:8]
     k = lambda v: f"{v / 1000:.0f}k"
+    month_labels, prev_month = [], None
+    for iso in m["starts"]:                                       # the axis names months, not week codes
+        mo = dt.date.fromisoformat(iso).month
+        month_labels.append(t(f"month.short.{mo}") if mo != prev_month else "")
+        prev_month = mo
+    marked = [i for i, x in enumerate(month_labels) if x]
+    if len(marked) > 1 and marked[1] - marked[0] < 4:             # a partial first month would collide with the next label
+        month_labels[marked[0]] = ""
     revenue_chart = charts.line_chart(labels, [{"name": t("ui.this_year"), "values": col("revenue", shop), "cls": "s1"},
                                                {"name": t("ui.last_year"), "values": col("revenue_ly", shop), "cls": "ly", "style": "dash"}],
-                                      title=t("overview.trend_title"), y_fmt=lambda v: vm.money(v) if v >= 1000 else f"{v:.0f}", markers=markers, table_label=t("ui.table"))
+                                      title=t("overview.trend_title"), y_fmt=lambda v: vm.money(v) if v >= 1000 else f"{v:.0f}", markers=markers, table_label=t("ui.table"),
+                                      axis_labels=month_labels)
 
     # barbers: one row each, with the week's figures and a 26-week revenue trend
     rows = []
@@ -338,21 +351,32 @@ def overview(request: Request, s: Session = Depends(db)):
         rows.append({"key": b.key, "name": b.name, "tier": b.tier, "util": r["util"], "rph": r["rev_per_sched_h"], "visits": r["visits"], "check": r["avg_check"],
                      "visits_d": vm.rel_change(r["visits"], p["visits"]), "trend": charts.spark([x["revenue"] for x in m["barbers"][b.key][-26:]], cls="s1", label=b.name,
                                                                                         fmt=lambda x: f"{x:,.0f}".replace(",", " "))})
-    # client health
-    seg = C.Counter(st for (st,) in s.execute(select(ClientProfile.segment)))
-    parts = [("active", "s1"), ("slipping", "c-lt"), ("overdue", "s2"), ("lapsed", "c-grey"), ("one_time", "c-pale"), ("switched", "s3")]
-    health = charts.stack100([{"label": h["label"]("segment.", k_), "value": seg.get(k_, 0), "cls": c_} for k_, c_ in parts], title=t("overview.client_health"))
-    overdue_run = analyses.latest(s, "overdue_regulars")
+    # the daily cases (the same model as the risk page): how many, why they opened, what they could be worth
+    case_counts = cases.counts(s)
+    trig = C.Counter(tr_ for (tr_,) in s.execute(select(RiskCase.trigger).where(RiskCase.status == "open")))
+    stake = s.scalar(select(func.coalesce(func.sum(RiskCase.priority), 0)).where(RiskCase.status == "open")) or 0
+    health = charts.stack100([{"label": h["label"]("case.trigger.", k_), "value": trig.get(k_, 0), "cls": c_} for k_, c_ in (("overdue", "s2"), ("lapsed", "c-grey"), ("first_timer", "c-pale"))],
+                             title=t("overview.cases_by_trigger"))
     # goals and calls
     board = goals.board(s)
     order = {"behind": 0, "ok": 1, "new": 2, "done": 3, "dropped": 4}
-    top_goals = sorted(board, key=lambda g: (order.get(g["state"], 5), g["scope"]))[:6]
+    groups: dict = {}                                             # one block per measured thing, the barbers as rows inside it
+    for g in sorted(board, key=lambda g: (order.get(g["state"], 5), g["scope"])):
+        if g["state"] != "dropped":
+            groups.setdefault(g["metric"], []).append(g)
+    goal_groups = sorted(groups.items(), key=lambda kv: min(order.get(g["state"], 5) for g in kv[1]))[:3]
+    goal_total = sum(len(v) for v in groups.values())
     calls = cases.case_rows(s, "open", limit=6)
     dates = vm.measurement_dates(s)
     cur = vm.values_at(s, dates[-1] if dates else None)
+    heat_avg = {}
+    for b_ in vm.barbers(s):
+        vals = [cur.get(b_.key, {}).get(f"util_d{i}") for i in range(7)]
+        vals = [v for v in vals if v is not None]
+        heat_avg[b_.key] = sum(vals) / len(vals) if vals else None
     review_job = next((j["last"] for j in jobs_service.list_jobs(s) if j["job"] == "weekly_review"), None)
-    return page(request, s, "overview.html", "overview", title="nav.overview", tiles=tiles, week_label=f"{last['week']} · {last['start']}", revenue_chart=revenue_chart, rows=rows,
-                health=health, seg=seg, overdue_run=overdue_run, top_goals=top_goals, board=board, calls=calls, bnames=names(s), cur=cur, latest=dates[-1] if dates else None,
+    return page(request, s, "overview.html", "overview", title="nav.overview", tiles=tiles, week_label=week_range, revenue_chart=revenue_chart, rows=rows,
+                health=health, case_counts=case_counts, stake=stake, trig_total=sum(trig.values()), goal_groups=goal_groups, goal_total=goal_total, heat_avg=heat_avg, week_range=week_range, board=board, calls=calls, bnames=names(s), cur=cur, latest=dates[-1] if dates else None,
                 review_job=review_job, factors_n=len(dated), seg_asof=s.scalar(select(func.max(ClientProfile.asof))),
                 scope_names={"team": t("common.team")} | names_by_key(s))
 

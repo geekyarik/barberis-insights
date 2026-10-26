@@ -13,8 +13,9 @@
 <div class="cols-2">
   {% for key, prefix, rows in [('outreach.by_offer', 'offer.', by_offer), ('outreach.by_trigger', 'case.trigger.', by_trigger), ('outreach.by_admin', '', by_admin)] %}
   {% call panel(t(key), t("outreach.table_sub"), "nopad") %}
-  <div class="tablebox" style="border:0"><table><thead><tr><th scope="col" class="l"></th><th scope="col">{{ t("outreach.processed_n") }}</th><th scope="col">{{ t("outreach.won") }}</th><th scope="col">{{ t("outreach.rate") }}</th><th scope="col">{{ t("outreach.recovered") }}</th></tr></thead>
-    <tbody>{% for k, n, w, rev in rows %}<tr><td class="l">{{ label(prefix, k) if prefix else k }}</td><td>{{ n }}</td><td>{{ w }}</td><td>{{ (100*w/n)|round|int }}%</td><td>₴{{ '{:,.0f}'.format(rev).replace(',', ' ') }}</td></tr>{% endfor %}</tbody></table></div>
+  <div class="tablebox" style="border:0"><table><thead><tr><th scope="col" class="l"><span class="sr-only">{{ t(key) }}</span></th><th scope="col">{{ t("outreach.processed_n") }}</th><th scope="col">{{ t("outreach.won") }}</th><th scope="col">{{ t("outreach.rate") }}</th><th scope="col">{{ t("outreach.recovered") }}</th></tr></thead>
+    <tbody>{% for k, n, w, rev in rows %}<tr><td class="l">{{ label(prefix, k) if prefix else k }}</td><td>{{ n }}</td><td>{{ w }}</td><td>{{ (100*w/n)|round|int }}%</td><td>₴{{ '{:,.0f}'.format(rev).replace(',', ' ') }}</td></tr>
+      {% else %}<tr><td class="l muted" colspan="5">{{ t("outreach.table_empty") }}</td></tr>{% endfor %}</tbody></table></div>
   {% endcall %}{% endfor %}
   {% call panel(t("outreach.by_outcome"), none, "nopad") %}
   <div class="tablebox" style="border:0"><table><tbody>{% for o in ("visited", "rejected", "no_answer", "expired") %}<tr><td class="l">{{ label("case.outcome.", o) }}</td><td>{{ outcomes.get(o, 0) }}</td></tr>{% endfor %}
